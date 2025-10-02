@@ -2070,6 +2070,8 @@ function offerPermanentAbilityChoice() {
             updateProjectiles();
             if (typeof updateShockwaves === 'function') updateShockwaves();
             if (typeof updateVortexFields === 'function') updateVortexFields();
+            if (typeof updateEchoBloomFields === 'function') updateEchoBloomFields();
+            if (typeof updateBloomRings === 'function') updateBloomRings();
             // Failsafe: re-anchor any orbitals to current player position in case other logic modified them after projectile update
             if (game && game.projectiles && game.player) {
                 for (const proj of game.projectiles) {
@@ -2770,9 +2772,10 @@ function offerPermanentAbilityChoice() {
             // Radial Burst wants 16 evenly spaced shots. Omni Shot wants 8. If the player has additional
             // multi-shot bonuses exceeding the pattern baseline, we keep the higher number so stacking
             // projectile count still scales patterns (i.e., 20-way radial if they somehow stack enough).
-            // Ensure Cross Shot provides at least 4 projectiles BEFORE other pattern scaling so it isn't overwritten.
-            if (hasCross && projectileCount < 4) {
-                projectileCount = 4;
+            // Ensure Cross Shot provides at least a baseline number BEFORE other pattern scaling so it isn't overwritten.
+            const CROSS_MIN_PROJECTILES = 4; // Adjust to raise/lower baseline for Cross Shot
+            if (hasCross && projectileCount < CROSS_MIN_PROJECTILES) {
+                projectileCount = CROSS_MIN_PROJECTILES;
             }
             const baseMultiBeforePattern = projectileCount; // capture current multi-shot total (after Cross minimum)
             if (hasRadial) {
@@ -2796,7 +2799,7 @@ function offerPermanentAbilityChoice() {
                 // 5 => R,D,L,U + 1 extra (goes to Right arm)
                 // 8 => 2 per arm
                 // 12 => 3 per arm, etc.
-                projectileCount = Math.max(baseMultiBeforePattern, 4);
+                projectileCount = Math.max(baseMultiBeforePattern, CROSS_MIN_PROJECTILES);
             }
             const patternCount = projectileCount; // final number of shots to emit
 
@@ -5269,27 +5272,32 @@ function offerPermanentAbilityChoice() {
                 if (!proj.enemy && !proj.beam) {
                     // Bloom Ring: emit expanding pellet ring periodically
                     if (proj.bloomRing) {
-                        proj._bloomTimer = (proj._bloomTimer||0)+1;
-                        const interval = 40; // frames
-                        if (proj._bloomTimer >= interval && !proj._bloomExcess) {
-                            proj._bloomTimer = 0;
-                            const count = 10;
+                        // Hybrid mode C: Occasional small sub-ring emissions from projectiles (low density)
+                        // while main large rings are handled at player level (updateBloomRings())
+                        // Use per-projectile stagger so not all cores emit on same frame
+                        const subInterval = 160 + ((proj._bloomSubRand)||(proj._bloomSubRand = Math.floor(Math.random()*90))); // ~2.5s avg
+                        proj._bloomSubTimer = (proj._bloomSubTimer||0)+1;
+                        if (proj._bloomSubTimer >= subInterval) {
+                            proj._bloomSubTimer = 0;
+                            // Emit a tiny petal burst (6) for visual continuity
+                            const count = 6;
                             const baseDmg = proj.baseDamage || calculateDamage();
                             for (let r=0;r<count;r++) {
                                 const ang = (r/count)*Math.PI*2;
-                                const spd = 3.2 + Math.random()*0.6;
+                                const spd = 3.6 + Math.random()*0.5;
                                 game.projectiles.push({
                                     x: proj.x, y: proj.y,
                                     vx: Math.cos(ang)*spd, vy: Math.sin(ang)*spd,
-                                    life: 38,
-                                    size: Math.max(3, Math.floor(proj.size*0.55)),
+                                    life: 34,
+                                    size: Math.max(2, Math.floor(proj.size*0.45)),
                                     enemy:false,
-                                    damage: Math.max(1, Math.floor(baseDmg * 0.28)),
-                                    baseDamage: Math.max(1, Math.floor(baseDmg * 0.28)),
-                                    bloomChild:true
+                                    damage: Math.max(1, Math.floor(baseDmg * 0.22)),
+                                    baseDamage: Math.max(1, Math.floor(baseDmg * 0.22)),
+                                    bloomChild:true,
+                                    _petal:true
                                 });
                             }
-                            addParticle(proj.x, proj.y, '#FFEEDD','explosion');
+                            addParticle(proj.x, proj.y, '#FFEEDD','spark');
                         }
                     }
                     // Cascade Burst: pulsing forward micro-bursts
@@ -5527,11 +5535,18 @@ function offerPermanentAbilityChoice() {
                         proj._umbTravel += stepDist;
                         proj._umbCoreAge = (proj._umbCoreAge||0)+1;
                         // Failsafe: only if very old (>80f) OR slowed to near stop (speed <0.5)
-                        const forceSplit = (proj._umbCoreAge > 80) || stepDist < 0.5;
+                        // Additional failsafe: if remaining life is low (<=10) force split so it never expires silently.
+                        const lowLife = proj.life != null && proj.life <= 10;
+                        const forceSplit = (proj._umbCoreAge > 80) || stepDist < 0.5 || lowLife;
                         if (proj._umbTravel >= (proj._umbSplitDistance || 160) || forceSplit) {
                             proj._umbDidSplit = true;
                             const base = proj.baseDamage || calculateDamage();
-                            const ang = Math.atan2(proj.vy, proj.vx);
+                            let ang = Math.atan2(proj.vy, proj.vx);
+                            if (!isFinite(ang) || (Math.abs(proj.vx) < 0.0001 && Math.abs(proj.vy) < 0.0001)) {
+                                // Fallback: derive from player lastDirection so arcs always have a forward reference
+                                const ld = (game.player && game.player.lastDirection) || {x:1,y:0};
+                                ang = Math.atan2(ld.y, ld.x);
+                            }
                             const arcRadius = 140; // larger radius for a broad overhead sweep
                             for (let side=-1; side<=1; side+=2) {
                                 game.projectiles.push({
@@ -5555,6 +5570,8 @@ function offerPermanentAbilityChoice() {
                                 });
                             }
                             for (let p=0;p<18;p++) addParticle(proj.x + (Math.random()-0.5)*24, proj.y + (Math.random()-0.5)*24, '#FFDFAA','spark');
+                            // Debug: mark origin in a distinct color briefly (helps verify spawn)
+                            addParticle(proj.x, proj.y, '#FFAA55','ambient');
                             addParticle(proj.x, proj.y, '#FFE8CC','trail');
                             proj.life = 0;
                         }
@@ -5571,6 +5588,8 @@ function offerPermanentAbilityChoice() {
                             if (proj._arcProgress >= 1) {
                                 proj._arcDone = true;
                                 proj._arcFade = 18; // brief linger
+                                // Endpoint marker to confirm full 180° reach
+                                addParticle(proj.x, proj.y, '#FFCC55','spark');
                             }
                         } else {
                             proj._arcFade--;
@@ -5586,6 +5605,8 @@ function offerPermanentAbilityChoice() {
                             proj._echoNextLifePoint = Math.floor(proj.life * 0.70); // initial trigger threshold
                             proj._echoMaxStages = 2; // number of intermediate echoes before final
                             proj._echoPetalColor = '#FFE0FF';
+                            proj._echoTelegraph = 0; // grows near bloom
+                            proj._echoTelegraphMax = 42; // frames of max telegraph before bloom
                         }
                         // Spawn echoes at descending life thresholds
                         if (proj.life <= proj._echoNextLifePoint && proj._echoStage < proj._echoMaxStages) {
@@ -5617,25 +5638,48 @@ function offerPermanentAbilityChoice() {
                                     const dx=p2.x-proj.x; const dy=p2.y-proj.y; if (dx*dx+dy*dy > 36) { converged=false; break; }
                                 }
                             }
+                            // Telegraph growth once all echoes spawned
+                            if (echoCount && !proj._echoBloomed) {
+                                proj._echoTelegraph = Math.min(proj._echoTelegraph + 1, proj._echoTelegraphMax);
+                                if (proj._echoTelegraph > proj._echoTelegraphMax * 0.65 && Math.random()<0.25) {
+                                    addParticle(proj.x + (Math.random()-0.5)*20, proj.y + (Math.random()-0.5)*20, '#FFD6FF','spark');
+                                }
+                            }
                             if (echoCount && converged) {
                                 // Perform bloom: radial petal ring + explosion damage
                                 proj._echoBloomed = true;
                                 const base = proj.baseDamage||calculateDamage();
-                                const burstDmg = Math.max(1, Math.floor(base * 0.75));
+                                const burstDmg = Math.max(1, Math.floor(base * 1.10)); // stronger central pop
                                 explodeProjectile({x:proj.x,y:proj.y,size:proj.size,enemy:false}, burstDmg);
-                                const petals = 6 + Math.floor(Math.random()*3);
+                                addScreenShake(6);
+                                // Larger petal count scaling with multi-shot patterns (optional simple scale)
+                                const petals = 10 + Math.floor(Math.random()*4);
                                 for (let p=0;p<petals;p++) {
                                     const ang = (p/petals)*Math.PI*2;
                                     game.projectiles.push({
                                         x: proj.x, y: proj.y,
-                                        vx: Math.cos(ang)*2.4, vy: Math.sin(ang)*2.4,
-                                        life: 55,
-                                        size: Math.max(2, proj.size*0.45), enemy:false,
-                                        damage: Math.max(1, Math.floor(base*0.35)), baseDamage: Math.max(1, Math.floor(base*0.35)),
+                                        vx: Math.cos(ang)*(2.8 + Math.random()*0.6), vy: Math.sin(ang)*(2.8 + Math.random()*0.6),
+                                        life: 65,
+                                        size: Math.max(2, proj.size*0.55), enemy:false,
+                                        damage: Math.max(1, Math.floor(base*0.42)), baseDamage: Math.max(1, Math.floor(base*0.42)),
                                         echoPetal:true
                                     });
                                 }
+                                // Resonance field: lingering aura dealing periodic pulse damage near center
+                                const field = {
+                                    x: proj.x, y: proj.y,
+                                    radius: 120,
+                                    createdAt: Date.now(),
+                                    duration: 1800,
+                                    tickEvery: 300,
+                                    lastTick: 0,
+                                    baseDamage: Math.max(1, Math.floor(base * 0.30)),
+                                    type: 'echoBloom'
+                                };
+                                if (!game.echoBloomFields) game.echoBloomFields = [];
+                                game.echoBloomFields.push(field);
                                 addParticle(proj.x, proj.y, '#FFE6FF','explosion');
+                                for (let r=0;r<20;r++) addParticle(proj.x + (Math.random()-0.5)*140, proj.y + (Math.random()-0.5)*140, '#FFC8FF','spark');
                                 // consume echoes
                                 for (let p2 of game.projectiles) {
                                     if (p2.echoChild && p2.parentRef === proj) p2.life = 0;
@@ -6473,6 +6517,15 @@ function offerPermanentAbilityChoice() {
                         // Phasing bounce visual accent (a faint cyan flash) so player sees the virtual ricochet
                         if (proj.phasing) {
                             addParticle(proj.x, proj.y, '#66EEFF', 'spark');
+                            // Added brief cyan ring flash for clearer phasing ricochet feedback
+                            if (typeof addTransientEffect === 'function') {
+                                addTransientEffect({ type:'ringFlash', x:proj.x, y:proj.y, color:'#66EEFF', radius:24, life:18 });
+                            } else {
+                                // Fallback: spawn extra outward spark petals
+                                for (let rf=0; rf<5; rf++) {
+                                    addParticle(proj.x + (Math.random()-0.5)*6, proj.y + (Math.random()-0.5)*6, '#AAFFFF', 'spark');
+                                }
+                            }
                         }
                     }
                 } else {
@@ -7574,6 +7627,143 @@ function offerPermanentAbilityChoice() {
                             enemy.slowTime = Math.max(enemy.slowTime || 0, 150);
                             // Optional: add tiny temporal jitter particle
                             if (Math.random() < 0.3) addParticle(enemy.x, enemy.y - enemy.size/2, '#66AAFF', 'spark');
+
+        // === Bloom Ring System (Hybrid Mode C) ===
+        // Player periodically spawns large expanding damage rings. Projectiles emit occasional sub-petal bursts (handled inline earlier).
+        // Each enemy is damaged at most once per ring (edge pass). Ring has telegraph (pre-detonation) then expansion phase.
+        function spawnBloomRing(x, y, opts) {
+            if (!game.bloomRings) game.bloomRings = [];
+            const maxActive = 6;
+            if (game.bloomRings.length >= maxActive) game.bloomRings.shift();
+            // Vortex proximity synergy: if spawning within any vortex innerRadius*1.1, boost damage and growth slightly
+            let vortexBoost = 1;
+            if (Array.isArray(game.vortexFields) && game.vortexFields.length) {
+                for (const vf of game.vortexFields) {
+                    const dx = x - vf.x, dy = y - vf.y; const d = Math.hypot(dx, dy);
+                    if (d < vf.innerRadius * 1.1) { vortexBoost = 1.18; break; }
+                }
+            }
+            const ring = {
+                x, y,
+                radius: 0,
+                width: opts && opts.width || 26,
+                growth: (opts && opts.growth || 7.2) * (vortexBoost>1?1.06:1),
+                maxRadius: (opts && opts.maxRadius || 420) * (vortexBoost>1?1.04:1),
+                damage: (opts && opts.damage || Math.max(2, Math.floor(calculateDamage() * 0.55))) * vortexBoost,
+                createdAt: Date.now(),
+                maxLife: (opts && opts.maxLife) || 6000, // ms fail-safe
+                hits: new Set(),
+                detonated: true, // expansion begins immediately (telegraph handled visually for first few frames)
+                seed: Math.random()*Math.PI*2
+            };
+            game.bloomRings.push(ring);
+            // Petal emission (stronger, fewer) at ring birth
+            const petals = 8;
+            for (let i=0;i<petals;i++) {
+                const ang = (i/petals)*Math.PI*2;
+                const spd = 4.2 + Math.random()*0.8;
+                game.projectiles.push({
+                    x, y,
+                    vx: Math.cos(ang)*spd,
+                    vy: Math.sin(ang)*spd,
+                    life: 46,
+                    size: 4,
+                    enemy:false,
+                    damage: Math.max(1, Math.floor(ring.damage * 0.42 * (vortexBoost>1?1.1:1))),
+                    baseDamage: Math.max(1, Math.floor(ring.damage * 0.42 * (vortexBoost>1?1.1:1))),
+                    bloomChild:true,
+                    _petal:true
+                });
+            }
+            if (typeof addScreenShake === 'function') addScreenShake(4, 180);
+            addParticle(x, y, '#FFE4CC','explosion');
+        }
+
+        function updateBloomRings() {
+            if (!game.player || !game.player.abilities || !game.player.abilities.some(a=>ABILITIES[a] && ABILITIES[a].effect && ABILITIES[a].effect.bloomRing)) return;
+            if (!game._bloomRingCharge) game._bloomRingCharge = 0;
+            const chargeTime = 58; // frames between main rings (approx 1s at 60fps)
+            game._bloomRingCharge++;
+            if (game._bloomRingCharge >= chargeTime) {
+                game._bloomRingCharge = 0;
+                // Spawn ring at player location (slightly ahead if moving for dynamism)
+                let sx = game.player.x;
+                let sy = game.player.y;
+                if (game.player && game.player.vx && game.player.vy) {
+                    sx += game.player.vx * 4;
+                    sy += game.player.vy * 4;
+                }
+                // Optional synergy: if Echo Bloom field active, increase radius a bit
+                const activeEcho = game.echoBloomFields && game.echoBloomFields.length;
+                spawnBloomRing(sx, sy, activeEcho ? { maxRadius: 470, growth: 7.8 } : null);
+            }
+            // Ring progression & damage application
+            if (!game.bloomRings || !game.bloomRings.length) return;
+            for (let i = game.bloomRings.length - 1; i >= 0; i--) {
+                const rg = game.bloomRings[i];
+                rg.radius += rg.growth;
+                // Vortex intersection synergy: when ring edge passes through vortex radius for first time, spawn bonus petals & temp damage buff
+                if (!rg._vortexProc && Array.isArray(game.vortexFields) && game.vortexFields.length) {
+                    for (const vf of game.vortexFields) {
+                        const dxv = rg.x - vf.x, dyv = rg.y - vf.y; const dv = Math.hypot(dxv, dyv);
+                        // Check if ring edge intersects vortex outer radius band this frame
+                        if (Math.abs(dv - rg.radius) < rg.growth + 8 && dv < vf.radius + rg.width) {
+                            rg._vortexProc = true;
+                            // Damage boost for remaining expansion
+                            rg.damage *= 1.15;
+                            rg.growth *= 1.08;
+                            // Spawn bonus petals focused tangentially (12 smaller petals)
+                            const bonus = 12;
+                            for (let b=0;b<bonus;b++) {
+                                const ang = (b/bonus)*Math.PI*2;
+                                const spd = 4.6 + Math.random()*0.9;
+                                game.projectiles.push({
+                                    x: rg.x + Math.cos(ang)*rg.radius,
+                                    y: rg.y + Math.sin(ang)*rg.radius,
+                                    vx: Math.cos(ang + Math.PI/2)*spd*0.55,
+                                    vy: Math.sin(ang + Math.PI/2)*spd*0.55,
+                                    life: 34,
+                                    size: 3,
+                                    enemy:false,
+                                    damage: Math.max(1, Math.floor(rg.damage * 0.24)),
+                                    baseDamage: Math.max(1, Math.floor(rg.damage * 0.24)),
+                                    bloomChild:true,
+                                    _petal:true,
+                                    _vortexPetal:true
+                                });
+                            }
+                            addParticle(rg.x, rg.y, '#FFEEDD','explosion');
+                            if (typeof addScreenShake === 'function') addScreenShake(3, 160);
+                            break;
+                        }
+                    }
+                }
+                // Lifespan fail-safe (ms)
+                if (Date.now() - rg.createdAt > rg.maxLife || rg.radius > rg.maxRadius + rg.width*1.2) {
+                    game.bloomRings.splice(i,1);
+                    continue;
+                }
+                // Damage band: treat ring edge as annulus
+                if (game.enemies && game.enemies.length) {
+                    for (const enemy of game.enemies) {
+                        if (!enemy || enemy.health <= 0) continue;
+                        const id = enemy._id || enemy.__rid || enemy; // fallback: object ref
+                        if (rg.hits.has(id)) continue;
+                        const dx = enemy.x - rg.x;
+                        const dy = enemy.y - rg.y;
+                        const dist = Math.hypot(dx, dy);
+                        const edgeDelta = Math.abs(dist - rg.radius);
+                        if (edgeDelta <= rg.width * 0.55 && dist <= rg.radius + rg.width) {
+                            rg.hits.add(id);
+                            const dmg = Math.max(1, Math.floor(rg.damage * (0.85 + Math.random()*0.3)));
+                            applyPlayerDamage(enemy, dmg);
+                            addDamageNumber(enemy.x, enemy.y - (enemy.size||18)/2, dmg, '#FFC8AA');
+                            if (Math.random()<0.5) addParticle(enemy.x, enemy.y, '#FFDCC0','spark');
+                        }
+                    }
+                }
+            }
+        }
                         }
                     });
                 }
@@ -7721,6 +7911,30 @@ function offerPermanentAbilityChoice() {
                     f.lastTick = now;
                     // Pulse visual: ring contraction particles
                     for (let p=0;p<8;p++) addParticle(f.x + (Math.random()-0.5)*f.radius*0.9, f.y + (Math.random()-0.5)*f.radius*0.9, '#AA44AA','spark');
+                }
+            }
+        }
+
+        // Echo Bloom lingering resonance fields
+        function updateEchoBloomFields() {
+            if (!Array.isArray(game.echoBloomFields) || !game.echoBloomFields.length) return;
+            const now = Date.now();
+            for (let i = game.echoBloomFields.length - 1; i >= 0; i--) {
+                const f = game.echoBloomFields[i];
+                if (now - f.createdAt > f.duration) { game.echoBloomFields.splice(i,1); continue; }
+                if (now - f.lastTick >= f.tickEvery) {
+                    f.lastTick = now;
+                    game.enemies.forEach(en => {
+                        if (en.health<=0) return;
+                        const dx = en.x - f.x; const dy = en.y - f.y; const d = Math.hypot(dx,dy);
+                        if (d < f.radius) {
+                            const fall = 0.45 + 0.55*(1 - d / f.radius);
+                            const dmg = Math.max(1, Math.floor(f.baseDamage * fall));
+                            en.health -= dmg;
+                            addDamageNumber(dmg, en.x, en.y - en.size/2, { type:'void' });
+                            if (Math.random()<0.25) addParticle(en.x, en.y, '#FFC8FF','impact');
+                        }
+                    });
                 }
             }
         }
@@ -8715,6 +8929,91 @@ offerPermanentAbilityChoice();
                     ctx.beginPath();
                     ctx.arc(f.x, f.y, coreR, 0, Math.PI*2);
                     ctx.fill();
+                });
+            }
+
+            // Echo Bloom resonance field rendering (beneath enemies, above vortex for contrast)
+            if (Array.isArray(game.echoBloomFields) && game.echoBloomFields.length) {
+                const nowT = Date.now();
+                game.echoBloomFields.forEach(f => {
+                    const age = nowT - f.createdAt;
+                    const life = 1 - Math.min(1, age / f.duration);
+                    const pulse = 0.5 + Math.sin(nowT/170 + f.x*0.05 + f.y*0.03)*0.5;
+                    const radius = f.radius * (0.92 + pulse*0.08);
+                    const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, radius);
+                    g.addColorStop(0, `rgba(255,230,255,${0.40 * life})`);
+                    g.addColorStop(0.45, `rgba(230,140,255,${0.18 * life})`);
+                    g.addColorStop(1, 'rgba(160,60,200,0)');
+                    ctx.fillStyle = g;
+                    ctx.beginPath(); ctx.arc(f.x, f.y, radius, 0, Math.PI*2); ctx.fill();
+                    // Subtle rotating petal spokes
+                    ctx.save();
+                    ctx.translate(f.x, f.y);
+                    ctx.rotate(age/600);
+                    const petals = 8;
+                    for (let p=0;p<petals;p++) {
+                        const a = (p/petals)*Math.PI*2;
+                        const ir = radius*0.15; const or = radius*0.75;
+                        ctx.strokeStyle = `rgba(255,200,255,${0.10 * life})`;
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.moveTo(Math.cos(a)*ir, Math.sin(a)*ir);
+                        ctx.lineTo(Math.cos(a)*or, Math.sin(a)*or);
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+                });
+            }
+
+            // Bloom Rings rendering (after Echo Bloom resonance so rings sit above fields but below lightning)
+            if (Array.isArray(game.bloomRings) && game.bloomRings.length) {
+                const nowBR = Date.now();
+                game.bloomRings.forEach(rg => {
+                    const age = nowBR - rg.createdAt;
+                    const lifeRatio = 1 - Math.min(1, age / rg.maxLife);
+                    const growthPhase = Math.min(1, rg.radius / rg.maxRadius);
+                    const alpha = 0.65 * lifeRatio;
+                    // Outer glow donut
+                    const grad = ctx.createRadialGradient(rg.x, rg.y, Math.max(0, rg.radius - rg.width*0.65), rg.x, rg.y, rg.radius + rg.width*0.4);
+                    grad.addColorStop(0, 'rgba(255,230,255,0)');
+                    grad.addColorStop(0.55, `rgba(255,230,210,${alpha*0.18})`);
+                    grad.addColorStop(0.82, `rgba(255,160,120,${alpha*0.55})`);
+                    grad.addColorStop(1, 'rgba(255,120,60,0)');
+                    ctx.fillStyle = grad;
+                    ctx.beginPath();
+                    ctx.arc(rg.x, rg.y, rg.radius + rg.width*0.4, 0, Math.PI*2);
+                    ctx.fill();
+                    // Core thin inner ring (charging telegraph fade out early)
+                    if (!rg.detonated) {
+                        const teleA = 0.35 + Math.sin(nowBR/140 + rg.x*0.02)*0.25;
+                        ctx.strokeStyle = `rgba(255,240,240,${teleA})`;
+                        ctx.lineWidth = 2 + Math.sin(nowBR/90)*1.5;
+                        ctx.beginPath();
+                        ctx.arc(rg.x, rg.y, 12 + Math.sin(nowBR/120)*3, 0, Math.PI*2);
+                        ctx.stroke();
+                    }
+                    // Ring edge (main visible band)
+                    ctx.save();
+                    ctx.globalCompositeOperation = 'lighter';
+                    ctx.strokeStyle = `rgba(255,200,160,${alpha * 0.85})`;
+                    ctx.lineWidth = rg.width * (0.55 + Math.sin(nowBR/200 + rg.seed)*0.1);
+                    ctx.beginPath();
+                    ctx.arc(rg.x, rg.y, rg.radius, 0, Math.PI*2);
+                    ctx.stroke();
+                    // Rotating spokes for motion cue
+                    ctx.translate(rg.x, rg.y);
+                    ctx.rotate(age/600 + rg.seed);
+                    const spokes = 4;
+                    for (let s=0;s<spokes;s++) {
+                        const ang = (s/spokes)*Math.PI*2;
+                        ctx.strokeStyle = `rgba(255,200,180,${alpha*0.22})`;
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.moveTo(Math.cos(ang)*(rg.radius-rg.width*0.5), Math.sin(ang)*(rg.radius-rg.width*0.5));
+                        ctx.lineTo(Math.cos(ang)*(rg.radius+rg.width*0.5), Math.sin(ang)*(rg.radius+rg.width*0.5));
+                        ctx.stroke();
+                    }
+                    ctx.restore();
                 });
             }
 
