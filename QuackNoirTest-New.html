@@ -65,23 +65,27 @@
             line-height: 1.4;
         }
         .tooltip {
-            position: absolute;
+            position: fixed; /* detach from scaled canvas so always at true bottom */
             left: 50%;
-            bottom: 18px;
+            bottom: 8px;
             transform: translateX(-50%);
-            background: rgba(60,60,60,0.95);
-            color: white;
-            padding: 12px 16px;
-            border-radius: 8px;
-            border: 2px solid #666;
+            background: linear-gradient(180deg, rgba(30,30,30,0.9), rgba(12,12,12,0.92));
+            color: #fff;
+            padding: 10px 18px 12px 18px;
+            border-radius: 10px;
+            border: 2px solid #444;
             font-size: 14px;
             text-align: center;
-            z-index: 200;
+            z-index: 1200; /* above game & side panels but below pause overlay (1000) -> raise above */
             opacity: 0;
-            transition: opacity 0.3s ease;
+            transition: opacity 0.3s ease, transform 0.35s ease;
             pointer-events: none;
-            max-width: 400px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            max-width: 520px;
+            width: auto;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.65), 0 0 10px rgba(0,255,136,0.18);
+            font-family: 'Courier New', monospace;
+            line-height: 1.25;
+            backdrop-filter: blur(3px);
         }
         .tooltip.show {
             opacity: 1;
@@ -159,9 +163,9 @@
             position: relative;
         }
         /* Stats panel rows */
-        .stat-row { display:flex; justify-content:space-between; align-items:center; margin:6px 0 4px; padding:2px 0 4px; border-bottom:1px solid #333; }
-        .stat-label { color:#ccc; font-size:11px; letter-spacing:0.5px; }
-        .stat-value { color:#00ff88; font-weight:bold; font-size:12px; text-shadow:0 0 4px #004422; }
+    .stat-row { display:flex; justify-content:flex-start; align-items:center; gap:6px; margin:4px 0 2px; padding:1px 0 3px; border-bottom:1px solid #222; flex-wrap:wrap; }
+    .stat-label { color:#ccc; font-size:11px; letter-spacing:0.5px; min-width:72px; }
+    .stat-value { color:#00ff88; font-weight:bold; font-size:11px; text-shadow:0 0 3px #004422; }
         #abilities > div:first-child { font-weight:bold; margin-bottom:4px; color:#ffdd55; text-shadow:0 0 6px #664400; }
         #abilities { font-family:'Courier New', monospace; }
         .progress-bar {
@@ -178,7 +182,29 @@
             border-radius: 4px;
             transition: width 0.3s ease;
         }
-        html, body { margin:0; padding:0; overflow-y:hidden; }
+    html, body { margin:0; padding:0; overflow-y:hidden; background:#000; }
+    /* Compact mode adjustments for small scale */
+    body.compact-ui #ui { padding:6px 8px !important; }
+    body.compact-ui #abilities { padding:6px 8px !important; }
+    body.compact-ui .stat-row { margin:4px 0 2px; }
+    body.compact-ui .stat-label { font-size:10px; }
+    body.compact-ui .stat-value { font-size:10px; }
+    /* Allow internal scrolling of right panel when viewport height is limited */
+    #statsPanelWrapper { max-height: calc(100vh - 8px); overflow-y:auto; }
+    /* Allow horizontal scroll if content wider than base width */
+    #statsPanelWrapper { overflow-x:hidden; }
+    /* Responsive: when body has class panel-below, stack panel under canvas full width */
+    body.panel-below #gameSection { flex-direction: column !important; align-items:center !important; }
+    body.panel-below #statsPanelWrapper { width:100% !important; max-width:860px; display:flex; flex-direction:row; flex-wrap:wrap; justify-content:space-between; }
+    body.panel-below #ui, body.panel-below #abilities { width: calc(50% - 12px); min-width:300px; }
+    @media (max-width: 900px) {
+        body.panel-below #ui, body.panel-below #abilities { width:100%; }
+    }
+    #gameSection { gap: 12px !important; }
+    #gameCanvas { border: 3px solid #333; box-shadow:0 0 12px rgba(255,160,80,0.25); background:#000; border-radius:6px; }
+    #gameContainer { position:relative; }
+    /* Reserve space under canvas for HUD; HUD itself will sit below without causing scroll */
+    #ui { margin-top:4px; }
         /* Tighten spacing under minimap/sound buttons */
         #gameSection { margin-bottom:0; }
         /* Reduce top margin on minimap to reclaim vertical space */
@@ -187,8 +213,9 @@
 </head>
 <body>
     <div id="launchCurtain"></div>
-                        <div id="gameSection" style="display: flex; flex-direction: row; align-items: flex-start; gap: 0; margin:0; padding:0;">
-                            <div style="display: flex; flex-direction: column; align-items: flex-start;">
+                        <div id="gameSection" style="display: flex; flex-direction: row; align-items: flex-start; gap: 2px; margin:0; padding:0;">
+                            <!-- Left: Scaled game canvas column -->
+                            <div id="gameOuter" style="position: relative; display: flex; flex-direction: column; align-items: flex-start;">
                                 <div id="gameContainer" style="position: relative;">
                                     <canvas id="gameCanvas" width="640" height="480"></canvas>
                                     <div id="abilityTooltip" class="tooltip">
@@ -196,28 +223,28 @@
                                         <div id="tooltipDesc" class="ability-desc"></div>
                                     </div>
                                 </div>
-                                <div style="display: flex; flex-direction: row; align-items: flex-start; margin-top: 8px;">
-                                    <div id="ui" style="background: rgba(0,0,0,0.8); padding: 8px; border-radius: 6px; min-width: 180px;">
-                                        <div>Health: <span id="health"></span> / <span id="maxHealth"></span></div>
-                                        <div>District: <span id="dungeon"></span> | Street: <span id="room"></span></div>
-                                        <div>Score: <span id="score"></span></div>
-                                        <div class="progress-bar"><div id="healthBar" class="progress-fill" style="width:100%"></div></div>
-                                        <div id="chestLegend" style="margin-top:8px;font-size:11px;color:#ffdd55;letter-spacing:0.5px;">Chests: <span id="statChests" style="color:#ffd700"></span></div>
-                                    </div>
-                                </div>
                             </div>
-                                                    <div style="display: flex; flex-direction: row; align-items: flex-start; margin-left: 0; width: 220px; justify-content: flex-start;">
-                                                        <div id="abilities" style="width: 210px;">
-                                                            <div>Stats:</div>
-                                                            <div class="stat-row"><span class="stat-label">Damage</span><span id="statDamage" class="stat-value"></span></div>
-                                                            <div class="stat-row"><span class="stat-label">Projectiles</span><span id="statProjectiles" class="stat-value"></span></div>
-                                                            <div class="stat-row"><span class="stat-label">Attack Speed</span><span id="statAttackSpeed" class="stat-value"></span></div>
-                                                            <div class="stat-row"><span class="stat-label">Pierce</span><span id="statPierce" class="stat-value"></span></div>
-                                                            <div class="stat-row"><span class="stat-label">Crit</span><span id="statCrit" class="stat-value"></span></div>
-                                                            <div class="stat-row"><span class="stat-label">Block</span><span id="statBlock" class="stat-value"></span></div>
-                                                            <div class="stat-row"><span class="stat-label">Kills</span><span id="statKills" class="stat-value"></span></div>
-                                                            <div class="stat-row"><span class="stat-label">Rooms</span><span id="statRooms" class="stat-value"></span></div>
-                                                        </div>
+                            <!-- Right: Side panel (health HUD on top, stats below) -->
+                            <div id="statsPanelWrapper" style="position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin-left:0; width: 210px; box-sizing:border-box; overflow-x:hidden;">
+                                <div id="ui" style="background: rgba(0,0,0,0.88); padding: 8px 10px; border-radius: 8px; width:100%; box-shadow:0 0 10px rgba(0,0,0,0.65);">
+                                    <div style="font-weight:bold; color:#ffdd55; margin-bottom:6px; letter-spacing:0.5px;">Status</div>
+                                    <div style="margin:2px 0;">Health: <span id="health"></span> / <span id="maxHealth"></span></div>
+                                    <div style="margin:2px 0;">District: <span id="dungeon"></span> | Street: <span id="room"></span></div>
+                                    <div style="margin:2px 0;">Score: <span id="score"></span></div>
+                                    <div class="progress-bar" style="margin-top:8px; margin-bottom:6px; height:10px;"><div id="healthBar" class="progress-fill" style="width:100%; height:100%"></div></div>
+                                    <div id="chestLegend" style="margin-top:2px;font-size:11px;color:#ffdd55;letter-spacing:0.5px;">Chests: <span id="statChests" style="color:#ffd700"></span></div>
+                                </div>
+                                <div id="abilities" style="width:100%; background:rgba(0,0,0,0.78); padding:8px 10px; border-radius:8px; box-shadow:0 0 8px rgba(0,0,0,0.55);">
+                                    <div style="font-weight:bold; margin-bottom:6px; color:#00ff88; letter-spacing:0.5px;">Stats:</div>
+                                    <div class="stat-row"><span class="stat-label">Damage</span><span id="statDamage" class="stat-value"></span></div>
+                                    <div class="stat-row"><span class="stat-label">Projectiles</span><span id="statProjectiles" class="stat-value"></span></div>
+                                    <div class="stat-row"><span class="stat-label">Attack Speed</span><span id="statAttackSpeed" class="stat-value"></span></div>
+                                    <div class="stat-row"><span class="stat-label">Pierce</span><span id="statPierce" class="stat-value"></span></div>
+                                    <div class="stat-row"><span class="stat-label">Crit</span><span id="statCrit" class="stat-value"></span></div>
+                                    <div class="stat-row"><span class="stat-label">Block</span><span id="statBlock" class="stat-value"></span></div>
+                                    <div class="stat-row"><span class="stat-label">Kills</span><span id="statKills" class="stat-value"></span></div>
+                                    <div class="stat-row"><span class="stat-label">Rooms</span><span id="statRooms" class="stat-value"></span></div>
+                                </div>
                             </div>
                         </div>
                         <!-- Pause overlay with tabbed submenus -->
@@ -248,11 +275,110 @@
         document.addEventListener('DOMContentLoaded', ()=> {
             const cv = document.getElementById('gameCanvas');
             if (cv) { cv.style.display='block'; cv.style.visibility='visible'; }
+            // Preload car obstacle images
+            const carImgH = new Image();
+            carImgH.onload = ()=>{ carImgH._ok = true; };
+            carImgH.onerror = ()=>{ console.warn('[CarImage] Failed to load assets/cars/car-horizontal.png'); carImgH._broken = true; };
+            carImgH.src = 'assets/cars/car-horizontal.png';
+            const carImgV = new Image();
+            carImgV.onload = ()=>{ carImgV._ok = true; };
+            carImgV.onerror = ()=>{ console.warn('[CarImage] Failed to load assets/cars/car-front.png'); carImgV._broken = true; };
+            carImgV.src = 'assets/cars/car-front.png';
+            window._carObstacleImages = { h: carImgH, v: carImgV };
+            // === Dynamic Canvas Scaling Wrapper ===
+            // We render at a fixed logical resolution and scale up to fit while leaving room for HUD (right) and stats (bottom if needed) without scrollbars.
+            (function initScaledCanvas(){
+                // === Layout / Scaling Constants ===
+                // SIDE_PANEL_WIDTH: width reserved for right column (health HUD + stats) in CSS pixels. Adjust if panel content widens.
+                // LOGICAL_WIDTH/HEIGHT: fixed internal simulation resolution; gameplay, collision, spawn logic use these units.
+                //   Expanding increases visible world area per room (ROOM_WIDTH / ROOM_HEIGHT derived from these values).
+                // MAX_DPR: clamp on devicePixelRatio to prevent huge backing buffers that can hurt performance / memory.
+                // Scaling Strategy: We scale canvas to fit available width (minus side panel) and full window height.
+                //   Scale = min( (availW - SIDE_PANEL_WIDTH)/LOGICAL_WIDTH, availH/LOGICAL_HEIGHT ).
+                //   This preserves aspect ratio while maximizing playfield without causing scrollbars.
+                const SIDE_PANEL_WIDTH = 200; // reduced baseline width for narrower laptop fit
+                // Reduced logical width to tighten horizontal span (improves performance & small-screen fit)
+                const LOGICAL_WIDTH = 1160;  // adjusted to nearest TILE_SIZE multiple (20*58) to align right edge
+                const LOGICAL_HEIGHT = 720;  // keep vertical space (some users on 1366x768)
+                const MAX_DPR = 1.25; // lowered from 1.5 to reduce backing buffer size and fill cost
+                const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+                const canvasCSS = cv;
+                function configureBuffer(){
+                    cv.width = LOGICAL_WIDTH * dpr;
+                    cv.height = LOGICAL_HEIGHT * dpr;
+                    canvasCSS.style.width = LOGICAL_WIDTH + 'px';
+                    canvasCSS.style.height = LOGICAL_HEIGHT + 'px';
+                    const ctxLocal = cv.getContext('2d');
+                    ctxLocal.setTransform(dpr,0,0,dpr,0,0);
+                }
+                configureBuffer();
+                window.__LOGICAL_CANVAS__ = { w: LOGICAL_WIDTH, h: LOGICAL_HEIGHT, dpr };
+                // Apply scale so canvas + side panel fit horizontally within window while maximizing canvas height.
+                function applyScale(){
+                    const availW = window.innerWidth - 6; // slightly tighter outer margin
+                    const availH = window.innerHeight - 6;
+                    const GAP = 8;             // reduced gap between canvas and side panel
+                    const SAFETY = 4;           // smaller safety margin
+                    const CANVAS_BORDER = 3;    // matches CSS border thickness on #gameCanvas
+                    // Measure actual side panel width if rendered (more accurate than constant)
+                    const panelEl = document.getElementById('statsPanelWrapper');
+                    const panelWidth = (panelEl && panelEl.offsetWidth) ? panelEl.offsetWidth : SIDE_PANEL_WIDTH;
+                    let scale = availH / LOGICAL_HEIGHT; // start height-first
+                    let layoutBelow = false;
+                    // Predict total width requirement in side-by-side mode
+                    const scaledCandidateWidth = LOGICAL_WIDTH * scale;
+                    let totalProjected = scaledCandidateWidth + (2 * CANVAS_BORDER * scale) + panelWidth + GAP + SAFETY;
+                    // If width insufficient even after scaling down (or viewport very narrow), switch to panel-below layout
+                    if (totalProjected > availW && availW < 1000) {
+                        layoutBelow = true;
+                    } else if (totalProjected > availW) {
+                        // Try reducing scale just enough to fit side-by-side
+                        const widthBudgetWithBorder = availW - panelWidth - GAP - SAFETY - (2 * CANVAS_BORDER * scale);
+                        const revised = widthBudgetWithBorder / LOGICAL_WIDTH;
+                        scale = Math.min(scale, revised * 0.997);
+                        totalProjected = (LOGICAL_WIDTH * scale) + (2 * CANVAS_BORDER * scale) + panelWidth + GAP + SAFETY;
+                        if (totalProjected > availW * 1.02) {
+                            // Still doesn't fit; fall back to below layout
+                            layoutBelow = true;
+                            scale = Math.min(scale, (availW - SAFETY*2) / LOGICAL_WIDTH); // re-evaluate width usage for centered canvas
+                        }
+                    }
+                    const MIN_SCALE = 0.35; // allow smaller scale on compact laptop displays
+                    scale = Math.max(Math.min(scale, 3), MIN_SCALE);
+                    // Slight intentional shrink to guarantee no overflow due to fractional rounding
+                    scale *= 0.993;
+                    const scaledBorderTotal = 2 * CANVAS_BORDER * scale;
+                    if (!layoutBelow) {
+                        // Final overflow guard in side-by-side mode
+                        const totalNeeded = (LOGICAL_WIDTH * scale) + scaledBorderTotal + panelWidth + GAP + SAFETY;
+                        if (totalNeeded > availW) {
+                            const widthBudgetWithBorder = availW - panelWidth - GAP - SAFETY - scaledBorderTotal;
+                            const revised = widthBudgetWithBorder / LOGICAL_WIDTH;
+                            scale = Math.max(Math.min(revised * 0.995, scale), 0.40);
+                        }
+                    }
+                    const scaledW = LOGICAL_WIDTH * scale;
+                    canvasCSS.style.transformOrigin = 'top left';
+                    canvasCSS.style.transform = `scale(${scale})`;
+                    const gameOuter = document.getElementById('gameOuter');
+                    if (gameOuter) gameOuter.style.width = (scaledW + scaledBorderTotal) + 'px';
+                    // Toggle layout mode class
+                    if (layoutBelow) document.body.classList.add('panel-below'); else document.body.classList.remove('panel-below');
+                    // Toggle compact UI class when scale falls below threshold
+                    if (scale < 0.52) document.body.classList.add('compact-ui'); else document.body.classList.remove('compact-ui');
+                }
+                window.addEventListener('resize', applyScale);
+                applyScale();
+            })();
         });
     let canvas, ctx;
     const TILE_SIZE = 20;
-    const ROOM_WIDTH = 32;
-    const ROOM_HEIGHT = 24;
+    // Derive room tile dimensions from logical canvas size (set in scaling wrapper: 1160x720)
+    // If LOGICAL size changes later, these should be recomputed or made reactive.
+    const LOGICAL_W = (window.__LOGICAL_CANVAS__ && window.__LOGICAL_CANVAS__.w) || 1160;
+    const LOGICAL_H = (window.__LOGICAL_CANVAS__ && window.__LOGICAL_CANVAS__.h) || 720;
+    const ROOM_WIDTH = Math.floor(LOGICAL_W / TILE_SIZE);  // dynamic width in tiles
+    const ROOM_HEIGHT = Math.floor(LOGICAL_H / TILE_SIZE); // dynamic height in tiles
         
     const game = {
             player: {
@@ -274,7 +400,11 @@
             screenShake: 0, screenShakeIntensity: 0, paused: false,
             sfxEnabled: true,
             musicEnabled: true,
+            showFps: false,
             disableCosmeticParticles: false, // user-configurable performance toggle
+            // Performance / FX dynamic control
+            perf: { frameTimes: [], lastFpsSample: performance.now(), fps: 60, lowFx:false, autoLowFx:true },
+            fxSuppression: { particleSkip: 0 },
             _roomSpawnedEnemies: 0,
             _restartGraceFrames: 0,
             nextDuckFlockFrame: 0 // scheduling for Duck Dynasty flocks
@@ -361,6 +491,19 @@ function ensureBackgroundMusic() {
         }
     } catch(e) {}
 }
+// Manual Low FX toggle: press 'L' to toggle, Shift+L to re-enable auto mode
+window.addEventListener('keydown', (e)=>{
+    if (e.key === 'l' || e.key === 'L') {
+        if (game && game.perf) {
+            if (e.shiftKey) {
+                game.perf.autoLowFx = true; // re-enable auto management
+            } else {
+                game.perf.lowFx = !game.perf.lowFx;
+                game.perf.autoLowFx = false; // manual override
+            }
+        }
+    }
+});
 
 function toggleCosmeticParticles() {
     game.disableCosmeticParticles = !game.disableCosmeticParticles;
@@ -1570,19 +1713,33 @@ function offerPermanentAbilityChoice() {
             game.roomStartTime = Date.now();
             game.roomCleared = false;
             
+            // Select / update theme for this room
+            game.currentTheme = pickTheme(game.dungeon, game.room);
+
             // Create perimeter walls
+            // Build perimeter walls spanning full logical canvas area
             for (let x = 0; x < ROOM_WIDTH; x++) {
-                game.walls.push({ x: x * TILE_SIZE, y: 0, type: 'building' });
-                game.walls.push({ x: x * TILE_SIZE, y: (ROOM_HEIGHT - 1) * TILE_SIZE, type: 'building' });
+                game.walls.push({ x: x * TILE_SIZE, y: 0, type: 'building' }); // top
+                game.walls.push({ x: x * TILE_SIZE, y: (ROOM_HEIGHT - 1) * TILE_SIZE, type: 'building' }); // bottom
             }
             for (let y = 1; y < ROOM_HEIGHT - 1; y++) {
-                game.walls.push({ x: 0, y: y * TILE_SIZE, type: 'building' });
-                game.walls.push({ x: (ROOM_WIDTH - 1) * TILE_SIZE, y: y * TILE_SIZE, type: 'building' });
+                game.walls.push({ x: 0, y: y * TILE_SIZE, type: 'building' }); // left
+                game.walls.push({ x: (ROOM_WIDTH - 1) * TILE_SIZE, y: y * TILE_SIZE, type: 'building' }); // right
             }
             
             // Add varied obstacles
-            const obstacleTypes = ['car', 'dumpster', 'streetlight', 'barrier'];
+            const baseObstacleTypes = ['car', 'dumpster', 'streetlight', 'barrier'];
+            // Expand obstacle list according to theme weights (simple duplication weighting)
+            let obstacleTypes = [];
+            const ow = game.currentTheme.obstacleWeights || {};
+            baseObstacleTypes.forEach(t => {
+                const weight = Math.max(0.1, ow[t] || 1);
+                const copies = Math.round(weight * 5); // scale factor for variety; 1 => 5 copies
+                for (let c=0;c<copies;c++) obstacleTypes.push(t);
+            });
+            if (!obstacleTypes.length) obstacleTypes = baseObstacleTypes.slice();
             const obstacleCount = 5 + Math.floor(game.dungeon / 2);
+            const OBSTACLE_MIN_GAP = TILE_SIZE * 1.2; // minimum pixel gap between obstacle bounding boxes (excluding perimeter walls)
             
             for (let i = 0; i < obstacleCount; i++) {
                 let x, y, attempts = 0;
@@ -1590,11 +1747,63 @@ function offerPermanentAbilityChoice() {
                     x = (2 + Math.floor(Math.random() * (ROOM_WIDTH - 4))) * TILE_SIZE;
                     y = (2 + Math.floor(Math.random() * (ROOM_HEIGHT - 4))) * TILE_SIZE;
                     attempts++;
-                } while ((Math.abs(x - 320) < 100 && Math.abs(y - 240) < 100) && attempts < 50);
+                } while ((Math.abs(x - (LOGICAL_W/2)) < 100 && Math.abs(y - (LOGICAL_H/2)) < 100) && attempts < 50);
                 
                 if (attempts < 50) {
                     const type = obstacleTypes[Math.floor(Math.random() * obstacleTypes.length)];
-                    game.walls.push({ x, y, type });
+                    if (type === 'car') {
+                        // Larger car footprint: treat horizontal as wider, vertical as taller.
+                        const orientation = Math.random() < 0.55 ? 'horizontal' : 'vertical';
+                        // Base tile to pixel conversions
+                        const tile = TILE_SIZE;
+                        let widthPx, heightPx;
+                        if (orientation === 'horizontal') {
+                            widthPx = tile * 3; // spans 3 tiles wide
+                            heightPx = tile * 2; // 2 tiles tall
+                        } else {
+                            widthPx = tile * 2; // 2 tiles wide
+                            heightPx = tile * 3; // 3 tiles tall
+                        }
+                        // Re-center placement so original (x,y) acts as top-left snapped to tile grid
+                        // Ensure it doesn't overlap perimeter (simple clamp)
+                        if (x + widthPx > (ROOM_WIDTH-1)*tile) x = Math.max(tile, (ROOM_WIDTH-1)*tile - widthPx - tile);
+                        if (y + heightPx > (ROOM_HEIGHT-1)*tile) y = Math.max(tile, (ROOM_HEIGHT-1)*tile - heightPx - tile);
+                        // Check overlap with existing walls to avoid stacking
+                        const overlaps = game.walls.some(w => {
+                            const wW = w.width || tile; const wH = w.height || tile;
+                            // Expand tested car bounds by negative margin (gap) so we enforce distance.
+                            const ax1 = x - OBSTACLE_MIN_GAP, ay1 = y - OBSTACLE_MIN_GAP;
+                            const ax2 = x + widthPx + OBSTACLE_MIN_GAP, ay2 = y + heightPx + OBSTACLE_MIN_GAP;
+                            const bx1 = w.x, by1 = w.y, bx2 = w.x + wW, by2 = w.y + wH;
+                            return !(ax2 <= bx1 || ax1 >= bx2 || ay2 <= by1 || ay1 >= by2);
+                        });
+                        if (overlaps) {
+                            // Skip placing this car; continue loop without decrementing obstacleCount
+                            continue;
+                        }
+                        // Car theme tint adjustment range overrides random per-car variance if theme supplies range
+                        const carRange = game.currentTheme.carTintRange;
+                        let tint = null;
+                        if (carRange && carRange.length === 2) {
+                            tint = carRange[0] + Math.random()*(carRange[1]-carRange[0]);
+                        }
+                        game.walls.push({ x, y, type, orientation, width: widthPx, height: heightPx, tint });
+                        // Placing a large object counts as two obstacles to keep density reasonable
+                        if (i < obstacleCount - 1) i++;
+                    } else {
+                        // Enforce spacing for non-car obstacles too
+                        const tile = TILE_SIZE;
+                        const widthPx = tile, heightPx = tile;
+                        const overlaps = game.walls.some(w => {
+                            const wW = w.width || tile; const wH = w.height || tile;
+                            const ax1 = x - OBSTACLE_MIN_GAP, ay1 = y - OBSTACLE_MIN_GAP;
+                            const ax2 = x + widthPx + OBSTACLE_MIN_GAP, ay2 = y + heightPx + OBSTACLE_MIN_GAP;
+                            const bx1 = w.x, by1 = w.y, bx2 = w.x + wW, by2 = w.y + wH;
+                            return !(ax2 <= bx1 || ax1 >= bx2 || ay2 <= by1 || ay1 >= by2);
+                        });
+                        if (overlaps) continue;
+                        game.walls.push({ x, y, type });
+                    }
                 }
             }
             
@@ -1602,7 +1811,16 @@ function offerPermanentAbilityChoice() {
             const baseEnemyCount = 4;
             const enemyCount = baseEnemyCount + Math.floor(game.dungeon / 2) + Math.floor(game.room / 2);
             console.info('[RoomGen] Begin', { dungeon: game.dungeon, room: game.room, enemyCount });
-            const enemyTypes = Object.keys(ENEMY_TYPES);
+            // Build theme-weighted enemy pool (fallback to legacy logic if needed)
+            const enemyTypesAll = Object.keys(ENEMY_TYPES);
+            const themeEnemyWeights = (game.currentTheme && game.currentTheme.enemyWeights) || {};
+            let themeWeightedPool = [];
+            enemyTypesAll.forEach(t => {
+                const w = Math.max(0.05, themeEnemyWeights[t] || 1);
+                const copies = Math.round(w * 10);
+                for (let c=0;c<copies;c++) themeWeightedPool.push(t);
+            });
+            if (!themeWeightedPool.length) themeWeightedPool = enemyTypesAll.slice();
             
             // Add boss enemy every 5th room. Final boss only appears in district 10 room 5.
             const hasBoss = game.room === 5;
@@ -1610,10 +1828,10 @@ function offerPermanentAbilityChoice() {
             for (let i = 0; i < enemyCount; i++) {
                 let x, y, attempts = 0;
                 do {
-                    x = 60 + Math.random() * (canvas.width - 120);
-                    y = 60 + Math.random() * (canvas.height - 120);
+                    x = 60 + Math.random() * (LOGICAL_W - 120);
+                    y = 60 + Math.random() * (LOGICAL_H - 120);
                     attempts++;
-                } while ((Math.abs(x - 320) < 120 || Math.abs(y - 240) < 120 || isWall(x, y)) && attempts < 50);
+                } while ((Math.abs(x - (LOGICAL_W/2)) < 120 || Math.abs(y - (LOGICAL_H/2)) < 120 || isWall(x, y)) && attempts < 50);
                 
                 if (attempts < 50) {
                     let typeName;
@@ -1626,8 +1844,9 @@ function offerPermanentAbilityChoice() {
                             typeName = 'Boss Thug';
                         }
                     } else {
-                        // Weight enemy selection based on dungeon level
-                        const weights = {
+                        // Use theme weighted pool then modulate by dungeon progression similarly to legacy weighting (soft gating)
+                        // Filter pool for enemies whose legacy weight would be >0 to avoid early access to late-game types.
+                        const legacyWeights = {
                             'Thug': Math.max(1, 4 - game.dungeon),
                             'Street Dog': Math.max(1, 4 - game.dungeon),
                             'Punk': Math.max(1, 3 - game.dungeon + 2),
@@ -1635,23 +1854,18 @@ function offerPermanentAbilityChoice() {
                             'Dealer': Math.max(0, game.dungeon - 3),
                             'Enforcer': Math.max(0, game.dungeon - 6)
                         };
-                        
-                        const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
-                        let random = Math.random() * totalWeight;
-                        
-                        for (const [type, weight] of Object.entries(weights)) {
-                            random -= weight;
-                            if (random <= 0) {
-                                typeName = type;
-                                break;
-                            }
-                        }
+                        const filtered = themeWeightedPool.filter(t => (legacyWeights[t] || 0) > 0);
+                        const pool = filtered.length ? filtered : themeWeightedPool;
+                        typeName = pool[Math.floor(Math.random() * pool.length)];
                     }
-                    
                     const baseType = ENEMY_TYPES[typeName];
                     // Compounding 35% health increase per completed district: multiplier = 1.35^(dungeon-1)
                     const healthMult = Math.pow(1.35, (game.dungeon - 1));
-                    
+                    // Elite determination (skip for final boss)
+                    const themeMult = (game.currentTheme && game.currentTheme.eliteMult) || 1;
+                    const baseEliteChance = 0.05 + game.dungeon * 0.004 + game.room * 0.002;
+                    const eliteChance = baseEliteChance * themeMult;
+                    const isElite = (!hasBoss || i > 0) && Math.random() < eliteChance;
                     const enemyObj = {
                         x, y, type: typeName,
                         health: Math.floor(baseType.health * healthMult),
@@ -1667,8 +1881,17 @@ function offerPermanentAbilityChoice() {
                         lastAttack: 0,
                         poisoned: false, poisonTime: 0,
                         slowed: false, slowTime: 0,
-                        burning: false, burnTime: 0
+                        burning: false, burnTime: 0,
+                        elite: isElite
                     };
+                    if (isElite) {
+                        // Elite stat scaling updated: 5x health, modest speed & damage buffs
+                        enemyObj.health = Math.floor(enemyObj.health * 5.0);
+                        enemyObj.maxHealth = enemyObj.health;
+                        enemyObj.speed *= 1.10;
+                        enemyObj.damage = Math.ceil(enemyObj.damage * 1.4);
+                        enemyObj.eliteGlow = 1.0; // visual state tracker
+                    }
                     if (typeName === 'The Big Quack') {
                         enemyObj.finalBoss = true;
                         // Music swap to boss theme
@@ -1690,9 +1913,18 @@ function offerPermanentAbilityChoice() {
             }
             if (game.enemies.length === 0) {
                 console.warn('[RoomGen] No enemies spawned; injecting fallback.');
-                const fallback = { x: 320+(Math.random()*160-80), y: 240+(Math.random()*160-80), type:'Thug', health:40, maxHealth:40, speed:1.1, baseSpeed:1.1, damage:5, color:'#884400', size:20, xp:5, ranged:false, lastAttack:0, poisoned:false, slowed:false, burning:false };
+                const fallback = { x: (LOGICAL_W/2)+(Math.random()*160-80), y: (LOGICAL_H/2)+(Math.random()*160-80), type:'Thug', health:40, maxHealth:40, speed:1.1, baseSpeed:1.1, damage:5, color:'#884400', size:20, xp:5, ranged:false, lastAttack:0, poisoned:false, slowed:false, burning:false };
                 game.enemies.push(fallback);
                 if (typeof game._roomSpawnedEnemies === 'number') game._roomSpawnedEnemies++;
+            }
+            // Clamp any enemies that may have landed outside logical bounds due to future logic changes.
+            for (const en of game.enemies) {
+                if (!en) continue;
+                const margin = 40;
+                if (en.x < margin) en.x = margin + Math.random()*30;
+                if (en.y < margin) en.y = margin + Math.random()*30;
+                if (en.x > LOGICAL_W - margin) en.x = LOGICAL_W - margin - Math.random()*30;
+                if (en.y > LOGICAL_H - margin) en.y = LOGICAL_H - margin - Math.random()*30;
             }
             console.info('[RoomGen] Done', { spawned: game.enemies.length, counter: game._roomSpawnedEnemies });
             
@@ -1719,12 +1951,12 @@ function offerPermanentAbilityChoice() {
             }
             if (forceChest || Math.random() < chestSpawnChance) {
                 let x, y, attempts = 0;
-                const startX = 320, startY = 240; // player spawn center
+                const startX = LOGICAL_W/2, startY = LOGICAL_H/2; // player spawn center (dynamic)
                 const startExclusionR = 90; // radius within which chests may not spawn
                 const startExclusionR2 = startExclusionR * startExclusionR;
                 do {
-                    x = 60 + Math.random() * (canvas.width - 120);
-                    y = 60 + Math.random() * (canvas.height - 120);
+                    x = 60 + Math.random() * (LOGICAL_W - 120);
+                    y = 60 + Math.random() * (LOGICAL_H - 120);
                     attempts++;
                     const dxs = x - startX; const dys = y - startY;
                     var tooCloseToStart = (dxs*dxs + dys*dys) < startExclusionR2;
@@ -1761,15 +1993,18 @@ function offerPermanentAbilityChoice() {
                 }
             }
             
-            game.player.x = 320;
-            game.player.y = 240;
+            // Center player based on dynamic logical size
+            game.player.x = LOGICAL_W / 2;
+            game.player.y = LOGICAL_H / 2;
         }
 
         function isWall(x, y, size = 25) {
-            return game.walls.some(wall => 
-                x > wall.x - size && x < wall.x + TILE_SIZE + size &&
-                y > wall.y - size && y < wall.y + TILE_SIZE + size
-            );
+            // Supports variable-sized walls (cars, larger obstacles) using wall.width/height if provided
+            return game.walls.some(wall => {
+                const w = wall.width || TILE_SIZE;
+                const h = wall.height || TILE_SIZE;
+                return (x > wall.x - size && x < wall.x + w + size && y > wall.y - size && y < wall.y + h + size);
+            });
         }
 
         // Move an enemy along a vector in small steps, stopping before hitting walls.
@@ -1844,6 +2079,9 @@ function offerPermanentAbilityChoice() {
                 if (key === 'p') {
                     togglePause();
                     e.preventDefault();
+                }
+                if (key === 'f') {
+                    game.showFps = !game.showFps;
                 }
             });
             
@@ -1979,12 +2217,17 @@ function offerPermanentAbilityChoice() {
                     break;
             }
             
+            // If a prior hide timer exists, clear it so rapid acquisitions refresh visibility.
+            if (tooltip._hideTimer) {
+                clearTimeout(tooltip._hideTimer);
+                tooltip._hideTimer = null;
+            }
             tooltip.classList.add('show');
-            
-            // Hide after 3 seconds
-            setTimeout(() => {
+            // Auto-hide after 3.5s unless retriggered; extend slightly from previous 3s for readability.
+            tooltip._hideTimer = setTimeout(() => {
                 tooltip.classList.remove('show');
-            }, 3000);
+                tooltip._hideTimer = null;
+            }, 3500);
         }
 
         // ================= Rizz Ability (Animated Pull) =================
@@ -2063,6 +2306,25 @@ function offerPermanentAbilityChoice() {
             // Global frame counter (needed for timed mechanics like meteor detonation)
             if (typeof game.frame !== 'number') game.frame = 0;
             game.frame++;
+            // Performance sampling (FPS + auto low FX)
+            if (!game._lastFrameStamp) game._lastFrameStamp = performance.now();
+            const nowPerf = performance.now();
+            const dtFrame = nowPerf - game._lastFrameStamp; game._lastFrameStamp = nowPerf;
+            if (game.perf) {
+                const perf = game.perf;
+                perf.frameTimes.push(dtFrame);
+                if (perf.frameTimes.length > 90) perf.frameTimes.shift();
+                if (nowPerf - perf.lastFpsSample >= 500) {
+                    const avg = perf.frameTimes.reduce((a,b)=>a+b,0)/perf.frameTimes.length;
+                    perf.fps = 1000/avg;
+                    perf.lastFpsSample = nowPerf;
+                    if (perf.autoLowFx) {
+                        if (!perf.lowFx && perf.fps < 52) perf.lowFx = true;
+                        else if (perf.lowFx && perf.fps > 58) perf.lowFx = false;
+                    }
+                    game.fxSuppression.particleSkip = perf.lowFx ? 0.55 : 0;
+                }
+            }
             updatePlayer();
             updateEnemies();
             // Spawn/adjust orbitals BEFORE projectile update so they get a fresh position tick this frame
@@ -2183,6 +2445,16 @@ function offerPermanentAbilityChoice() {
             }
             // Enforce hard boundary for all enemies after every frame of motion/effects
             clampEnemiesToBounds();
+            // Lightweight rescue: if any enemy somehow drifts far outside bounds ( > logical + 200 ), teleport near center.
+            if (game.enemies && game.enemies.length) {
+                for (const en of game.enemies) {
+                    if (!en) continue;
+                    if (en.x < -200 || en.y < -200 || en.x > LOGICAL_W + 200 || en.y > LOGICAL_H + 200) {
+                        en.x = LOGICAL_W/2 + (Math.random()*240 - 120);
+                        en.y = LOGICAL_H/2 + (Math.random()*240 - 120);
+                    }
+                }
+            }
             // Terrifying Aura: removed level-based expiry; room-based handled elsewhere.
             // Beartrap periodic deployment
             if (game.player && game.player.abilities && game.player.abilities.includes('Beartrap')) {
@@ -2215,9 +2487,9 @@ function offerPermanentAbilityChoice() {
                     const pending = game.nukes.filter(n => !n.exploded);
                     if (pending.length < 3) {
                         const margin = 80;
-                        const nx = margin + Math.random() * (canvas.width - margin*2);
-                        const ny = margin + Math.random() * (canvas.height - margin*2);
-                        const radius = Math.min(canvas.width, canvas.height) / 4; // quarter screen radius
+                        const nx = margin + Math.random() * (LOGICAL_W - margin*2);
+                        const ny = margin + Math.random() * (LOGICAL_H - margin*2);
+                        const radius = Math.min(LOGICAL_W, LOGICAL_H) / 4; // quarter logical playfield radius
                         game.nukes.push({
                             x: nx,
                             y: ny,
@@ -2919,12 +3191,26 @@ function offerPermanentAbilityChoice() {
                 // Defensive: if bouncing was enabled but no explicit bounces value assigned by any ability effect, fall back to 3
                 if (bouncing && bounces === 0) bounces = 3;
 
+                // Dynamic projectile travel: base life scaled for enlarged logical canvas.
+                // Previously life was a flat 150 frames (~2.5s at 60fps) which limited range after expanding LOGICAL_W.
+                // New approach:
+                //  - Base life scaled relative to logical diagonal so projectiles can plausibly cross arena (~diagonal / avgSpeed).
+                //  - We assume average base speed ~8 (tuned from typical speed variable earlier in attack()).
+                //  - Clamp to avoid runaway extremely long-lived shots when future scaling changes occur.
+                const logicalDiag = Math.hypot(LOGICAL_W || 1280, LOGICAL_H || 720);
+                const avgSpeed = 8; // heuristic average projectile speed in px/frame
+                // Travel frames to cross 1.1 * diagonal (gives a bit of off-screen continuation) divided by avg speed.
+                let dynamicLife = Math.floor((logicalDiag * 1.1) / avgSpeed);
+                // Double the computed life to allow shots (especially post-bounce) to traverse more of the enlarged arena.
+                dynamicLife *= 2;
+                // Expanded clamp range to reflect doubled lifetime while preventing runaway accumulation.
+                dynamicLife = Math.max(340, Math.min(dynamicLife, 760));
                 const projectile = {
                     x: game.player.x + Math.cos(angle) * 20,
                     y: game.player.y + Math.sin(angle) * 20,
                     vx: Math.cos(angle) * speed,
                     vy: Math.sin(angle) * speed,
-                    life: 150,
+                    life: dynamicLife,
                     // snapshot base damage so later effects (explosions, splits, beams) scale consistently
                     baseDamage: calculateDamage(),
                     size: size,
@@ -3264,11 +3550,15 @@ function offerPermanentAbilityChoice() {
                     }
                 }
 
-                // Popcorn: replace primary projectile with a kernel that later pops into two puffs
+                // Popcorn: replace primary projectile with a kernel that later pops into:
+                //  - Two random-direction "kernel burst" mini bullets (new)
+                //  - Two angled puffs (existing)
+                //  - Each puff still produces crumbs on impact (existing chain)
+                // Extended fuse increases forward travel distance for better spacing before proliferation.
                 if (i === 0 && game.player.abilities.includes('Popcorn')) {
                     // Convert current projectile to a kernel (keep forward velocity)
                     projectile.isPopcornKernel = true;
-                    projectile._popFuse = 22; // frames until pop (tweakable)
+                    projectile._popFuse = 36; // extended fuse for farther travel
                     projectile._popDid = false;
                     // Slightly reduce immediate damage; main damage comes from puffs
                     if (projectile.baseDamage) {
@@ -3288,6 +3578,8 @@ function offerPermanentAbilityChoice() {
                     projectile._umbSplitDistance = 160; // longer travel so it doesn't pop right in front
                     projectile._umbDidSplit = false;
                     projectile._umbCoreAge = 0; // frames since fired (failsafe split)
+                    // Guarantee sufficient life so other modifiers don't kill it before splitting
+                    if (projectile.life && projectile.life < 120) projectile.life = 120;
                 }
 
                 // Laser Beam special-case: continuous beam energy weapon
@@ -5507,6 +5799,21 @@ function offerPermanentAbilityChoice() {
                         if (proj._popFuse <= 0) {
                             proj._popDid = true;
                             const base = proj.baseDamage || calculateDamage();
+                            // New: spawn two bonus kernel burst bullets in completely random directions
+                            for (let b=0;b<2;b++) {
+                                const angB = Math.random()*Math.PI*2;
+                                const speedB = 4.2 + Math.random()*1.6; // slightly faster than puffs
+                                game.projectiles.push({
+                                    x: proj.x, y: proj.y,
+                                    vx: Math.cos(angB)*speedB,
+                                    vy: Math.sin(angB)*speedB,
+                                    life: 48 + Math.floor(Math.random()*18),
+                                    size: 7, enemy:false,
+                                    baseDamage: Math.max(1, Math.floor(base * 0.55)),
+                                    damage: Math.max(1, Math.floor(base * 0.55)),
+                                    popcornKernelBurst: true
+                                });
+                            }
                             // Generate two puffs at slight random angles
                             for (let k=0;k<2;k++) {
                                 const ang = Math.atan2(proj.vy, proj.vx) + (Math.random()*0.9 - 0.45);
@@ -6590,7 +6897,12 @@ function offerPermanentAbilityChoice() {
                     }
                 }
                 // Final positional cull / life check
-                const alive = proj.life > 0 && proj.x > -20 && proj.x < canvas.width + 20 && proj.y > -20 && proj.y < canvas.height + 20;
+                // Extended off-screen tolerance: allow projectiles to travel further outside view before culling so
+                // longer-lived shots (larger logical canvas) aren't prematurely despawned right at edge.
+                const OFFSCREEN_PAD = 140; // previously 20; generous margin for effects that arc back or explode
+                const alive = proj.life > 0 &&
+                              proj.x > -OFFSCREEN_PAD && proj.x < canvas.width + OFFSCREEN_PAD &&
+                              proj.y > -OFFSCREEN_PAD && proj.y < canvas.height + OFFSCREEN_PAD;
                 if (!alive && proj.damageType === 'crystal' && !proj._crystalShattered) {
                     createCrystalShatter(proj.x, proj.y, proj.baseDamage || proj.damage || calculateDamage(), proj);
                 }
@@ -6611,10 +6923,11 @@ function offerPermanentAbilityChoice() {
         }
 
         function updateParticles() {
+            const fast = game.perf && game.perf.lowFx;
             game.particles = game.particles.filter(particle => {
                 particle.x += particle.vx;
                 particle.y += particle.vy;
-                particle.life--;
+                particle.life -= fast ? 2 : 1;
                 particle.alpha = particle.life / particle.maxLife;
                 return particle.life > 0;
             });
@@ -6822,6 +7135,45 @@ function offerPermanentAbilityChoice() {
         // Centralized hit resolution for projectiles. Returns true if projectile is consumed.
         function applyProjectileHit(enemy, proj) {
             if (!enemy || !proj) return true;
+            // Popcorn: if a kernel dies early by impact (should rarely happen) force pop immediately
+            if (proj.isPopcornKernel && !proj._popDid) {
+                proj._popDid = true;
+                const base = proj.baseDamage || calculateDamage();
+                // Early impact: also spawn the two random-direction kernel burst shots
+                for (let b=0;b<2;b++) {
+                    const angB = Math.random()*Math.PI*2;
+                    const speedB = 4.2 + Math.random()*1.6;
+                    game.projectiles.push({
+                        x: proj.x, y: proj.y,
+                        vx: Math.cos(angB)*speedB,
+                        vy: Math.sin(angB)*speedB,
+                        life: 48 + Math.floor(Math.random()*18),
+                        size: 7, enemy:false,
+                        baseDamage: Math.max(1, Math.floor(base * 0.55)),
+                        damage: Math.max(1, Math.floor(base * 0.55)),
+                        popcornKernelBurst: true
+                    });
+                }
+                for (let k=0;k<2;k++) {
+                    const ang = Math.atan2(proj.vy||0, proj.vx||1) + (Math.random()*0.9 - 0.45);
+                    const speed = (Math.sqrt((proj.vx||0)**2 + (proj.vy||0)**2) * 0.85) + Math.random()*1.2;
+                    game.projectiles.push({
+                        x: proj.x, y: proj.y,
+                        vx: Math.cos(ang)*speed,
+                        vy: Math.sin(ang)*speed,
+                        life: 40 + Math.floor(Math.random()*18),
+                        size: 12, enemy:false,
+                        popcornPuff:true,
+                        baseDamage: Math.max(1, Math.floor(base * 0.75)),
+                        damage: Math.max(1, Math.floor(base * 0.75)),
+                        _puffSpin: Math.random()*Math.PI*2,
+                        _puffDir: (Math.random()<0.5? -1:1)
+                    });
+                }
+                for (let s=0;s<10;s++) addParticle(proj.x + (Math.random()-0.5)*12, proj.y + (Math.random()-0.5)*12, '#FFEFA0','spark');
+                proj.life = 0;
+                return true; // kernel consumed
+            }
             // Time Bomb: armed hits near fuse end can trigger early detonation (feels responsive)
             if (proj.timeBomb && proj._timeBombArmed && proj._timeBombTimer <= 16) {
                 const dmg = Math.floor((proj.baseDamage || calculateDamage()) * (proj._timeBombExplosionMult || 2.0));
@@ -7030,6 +7382,26 @@ function offerPermanentAbilityChoice() {
             if ((proj.antimatter || proj.massiveExplosion) && proj.explosive) {
                 const explosDmg = Math.max(200, Math.floor((proj.baseDamage || damage) * 1.5));
                 explodeProjectile(proj, explosDmg); proj.life = 0; return true;
+            }
+            // Popcorn puff impact: spawn two crumb mini-shots (one-time)
+            if (proj.popcornPuff && !proj._crumbed) {
+                proj._crumbed = true;
+                const crumbBase = Math.max(1, Math.floor((proj.baseDamage || damage) * 0.55));
+                for (let c=0;c<2;c++) {
+                    const ang = Math.random() * Math.PI * 2;
+                    const spd = 3.0 + Math.random()*1.8;
+                    game.projectiles.push({
+                        x: proj.x, y: proj.y,
+                        vx: Math.cos(ang)*spd, vy: Math.sin(ang)*spd,
+                        life: 32 + Math.floor(Math.random()*12),
+                        size: 7, enemy:false,
+                        baseDamage: crumbBase,
+                        damage: crumbBase,
+                        popcornCrumb: true,
+                        _crumbFade: 0
+                    });
+                }
+                for (let p=0;p<12;p++) addParticle(proj.x + (Math.random()-0.5)*14, proj.y + (Math.random()-0.5)*14, '#FFEAA0','spark');
             }
             // Ricochet chaining: allow when ricochet flag set AND remaining bounces >0; phasing no longer blocks logic.
             if (proj.ricochet && proj.bounces > 0) {
@@ -7646,15 +8018,17 @@ function offerPermanentAbilityChoice() {
             const ring = {
                 x, y,
                 radius: 0,
-                width: opts && opts.width || 26,
+                width: opts && opts.width || 28, // slightly thicker for readability
                 growth: (opts && opts.growth || 7.2) * (vortexBoost>1?1.06:1),
-                maxRadius: (opts && opts.maxRadius || 420) * (vortexBoost>1?1.04:1),
+                maxRadius: (opts && opts.maxRadius || 440) * (vortexBoost>1?1.04:1),
                 damage: (opts && opts.damage || Math.max(2, Math.floor(calculateDamage() * 0.55))) * vortexBoost,
                 createdAt: Date.now(),
-                maxLife: (opts && opts.maxLife) || 6000, // ms fail-safe
+                maxLife: (opts && opts.maxLife) || 6000,
                 hits: new Set(),
-                detonated: true, // expansion begins immediately (telegraph handled visually for first few frames)
-                seed: Math.random()*Math.PI*2
+                detonated: true,
+                seed: Math.random()*Math.PI*2,
+                telegraphUntil: performance.now() + 180, // first 180ms gets brighter core pulse
+                firstDamage: false // flag for one-time stronger feedback on first enemy hit
             };
             game.bloomRings.push(ring);
             // Petal emission (stronger, fewer) at ring birth
@@ -7702,6 +8076,8 @@ function offerPermanentAbilityChoice() {
             for (let i = game.bloomRings.length - 1; i >= 0; i--) {
                 const rg = game.bloomRings[i];
                 rg.radius += rg.growth;
+                // Soft acceleration near early phase to feel more explosive
+                if (rg.radius < rg.maxRadius*0.25) rg.radius += rg.growth*0.15;
                 // Vortex intersection synergy: when ring edge passes through vortex radius for first time, spawn bonus petals & temp damage buff
                 if (!rg._vortexProc && Array.isArray(game.vortexFields) && game.vortexFields.length) {
                     for (const vf of game.vortexFields) {
@@ -7758,7 +8134,18 @@ function offerPermanentAbilityChoice() {
                             const dmg = Math.max(1, Math.floor(rg.damage * (0.85 + Math.random()*0.3)));
                             applyPlayerDamage(enemy, dmg);
                             addDamageNumber(enemy.x, enemy.y - (enemy.size||18)/2, dmg, '#FFC8AA');
-                            if (Math.random()<0.5) addParticle(enemy.x, enemy.y, '#FFDCC0','spark');
+                            // Hit shimmer particles (consistent, a couple per hit for clarity)
+                            addParticle(enemy.x, enemy.y, '#FFE0CC','spark');
+                            if (Math.random()<0.35) addParticle(enemy.x + (Math.random()-0.5)*10, enemy.y + (Math.random()-0.5)*10, '#FFD0B0','spark');
+                            // Slight outline flash effect via a temporary marker
+                            enemy._bloomFlash = 4; // frames of flash handled in enemy render (if implemented)
+                            // One-time stronger feedback on first damage event of this ring
+                            if (!rg.firstDamage) {
+                                rg.firstDamage = true;
+                                if (typeof addScreenShake === 'function') addScreenShake(5);
+                                // Central flash particle cluster
+                                for (let f=0;f<6;f++) addParticle(rg.x + (Math.random()-0.5)*rg.width*2, rg.y + (Math.random()-0.5)*rg.width*2, '#FFE8D8','explosion');
+                            }
                         }
                     }
                 }
@@ -8103,6 +8490,9 @@ function offerPermanentAbilityChoice() {
                 // Prevent any residual room-cleared flow from advancing
                 game.roomCleared = false;
                 game.gameOver = false;
+                // Defensive: clear any residual duck dynasty flock visuals before reset (prevents one-frame ghost row)
+                if (Array.isArray(game.duckFlocks)) game.duckFlocks.length = 0;
+                game.nextDuckFlockFrame = 0;
                 // Reset progression to the same street (do NOT advance) – keep current dungeon & room unless they were out of range
                 if (game.room < 1 || game.room > 5) game.room = 1;
                 if (game.dungeon < 1 || game.dungeon > 10) game.dungeon = 1;
@@ -8337,6 +8727,8 @@ offerPermanentAbilityChoice();
             game.shockwaves = [];
             game.vortexFields = [];
             game.lightningArcs = [];
+            game.duckFlocks = []; // clear any lingering Duck Dynasty flock sprites stuck after victory
+            game.nextDuckFlockFrame = 0; // reset scheduling so first flock re-times correctly
             // Restart grace: suppress premature room clear until enemies have visibly spawned
             game._restartGraceFrames = 30; // ~0.5s at 60fps
             game._roomSpawnedEnemies = 0;
@@ -8370,13 +8762,20 @@ offerPermanentAbilityChoice();
             // Cosmetic gating: suppress low-priority particle categories if user disabled them.
             const cosmeticTypes = { spark:1, ambient:1, lightning:1, heal:1, shield:1, damage:1, treasure:1 };
             if (game.disableCosmeticParticles && cosmeticTypes[type]) return;
+            // Probabilistic suppression in low FX mode (only for cosmetic types)
+            if (game.perf && game.perf.lowFx && cosmeticTypes[type]) {
+                if (Math.random() < 0.55) return;
+            }
+            if (!game.particles) game.particles = [];
+            const cap = (game.perf && game.perf.lowFx) ? 1200 : 2500;
+            if (game.particles.length >= cap) return;
             const particle = {
                 x: x + (Math.random() - 0.5) * 10,
                 y: y + (Math.random() - 0.5) * 10,
                 vx: (Math.random() - 0.5) * 4,
                 vy: (Math.random() - 0.5) * 4,
-                life: 30 + Math.random() * 20,
-                maxLife: 50,
+                life: (game.perf && game.perf.lowFx ? 22 : 30) + Math.random() * (game.perf && game.perf.lowFx ? 14 : 20),
+                maxLife: (game.perf && game.perf.lowFx) ? 38 : 50,
                 color: color,
                 type: type,
                 alpha: 1
@@ -8564,10 +8963,22 @@ offerPermanentAbilityChoice();
             ctx.save();
             ctx.translate(shakeX, shakeY);
             
-            // Clear with gradient background
+            // Clear with theme gradient background
+            const theme = game.currentTheme;
+            const gcols = (theme && theme.gradient) || ['#1a1a2e','#16213e'];
             const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            gradient.addColorStop(0, '#1a1a2e');
-            gradient.addColorStop(1, '#16213e');
+            if (gcols.length === 1) {
+                gradient.addColorStop(0, gcols[0]);
+                gradient.addColorStop(1, gcols[0]);
+            } else if (gcols.length === 2) {
+                gradient.addColorStop(0, gcols[0]);
+                gradient.addColorStop(1, gcols[1]);
+            } else {
+                // Distribute multi-stop gradient evenly
+                for (let i=0;i<gcols.length;i++) {
+                    gradient.addColorStop(i/(gcols.length-1), gcols[i]);
+                }
+            }
             ctx.fillStyle = gradient;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
@@ -8600,72 +9011,62 @@ offerPermanentAbilityChoice();
                         }
                         break;
                     case 'car': {
-                        // Car palette selection deterministic by x for variety
-                        const bodyColors = ['#c62828','#1565c0','#2e7d32','#f57c00'];
-                        const body = bodyColors[Math.floor(wall.x / 100) % bodyColors.length];
-                        const x = wall.x;
-                        const y = wall.y;
-                        const w = TILE_SIZE;
-                        const h = TILE_SIZE; // treat each tile square as parking footprint
-                        // Main body (lower chassis)
-                        ctx.fillStyle = body;
-                        ctx.fillRect(x, y + h*0.25, w, h*0.55);
-                        // Roof section (smaller, centered)
-                        ctx.fillStyle = shadeColor(body, -20);
-                        const roofW = w*0.70;
-                        const roofH = h*0.28;
-                        const roofX = x + (w - roofW)/2;
-                        const roofY = y + h*0.30;
-                        ctx.fillRect(roofX, roofY, roofW, roofH);
-                        // Windows (front & rear on roof)
-                        ctx.fillStyle = 'rgba(180,220,255,0.85)';
-                        ctx.fillRect(roofX + roofW*0.08, roofY + roofH*0.10, roofW*0.32, roofH*0.80);
-                        ctx.fillRect(roofX + roofW*0.60, roofY + roofH*0.10, roofW*0.32, roofH*0.80);
-                        // Mid pillar line
-                        ctx.fillStyle = shadeColor(body, -40);
-                        ctx.fillRect(roofX + roofW*0.50 - 1, roofY + roofH*0.08, 2, roofH*0.84);
-                        // Wheels (four circles protruding slightly)
-                        ctx.fillStyle = '#111';
-                        const wheelR = h*0.12;
-                        const wheelYF = y + h*0.28 + h*0.50; // same vertical alignment front/back
+                        const imgH = window._carObstacleImages && window._carObstacleImages.h;
+                        const imgV = window._carObstacleImages && window._carObstacleImages.v;
+                        // Use multi-tile footprint if provided (added during generation)
+                        const w = wall.width || TILE_SIZE;
+                        const h = wall.height || TILE_SIZE;
+                        const x = wall.x, y = wall.y;
+                        const vertical = wall.orientation === 'vertical';
+                        const img = vertical ? imgV : imgH;
+                        // Placeholder if image not yet ready / broken
+                        if (!img || img._broken || !img.complete || !img.naturalWidth) {
+                            ctx.fillStyle = '#444';
+                            ctx.fillRect(x, y, w, h);
+                            ctx.fillStyle = '#777';
+                            ctx.fillRect(x + w*0.08, y + h*0.08, w*0.84, h*0.84);
+                            if (wall.flashTimer > 0) {
+                                ctx.fillStyle = 'rgba(255,255,255,' + (0.5 * (wall.flashTimer/10)).toFixed(2) + ')';
+                                ctx.fillRect(x, y, w, h);
+                            }
+                            break;
+                        }
+                        ctx.imageSmoothingEnabled = true;
+                        // Assign persistent random tint factor if not already
+                        if (wall.tint == null) {
+                            // Light variance around neutral (1.0). Keep subtle to avoid artifacting stretched sprite.
+                            wall.tint = 0.85 + Math.random()*0.30; // 0.85 - 1.15
+                        }
+                        // Draw shadow first (simple soft ellipse under car footprint)
+                        const shadowInset = Math.min(w,h) * 0.05;
+                        const shadowCX = x + w/2;
+                        const shadowCY = y + h*0.92;
+                        const shadowRX = w/2 - shadowInset;
+                        const shadowRY = Math.min(h*0.18, h/2 - shadowInset);
+                        ctx.save();
+                        ctx.fillStyle = 'rgba(0,0,0,0.28)';
                         ctx.beginPath();
-                        ctx.arc(x + w*0.18, y + h*0.80, wheelR, 0, Math.PI*2); ctx.fill();
-                        ctx.beginPath();
-                        ctx.arc(x + w*0.82, y + h*0.80, wheelR, 0, Math.PI*2); ctx.fill();
-                        ctx.beginPath();
-                        ctx.arc(x + w*0.18, y + h*0.32, wheelR, 0, Math.PI*2); ctx.fill();
-                        ctx.beginPath();
-                        ctx.arc(x + w*0.82, y + h*0.32, wheelR, 0, Math.PI*2); ctx.fill();
-                        // Wheel hubs
-                        ctx.fillStyle = '#bbb';
-                        const hubR = wheelR*0.45;
-                        ;['#c','#c','#c','#c'].forEach(()=>{}); // no-op placeholder
-                        ctx.beginPath(); ctx.arc(x + w*0.18, y + h*0.80, hubR, 0, Math.PI*2); ctx.fill();
-                        ctx.beginPath(); ctx.arc(x + w*0.82, y + h*0.80, hubR, 0, Math.PI*2); ctx.fill();
-                        ctx.beginPath(); ctx.arc(x + w*0.18, y + h*0.32, hubR, 0, Math.PI*2); ctx.fill();
-                        ctx.beginPath(); ctx.arc(x + w*0.82, y + h*0.32, hubR, 0, Math.PI*2); ctx.fill();
-                        // Headlights (front assumed left-to-right => front at x side?) We'll treat top edge as front for simplicity
-                        ctx.fillStyle = '#ffeb3b';
-                        ctx.fillRect(x + w*0.10, y + h*0.20, w*0.18, h*0.08);
-                        ctx.fillRect(x + w*0.72, y + h*0.20, w*0.18, h*0.08);
-                        // Tail lights (bottom side)
-                        ctx.fillStyle = '#ff1744';
-                        ctx.fillRect(x + w*0.10, y + h*0.84, w*0.18, h*0.07);
-                        ctx.fillRect(x + w*0.72, y + h*0.84, w*0.18, h*0.07);
-                        // Center stripe / hood line
-                        ctx.strokeStyle = shadeColor(body, -50);
-                        ctx.lineWidth = 2;
-                        ctx.beginPath();
-                        ctx.moveTo(x + w*0.50, y + h*0.25);
-                        ctx.lineTo(x + w*0.50, y + h*0.80);
-                        ctx.stroke();
-                        // Simple shading overlay (gradient simulation)
-                        ctx.fillStyle = 'rgba(0,0,0,0.18)';
-                        ctx.fillRect(x, y + h*0.55, w, h*0.25);
-                        // Outline
-                        ctx.strokeStyle = '#00000055';
-                        ctx.lineWidth = 2;
-                        ctx.strokeRect(x + 0.5, y + h*0.25 + 0.5, w - 1, h*0.55 - 1);
+                        ctx.ellipse(shadowCX, shadowCY, shadowRX, shadowRY, 0, 0, Math.PI*2);
+                        ctx.fill();
+                        ctx.restore();
+                        // Draw car image stretched to footprint
+                        ctx.drawImage(img, x, y, w, h);
+                        // Apply subtle tint overlay (multiply-like using globalCompositeOperation if not lowFX)
+                        if (!game.lowFX && wall.tint !== 1) {
+                            ctx.save();
+                            ctx.globalCompositeOperation = 'multiply';
+                            const t = wall.tint;
+                            // Convert scalar to neutral gray variant; a slight greenish bias adds urban sodium feel
+                            const c = Math.floor(200 * t);
+                            ctx.fillStyle = `rgba(${c},${Math.floor(c*0.95)},${Math.floor(c*0.85)},0.28)`;
+                            ctx.fillRect(x, y, w, h);
+                            ctx.restore();
+                        }
+                        // Flash overlay (e.g., future explosions, collisions)
+                        if (wall.flashTimer > 0) {
+                            ctx.fillStyle = 'rgba(255,255,255,' + (0.55 * (wall.flashTimer/10)).toFixed(2) + ')';
+                            ctx.fillRect(x, y, w, h);
+                        }
                         break;
                     }
                     case 'dumpster': {
@@ -8973,16 +9374,31 @@ offerPermanentAbilityChoice();
                     const lifeRatio = 1 - Math.min(1, age / rg.maxLife);
                     const growthPhase = Math.min(1, rg.radius / rg.maxRadius);
                     const alpha = 0.65 * lifeRatio;
-                    // Outer glow donut
-                    const grad = ctx.createRadialGradient(rg.x, rg.y, Math.max(0, rg.radius - rg.width*0.65), rg.x, rg.y, rg.radius + rg.width*0.4);
-                    grad.addColorStop(0, 'rgba(255,230,255,0)');
-                    grad.addColorStop(0.55, `rgba(255,230,210,${alpha*0.18})`);
-                    grad.addColorStop(0.82, `rgba(255,160,120,${alpha*0.55})`);
-                    grad.addColorStop(1, 'rgba(255,120,60,0)');
+                    // Telegraph intensity (first ~180ms) – boosts inner glow & edge pulse
+                    const teleActive = performance.now() < (rg.telegraphUntil || 0);
+                    const telePulse = teleActive ? (0.55 + Math.sin(performance.now()/70 + rg.seed)*0.45) : 0;
+                    // Outer glow donut (warmer & brighter)
+                    const grad = ctx.createRadialGradient(rg.x, rg.y, Math.max(0, rg.radius - rg.width*0.9), rg.x, rg.y, rg.radius + rg.width*0.85);
+                    grad.addColorStop(0, `rgba(255,240,230,${teleActive?0.25+telePulse*0.25:0.10})`);
+                    grad.addColorStop(0.55, `rgba(255,210,180,${alpha * (0.22 + telePulse*0.2)})`);
+                    grad.addColorStop(0.80, `rgba(255,140,90,${alpha * 0.65})`);
+                    grad.addColorStop(1, 'rgba(255,100,40,0)');
                     ctx.fillStyle = grad;
                     ctx.beginPath();
-                    ctx.arc(rg.x, rg.y, rg.radius + rg.width*0.4, 0, Math.PI*2);
+                    ctx.arc(rg.x, rg.y, rg.radius + rg.width*0.85, 0, Math.PI*2);
                     ctx.fill();
+                    // Central flash (short lived after first damage)
+                    if (rg.firstDamage && age < 220) {
+                        const flashA = Math.max(0, 1 - (age/220));
+                        const cg = ctx.createRadialGradient(rg.x, rg.y, 0, rg.x, rg.y, Math.min(rg.radius*0.55, 180));
+                        cg.addColorStop(0, `rgba(255,250,240,${0.55*flashA})`);
+                        cg.addColorStop(0.6, `rgba(255,200,150,${0.25*flashA})`);
+                        cg.addColorStop(1, 'rgba(255,150,90,0)');
+                        ctx.fillStyle = cg;
+                        ctx.beginPath();
+                        ctx.arc(rg.x, rg.y, Math.min(rg.radius*0.55, 180), 0, Math.PI*2);
+                        ctx.fill();
+                    }
                     // Core thin inner ring (charging telegraph fade out early)
                     if (!rg.detonated) {
                         const teleA = 0.35 + Math.sin(nowBR/140 + rg.x*0.02)*0.25;
@@ -8992,11 +9408,12 @@ offerPermanentAbilityChoice();
                         ctx.arc(rg.x, rg.y, 12 + Math.sin(nowBR/120)*3, 0, Math.PI*2);
                         ctx.stroke();
                     }
-                    // Ring edge (main visible band)
+                    // Ring edge (main visible band) brighter & pulsing
                     ctx.save();
                     ctx.globalCompositeOperation = 'lighter';
-                    ctx.strokeStyle = `rgba(255,200,160,${alpha * 0.85})`;
-                    ctx.lineWidth = rg.width * (0.55 + Math.sin(nowBR/200 + rg.seed)*0.1);
+                    const pulse = 0.55 + Math.sin(performance.now()/140 + rg.seed)*0.45;
+                    ctx.strokeStyle = `rgba(255,210,170,${alpha * (0.90 + pulse*0.10)})`;
+                    ctx.lineWidth = rg.width * (0.60 + pulse*0.18);
                     ctx.beginPath();
                     ctx.arc(rg.x, rg.y, rg.radius, 0, Math.PI*2);
                     ctx.stroke();
@@ -9006,8 +9423,8 @@ offerPermanentAbilityChoice();
                     const spokes = 4;
                     for (let s=0;s<spokes;s++) {
                         const ang = (s/spokes)*Math.PI*2;
-                        ctx.strokeStyle = `rgba(255,200,180,${alpha*0.22})`;
-                        ctx.lineWidth = 3;
+                        ctx.strokeStyle = `rgba(255,200,180,${alpha*0.30})`;
+                        ctx.lineWidth = 3.3;
                         ctx.beginPath();
                         ctx.moveTo(Math.cos(ang)*(rg.radius-rg.width*0.5), Math.sin(ang)*(rg.radius-rg.width*0.5));
                         ctx.lineTo(Math.cos(ang)*(rg.radius+rg.width*0.5), Math.sin(ang)*(rg.radius+rg.width*0.5));
@@ -9635,6 +10052,21 @@ offerPermanentAbilityChoice();
             
             // Draw enemies (restored original logic)
             game.enemies.forEach(enemy => {
+                // Elite aura pass (before sprite/procedural body). Skip for final boss or lowFX to reduce cost.
+                if (enemy.elite && !enemy.finalBoss && !game.lowFX) {
+                    const pulse = 0.6 + 0.4 * Math.sin(performance.now()/320 + enemy.x*0.015);
+                    const baseR = (enemy.size || 12) * 1.45;
+                    const grad = ctx.createRadialGradient(enemy.x, enemy.y, baseR*0.1, enemy.x, enemy.y, baseR);
+                    grad.addColorStop(0, 'rgba(255,220,120,' + (0.55 * pulse).toFixed(3) + ')');
+                    grad.addColorStop(1, 'rgba(255,150,40,0)');
+                    ctx.save();
+                    ctx.globalCompositeOperation = 'lighter';
+                    ctx.fillStyle = grad;
+                    ctx.beginPath();
+                    ctx.arc(enemy.x, enemy.y, baseR, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.restore();
+                }
                 let baseColor = enemy.color;
                 if (enemy.poisoned && enemy.burning) {
                     baseColor = '#8B4B00';
@@ -11122,8 +11554,11 @@ offerPermanentAbilityChoice();
                 ctx.textAlign = 'center';
                 ctx.strokeStyle = '#000000';
                 ctx.lineWidth = 2;
-                ctx.strokeText('STREET CLEARED!', canvas.width / 2, canvas.height / 2 - 30);
-                ctx.fillText('STREET CLEARED!', canvas.width / 2, canvas.height / 2 - 30);
+                // Center using logical dimensions (avoid DPR inflated canvas.width causing mis-centering)
+                const logicalMidX = (window.__LOGICAL_CANVAS__ ? window.__LOGICAL_CANVAS__.w : canvas.width) / 2;
+                const logicalMidY = (window.__LOGICAL_CANVAS__ ? window.__LOGICAL_CANVAS__.h : canvas.height) / 2;
+                ctx.strokeText('STREET CLEARED!', logicalMidX, logicalMidY - 30);
+                ctx.fillText('STREET CLEARED!', logicalMidX, logicalMidY - 30);
                 
                 ctx.fillStyle = '#ffffff';
                 ctx.font = '18px Arial';
@@ -11139,41 +11574,74 @@ offerPermanentAbilityChoice();
             }
             // Game Over overlay (draw after room cleared so it supersedes)
             if (game.gameOver) {
+                const logicalW = (window.__LOGICAL_CANVAS__ && window.__LOGICAL_CANVAS__.w) || canvas.width;
+                const logicalH = (window.__LOGICAL_CANVAS__ && window.__LOGICAL_CANVAS__.h) || canvas.height;
+                const cx = logicalW / 2;
+                const cy = logicalH / 2;
+                const since = performance.now() - (game._gameOverAt || performance.now());
+                const fade = Math.min(1, since / 650); // slower fade to full
+                // Ease (quadratic out)
+                const eased = fade * (2 - fade);
                 ctx.save();
-                ctx.globalAlpha = 0.95;
+                ctx.globalAlpha = 0.85 + eased * 0.10;
                 if (game.gameOverImage && game.gameOverImage.complete) {
                     const iw = game.gameOverImage.width;
                     const ih = game.gameOverImage.height;
-                    const cw = canvas.width;
-                    const ch = canvas.height;
-                    const scale = Math.min(cw / iw, ch / ih);
+                    // Target max fractions of logical dimensions
+                    const maxW = logicalW * 0.70;
+                    const maxH = logicalH * 0.70;
+                    let scale = Math.min(maxW / iw, maxH / ih);
+                    // Intro pop scale (slightly overshoot then settle)
+                    const pop = 1 + (1 - eased) * 0.25; // starts 1.25 -> 1.0
+                    scale *= pop;
                     const dw = iw * scale;
                     const dh = ih * scale;
-                    const dx = (cw - dw) / 2;
-                    const dy = (ch - dh) / 2;
+                    const dx = cx - dw / 2;
+                    const dy = cy - dh / 2;
                     ctx.drawImage(game.gameOverImage, dx, dy, dw, dh);
                 } else {
                     // Fallback simple text if image not yet loaded
-                    ctx.fillStyle = 'rgba(0,0,0,0.8)';
-                    ctx.fillRect(0,0,canvas.width,canvas.height);
-                    ctx.fillStyle = '#FF2222';
-                    ctx.font = 'bold 64px Courier New';
+                    ctx.fillStyle = 'rgba(0,0,0,'+(0.7+0.2*eased)+')';
+                    ctx.fillRect(0,0,logicalW,logicalH);
+                    ctx.fillStyle = '#FF4444';
+                    const baseFont = 56;
+                    ctx.font = 'bold '+Math.round(baseFont)+'px Courier New';
                     ctx.textAlign = 'center';
-                    ctx.fillText('GAME OVER', canvas.width/2, canvas.height/2);
+                    ctx.fillText('GAME OVER', cx, cy);
                 }
                 ctx.restore();
-                // Restart hint bar
+                // Restart hint bar (slide/fade in)
                 ctx.save();
-                ctx.fillStyle = 'rgba(0,0,0,0.6)';
-                ctx.fillRect(0, canvas.height - 60, canvas.width, 60);
+                const hintFade = Math.max(0, fade - 0.35) / 0.65;
+                ctx.globalAlpha = hintFade;
+                const barH = 54;
+                ctx.fillStyle = 'rgba(0,0,0,0.55)';
+                ctx.fillRect(0, logicalH - barH, logicalW, barH);
                 ctx.fillStyle = '#FFFFFF';
-                ctx.font = '20px Courier New';
+                const hintFont = 18 + Math.floor(2 * (1-hintFade));
+                ctx.font = hintFont+'px Courier New';
                 ctx.textAlign = 'center';
-                ctx.fillText('Press SPACE to restart', canvas.width/2, canvas.height - 24);
+                ctx.fillText('Press SPACE to restart', cx, logicalH - 22);
                 ctx.restore();
             }
             
             ctx.restore();
+
+            // FPS / FX overlay (debug) -- drawn after primary scene & overlays
+            if (game.showFps && game.perf && typeof game.perf.fps === 'number') {
+                ctx.save();
+                ctx.font = '14px Courier New';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'top';
+                const panelW = 124, panelH = 46;
+                ctx.fillStyle = 'rgba(0,0,0,0.55)';
+                ctx.fillRect(4,4,panelW,panelH);
+                ctx.fillStyle = '#0f0';
+                ctx.fillText('FPS: '+game.perf.fps.toFixed(0), 10, 10);
+                ctx.fillStyle = game.perf.lowFx ? '#ffb347' : '#93d3ff';
+                ctx.fillText('FX: '+(game.perf.lowFx?'LOW':'FULL'), 10, 26);
+                ctx.restore();
+            }
         }
 
         function updateStats() {
@@ -11410,6 +11878,63 @@ offerPermanentAbilityChoice();
             window.forceOrientationCheck = applyOrientationState;
         })();
         // ====================================================================
+        // THEME SYSTEM -----------------------------------------------------------
+        // Each theme adjusts visuals (background gradient), obstacle weighting, enemy weighting, and elite spawn multiplier.
+        const THEMES = [
+            {
+                key: 'neon',
+                label: 'Neon District',
+                gradient: ['#1a1a2e', '#301848', '#180a28'],
+                obstacleWeights: { car: 1.1, dumpster: 0.8, streetlight: 1.2, barrier: 0.9 },
+                enemyWeights: { GunDuck: 1.15, KnifeDuck: 0.95 },
+                carTintRange: [0.95, 1.25],
+                eliteMult: 1.15
+            },
+            {
+                key: 'industrial',
+                label: 'Industrial Docks',
+                gradient: ['#18222c', '#2a3a42', '#0e181e'],
+                obstacleWeights: { car: 0.9, dumpster: 1.3, streetlight: 0.7, barrier: 1.1 },
+                enemyWeights: { KnifeDuck: 1.1 },
+                carTintRange: [0.80, 1.05],
+                eliteMult: 1.0
+            },
+            {
+                key: 'financial',
+                label: 'Financial Core',
+                gradient: ['#1a2230', '#22384c', '#162a3e'],
+                obstacleWeights: { car: 1.2, dumpster: 0.6, streetlight: 1.3, barrier: 0.8 },
+                enemyWeights: { GunDuck: 1.2 },
+                carTintRange: [0.9, 1.15],
+                eliteMult: 1.25
+            },
+            {
+                key: 'underpass',
+                label: 'Shadow Underpass',
+                gradient: ['#101014', '#181a20', '#08090c'],
+                obstacleWeights: { car: 0.7, dumpster: 1.2, streetlight: 0.4, barrier: 1.3 },
+                enemyWeights: { KnifeDuck: 1.15 },
+                carTintRange: [0.7, 1.0],
+                eliteMult: 1.3
+            }
+        ];
+
+        function pickTheme(dungeon, room) {
+            // Simple rotation: cycle by dungeon index with slight variation based on room
+            const idx = (dungeon + Math.floor(room/3)) % THEMES.length;
+            return THEMES[idx];
+        }
+        // NOTE: Themes influence:
+        //  - Background gradient (applied each frame)
+        //  - Obstacle frequency via duplication weighting (generateRoom)
+        //  - Enemy spawn weighting (theme enemyWeights scaled & gated by legacy progression)
+        //  - Car tint range (overrides random car tint variance)
+        //  - Elite spawn multiplier (eliteMult)
+        // Elite System:
+        //  - Soft elites add health, speed, damage scaling without new behaviors (yet)
+        //  - Visual differentiation: pre-body aura with additive glow & outline stroke
+        //  - Low FX mode automatically suppresses aura composite for performance
+        // Future hooks: elite ability modifiers, loot bonuses, synergy-based elite variants.
     </script>
 </body>
 </html>
