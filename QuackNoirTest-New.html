@@ -7,6 +7,7 @@
     <!-- Dev: Write-access check by assistant on 2025-10-07. Safe no-op comment. -->
     <!-- Dev: Write-access re-check by assistant on 2025-10-08: OK (no-op) -->
     <!-- Dev: HEAD write-check by assistant 2025-10-08T15:55Z | token: ekg-verify-001 -->
+    <!-- Dev: Write-access re-check by assistant 2025-10-10T12:00Z | OK (no-op) -->
     <style>
         body {
             margin: 0;
@@ -4442,12 +4443,23 @@ function loadInputPreferences() {
             const v = parseFloat(dz);
             if (isFinite(v)) game.input.gpDeadzone = Math.min(0.6, Math.max(0.05, v));
         }
+        // Load optional manual mapping
+        const mapStr = localStorage.getItem('pref_gp_map');
+        if (mapStr) {
+            try {
+                const m = JSON.parse(mapStr);
+                if (m && typeof m === 'object') game.input.gpMap = m;
+            } catch(_) {}
+        }
     } catch(_) {}
 }
 function saveInputPreferences() {
     try {
         localStorage.setItem('pref_gamepad_enabled', game.input.gamepadEnabled ? '1' : '0');
         localStorage.setItem('pref_gamepad_deadzone', String(game.input.gpDeadzone));
+        if (game.input && game.input.gpMap) {
+            try { localStorage.setItem('pref_gp_map', JSON.stringify(game.input.gpMap)); } catch(_) {}
+        }
     } catch(_) {}
 }
 loadInputPreferences();
@@ -4478,6 +4490,57 @@ function _applyDeadzone(ax, ay, deadzone) {
     return { x: ax * scale, y: ay * scale };
 }
 
+// ===== Manual Mapping Helpers =====
+// Mapping entry format examples:
+// { type:'button', index:0 } => button index
+// { type:'axis', index:9, dir:'hat' } => POV hat axis, use __gp_hatToVec
+// { type:'axis', index:6, threshold:0.5, sign:1 } => axis to digital (e.g., dpadRight)
+// { type:'buttons', any:[0,1] } => pressed if any of listed
+function __gp_mappingPressed(pad, entry) {
+    try {
+        if (!entry || !pad) return false;
+        if (entry.any && Array.isArray(entry.any)) {
+            return entry.any.some(e => __gp_mappingPressed(pad, e));
+        }
+        if (entry.type === 'button') {
+            const i = entry.index|0; const b = pad.buttons && pad.buttons[i];
+            return !!(b && (b.pressed || ((b.value||0) > 0.5)));
+        }
+        if (entry.type === 'axis') {
+            const i = entry.index|0; const v = (pad.axes && typeof pad.axes[i] === 'number') ? pad.axes[i] : 0;
+            if (entry.dir === 'hat') {
+                const vec = __gp_hatToVec(v);
+                if (!vec) return false;
+                const want = entry.want || 'any'; // 'up','down','left','right','any'
+                if (want === 'any') return (vec.x!==0 || vec.y!==0);
+                if (want === 'up') return vec.y < 0;
+                if (want === 'down') return vec.y > 0;
+                if (want === 'left') return vec.x < 0;
+                if (want === 'right') return vec.x > 0;
+                return false;
+            }
+            const thr = (typeof entry.threshold==='number') ? Math.abs(entry.threshold) : 0.5;
+            const sign = (entry.sign===-1)?-1:1;
+            return sign>0 ? (v > thr) : (v < -thr);
+        }
+    } catch(_) {}
+    return false;
+}
+function __gp_hatToVec(hat) {
+    if (typeof hat !== 'number' || !isFinite(hat)) return null;
+    // Ignore invalid range
+    if (hat < -1.1 || hat > 1.1) return null;
+    // Treat small as neutral
+    if (Math.abs(hat) <= 0.08) return { x:0, y:0 };
+    // Bin to 8-way values seen on Windows/Firefox
+    const bins = [ -1.00, -0.71, -0.43, -0.14, 0.14, 0.43, 0.71, 1.00 ];
+    const dir8 = [ [0,-1], [1,-1], [1,0], [1,1], [0,1], [-1,1], [-1,0], [-1,-1] ];
+    const idx = bins.reduce((best, v, i) => (Math.abs(hat - v) < Math.abs(hat - bins[best]) ? i : best), 0);
+    const v = dir8[idx] || [0,0];
+    return { x: v[0], y: v[1] };
+}
+
+// Controller fixes applied 2025-10-10: D-Pad override, A-only fire, Start pause toggle, ignore stick clicks
 function updateGamepadInput() {
     const inp = game.input;
     if (!inp || !inp.gamepadEnabled) return;
@@ -4497,36 +4560,87 @@ function updateGamepadInput() {
     const dz = Math.min(0.6, Math.max(0.05, inp.gpDeadzone||0.25));
     const mv = _applyDeadzone(ax0, ay0, dz);
     const av = _applyDeadzone(ax1, ay1, dz);
+    // Clamp to [-1,1] to avoid rare >1 magnitudes from browser quirks
+    function clamp1(v){ return v>1?1:(v<-1?-1:v); }
+    mv.x = clamp1(mv.x); mv.y = clamp1(mv.y);
+    av.x = clamp1(av.x); av.y = clamp1(av.y);
+    // Some pads (e.g., MOGA XP5-A Plus) report right-stick Y as -1 at rest; treat this as invalid aim so movement can control facing
+    if (Math.abs(av.x) < 0.2 && (Math.abs(av.y + 1) < 0.12 || Math.abs(av.y) > 0.98)) {
+        // If aim appears pegged vertically with near-zero X, ignore it
+        av.x = 0; av.y = 0;
+    }
     inp.gpMove.x = mv.x; inp.gpMove.y = mv.y;
     inp.gpAim.x = av.x; inp.gpAim.y = av.y;
-    // Buttons: 0=A, 1=B, 6=LT, 7=RT, 8=Back, 9=Start
-    const btn = (i)=>{ const b = pad.buttons[i]; return b && (b.pressed || (b.value!=null && b.value>0.5)); };
-    // D-Pad digital movement (12=Up, 13=Down, 14=Left, 15=Right)
-    const dUp = btn(12), dDown = btn(13), dLeft = btn(14), dRight = btn(15);
-    const dpx = (dRight?1:0) - (dLeft?1:0);
-    const dpy = (dDown?1:0) - (dUp?1:0);
+    // Buttons: 0=A, 1=B, 2=X, 3=Y, 4=LB, 5=RB, 6=LT, 7=RT, 8=Back, 9=Start, 10=LS, 11=RS
+    const btn = (i)=>{ const b = pad.buttons[i]; return !!(b && (b.pressed || (b.value!=null && b.value>0.5))); };
+    // Manual mapping support
+    const map = (game.input && game.input.gpMap) || null;
+    // Resolve D-Pad state either via mapping or fallbacks
+    let dpx = 0, dpy = 0;
+    if (map && (map.dpadUp || map.dpadDown || map.dpadLeft || map.dpadRight)) {
+        const up = __gp_mappingPressed(pad, map.dpadUp);
+        const down = __gp_mappingPressed(pad, map.dpadDown);
+        const left = __gp_mappingPressed(pad, map.dpadLeft);
+        const right = __gp_mappingPressed(pad, map.dpadRight);
+        dpx = (right?1:0) - (left?1:0);
+        dpy = (down?1:0) - (up?1:0);
+    } else {
+        // D-Pad digital movement (12=Up, 13=Down, 14=Left, 15=Right)
+        const dUp = btn(12), dDown = btn(13), dLeft = btn(14), dRight = btn(15);
+        dpx = (dRight?1:0) - (dLeft?1:0);
+        dpy = (dDown?1:0) - (dUp?1:0);
+    }
+    // Fallback: D-Pad via POV "hat" (axis 9)
+    if (!map && dpx === 0 && dpy === 0 && Array.isArray(pad.axes) && pad.axes.length > 9) {
+        const hat = pad.axes[9];
+        const vec = __gp_hatToVec(hat);
+        if (vec) { dpx = vec.x; dpy = vec.y; }
+    }
+    // Fallback 2: older/alt mappings use separate axes 6 (horizontal) and 7 (vertical) for the D-Pad
+    if (!map && dpx === 0 && dpy === 0 && Array.isArray(pad.axes) && pad.axes.length >= 8) {
+        const dax = pad.axes[6] || 0, day = pad.axes[7] || 0;
+        if (Math.abs(dax) > 0.5) dpx = dax > 0 ? 1 : -1;
+        if (Math.abs(day) > 0.5) dpy = day > 0 ? 1 : -1; // +1 down, -1 up (matches standard)
+    }
     if (dpx !== 0 || dpy !== 0) {
-        // Override analog move when D-Pad is pressed for crisp digital control
+        // Override analog move when D-Pad is pressed for crisp digital control (no deadzone)
         inp.gpMove.x = dpx;
         inp.gpMove.y = dpy;
     }
-    const rtVal = pad.buttons[7] && pad.buttons[7].value || 0;
-    const ltVal = pad.buttons[6] && pad.buttons[6].value || 0;
-    const fireNow = btn(0) || rtVal > 0.35 || ltVal > 0.75; // A or triggers
+    // Clamp tiny drift post-deadzone
+    if (Math.abs(inp.gpMove.x) < 0.001) inp.gpMove.x = 0;
+    if (Math.abs(inp.gpMove.y) < 0.001) inp.gpMove.y = 0;
+    if (Math.abs(inp.gpAim.x) < 0.001) inp.gpAim.x = 0;
+    if (Math.abs(inp.gpAim.y) < 0.001) inp.gpAim.y = 0;
+    // Fire: manual mapping takes precedence; else A (0) only
+    let fireNow = false;
+    if (map && map.fire) fireNow = __gp_mappingPressed(pad, map.fire);
+    else fireNow = btn(0);
     inp.gpFire = !!fireNow;
-    // Start toggles pause on rising edge
-    const startNow = btn(9);
-    const lastStart = inp._lastButtons && inp._lastButtons.start;
-    if (startNow && !lastStart) {
-        // Debounce vs. held: small timestamp guard
+    // Start toggles pause on rising edge; ignore if a modal is open.
+    // Also guard against triggers mistakenly toggling by checking their raw values and mapping.
+    const trigBtnL = btn(6), trigBtnR = btn(7);
+    const trigValL = (pad.buttons[6] && typeof pad.buttons[6].value === 'number') ? pad.buttons[6].value : 0;
+    const trigValR = (pad.buttons[7] && typeof pad.buttons[7].value === 'number') ? pad.buttons[7].value : 0;
+    const startNow = (map && map.pause) ? __gp_mappingPressed(pad, map.pause) : btn(9);
+    const last = inp._lastButtons || {};
+    if (startNow && !last.start && trigValL < 0.1 && trigValR < 0.1 && !trigBtnL && !trigBtnR) {
         const now = performance.now ? performance.now() : Date.now();
         if (!inp._lastStartAt || now - inp._lastStartAt > 250) {
-            if (typeof togglePause === 'function') togglePause();
+            if (!(typeof isAnyAbilityModalOpen === 'function' && isAnyAbilityModalOpen())) {
+                if (typeof togglePause === 'function') togglePause();
+            }
             inp._lastStartAt = now;
         }
     }
-    // Keep a minimal snapshot for next frame edge detection
-    inp._lastButtons = { start: startNow };
+    // Snapshot for edge detection; explicitly track LS/RS to filter accidental actions
+    inp._lastButtons = {
+        start: startNow,
+        ls: btn(10),
+        rs: btn(11),
+        lt: trigBtnL,
+        rt: trigBtnR
+    };
 }
 
 // --- Permanent Ability System ---
@@ -4701,7 +4815,7 @@ function showStartingAbilityMenu() {
     const header = document.createElement('div');
     header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;';
     header.innerHTML = '<div style="color:#fff;font-weight:700;letter-spacing:1px">Pick Starting Ability</div>'+
-        '<button id="startAbClose" style="background:#222;color:#ddd;border:1px solid #666;padding:6px 10px;border-radius:6px;cursor:pointer">Close (Esc)</button>';
+        '<button id="startAbClose" data-gp-focus="1" style="background:#222;color:#ddd;border:1px solid #666;padding:6px 10px;border-radius:6px;cursor:pointer">Close (Esc)</button>';
 
     const controls = document.createElement('div');
     controls.style.cssText = 'display:flex;gap:10px;align-items:center;flex-wrap:wrap;';
@@ -4729,25 +4843,44 @@ function showStartingAbilityMenu() {
 
     function buildItem(name, meta){
         const t = (meta && meta.tier) || 1; const st = tierStyle(t);
+        const owned = Array.isArray(game?.player?.abilities) && game.player.abilities.includes(name);
         const d = document.createElement('div');
         d.style.cssText = [
-            'border:2px solid '+st.border, 'background:'+st.bg, 'border-radius:8px', 'padding:10px', 'cursor:pointer',
+            'border:2px solid '+st.border, 'background:'+st.bg, 'border-radius:8px', 'padding:10px',
             'display:flex', 'flex-direction:column', 'gap:6px', 'box-shadow:inset 0 0 8px #000, 0 0 8px rgba(0,0,0,0.35)'
         ].join(';');
-        d.onmouseenter = ()=> d.style.transform = 'translateY(-2px)';
-        d.onmouseleave = ()=> d.style.transform = 'none';
+        if (!owned) {
+            d.style.cursor = 'pointer';
+            d.onmouseenter = ()=> d.style.transform = 'translateY(-2px)';
+            d.onmouseleave = ()=> d.style.transform = 'none';
+        } else {
+            d.style.cursor = 'not-allowed';
+            d.style.filter = 'grayscale(0.6) opacity(0.65)';
+            d.setAttribute('aria-disabled','true');
+            d.title = 'Already owned';
+        }
         const title = document.createElement('div');
         title.textContent = name;
         title.style.cssText = 'font-weight:700;color:'+st.name+';text-shadow:0 0 6px rgba(0,0,0,.6)';
         const desc = document.createElement('div');
         desc.textContent = meta && meta.desc ? meta.desc : '';
         desc.style.cssText = 'color:#ddd;font-size:12px;min-height:32px;line-height:1.25';
-        d.appendChild(title); d.appendChild(desc);
-        d.onclick = () => {
-            applyStartingAbility(name);
-            try { document.body.removeChild(overlay); } catch(_) {}
-            game.paused = wasPaused;
-        };
+        d.appendChild(title);
+        if (owned) {
+            const badge = document.createElement('div');
+            badge.textContent = 'OWNED';
+            badge.style.cssText = 'align-self:flex-start;background:#2a2a2a;color:#bbb;border:1px solid #555;border-radius:4px;padding:2px 6px;font-size:11px;letter-spacing:0.5px;';
+            d.appendChild(badge);
+        }
+        d.appendChild(desc);
+        if (!owned) {
+            d.setAttribute('data-gp-focus','1');
+            d.onclick = () => {
+                applyStartingAbility(name);
+                try { document.body.removeChild(overlay); } catch(_) {}
+                game.paused = wasPaused;
+            };
+        }
         return d;
     }
 
@@ -4788,13 +4921,33 @@ function showStartingAbilityMenu() {
     document.getElementById('startAbClose').onclick = () => { try { document.body.removeChild(overlay); } catch(_) {} game.paused = wasPaused; };
     search.oninput = filterAndRender;
     onlyWeaponsChk.onchange = filterAndRender;
-    setTimeout(()=> search.focus(), 0);
+    // Do not auto-focus the search input so controller can immediately navigate
 
     // ESC to close
     const escHandler = (ev)=>{ if (ev.key === 'Escape') { ev.preventDefault(); try { document.body.removeChild(overlay); } catch(_) {} game.paused = wasPaused; window.removeEventListener('keydown', escHandler, true);} };
     window.addEventListener('keydown', escHandler, true);
 
     filterAndRender();
+    // Default controller focus to the first selectable card (skip owned/disabled); fall back to Close
+    try {
+        setTimeout(() => {
+            const cont = document.getElementById('startAbilityOverlay');
+            if (!cont) return;
+            const items = gatherFocusables(cont);
+            if (items && items.length) {
+                game.uiNav = game.uiNav || {};
+                game.uiNav.container = cont;
+                game.uiNav.items = items;
+                let idx = 0;
+                for (let i=0;i<items.length;i++) {
+                    const el = items[i];
+                    if (el.getAttribute && el.getAttribute('data-gp-focus')==='1' && grid.contains(el)) { idx=i; break; }
+                }
+                game.uiNav.index = idx;
+                applyGpFocus();
+            }
+        }, 0);
+    } catch(_) {}
 }
 
 // Bind global hotkey: '0' opens the starting ability picker
@@ -4866,6 +5019,20 @@ function showTitleScreen() {
         if (ev.code==='Space') { ev.preventDefault(); cleanup(); begin('title-space'); }
     }
     function clickHandler(){ cleanup(); begin('title-click'); }
+    function gamepadHandler(){
+        try {
+            const pads = (navigator.getGamepads && navigator.getGamepads()) || [];
+            for (let i=0;i<pads.length;i++){
+                const p = pads[i];
+                if (!p || !p.connected) continue;
+                const a = p.buttons && p.buttons[0];
+                const start = p.buttons && p.buttons[9];
+                if ((a && (a.pressed || (a.value>0.5))) || (start && (start.pressed || (start.value>0.5)))) {
+                    cleanup(); begin('title-gamepad'); return;
+                }
+            }
+        } catch(_){ }
+    }
     function cleanup(){
         window.removeEventListener('keydown', keyHandler);
         overlay.removeEventListener('click', clickHandler);
@@ -4874,6 +5041,25 @@ function showTitleScreen() {
     window.addEventListener('keydown', keyHandler);
     overlay.addEventListener('click', clickHandler, { passive:true });
     overlay.addEventListener('touchstart', clickHandler, { passive:true });
+    // Allow A/Start to begin on title screen (polling while overlay visible)
+    const gpInterval = setInterval(()=>{
+        const to = document.getElementById('titleOverlay');
+        if (!to) { clearInterval(gpInterval); return; }
+        try {
+            const pads = (navigator.getGamepads && navigator.getGamepads()) || [];
+            for (let i=0; i<pads.length; i++) {
+                const p = pads[i];
+                if (!p || !p.connected) continue;
+                const a = p.buttons && p.buttons[0];
+                const start = p.buttons && p.buttons[9];
+                if ((a && (a.pressed || (a.value>0.5))) || (start && (start.pressed || (start.value>0.5)))) {
+                    cleanup(); begin('title-gamepad'); return;
+                }
+            }
+        } catch(_) {}
+    }, 120);
+    // Also react to a newly connected pad (poller above will handle the input)
+    window.addEventListener('gamepadconnected', ()=>{});
 }
 window.addEventListener('load', showTitleScreen);
 
@@ -5202,7 +5388,7 @@ function showAbilityChoiceUI(options) {
         card.onmouseenter = ()=>{ card.style.transform='translateY(-4px)'; card.style.boxShadow=`0 0 16px ${style.glow}, 0 0 4px ${style.border}`; };
         card.onmouseleave = ()=>{ card.style.transform='none'; card.style.boxShadow=`0 0 10px ${style.glow}, inset 0 0 8px #000`; };
 
-        const badge = document.createElement('div');
+    const badge = document.createElement('div');
         badge.textContent = style.label;
         badge.style.cssText = `position:absolute;top:-12px;left:12px;padding:2px 8px;`+
             `background:${style.border};color:#fff;font:600 11px 'Courier New',monospace;`+
@@ -5247,7 +5433,8 @@ function showAbilityChoiceUI(options) {
             const intId = setInterval(spawnFlair, 650 + Math.random()*400);
             flairIntervals.push(intId);
         }
-        card.style.cursor = 'pointer';
+    card.style.cursor = 'pointer';
+    card.setAttribute('data-gp-focus','1');
         card.onclick = () => {
             if (!game.player.permanentAbilities.includes(ability)) {
                 game.player.permanentAbilities.push(ability);
@@ -5263,6 +5450,7 @@ function showAbilityChoiceUI(options) {
                     btn.textContent = 'Play Again';
                     btn.style.cssText = 'position:fixed;bottom:40px;left:50%;transform:translateX(-50%);padding:12px 28px;font-size:18px;background:#222;color:#fff;border:2px solid #666;border-radius:6px;z-index:30010;cursor:pointer;';
                     btn.onclick = () => { btn.remove(); resetGame(); };
+                    btn.setAttribute('data-gp-focus','1');
                     document.body.appendChild(btn);
                 }
             }
@@ -5291,7 +5479,7 @@ function showRainbowAbilityPicker(onSelect) {
     const header = document.createElement('div');
     header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;';
     header.innerHTML = '<div style="color:#fff;font-weight:800;letter-spacing:1px;text-shadow:0 0 10px #fff, 0 0 20px #f0f;">Rainbow Chest — Choose Any Ability</div>'+
-        '<button id="rainbowCloseBtn" style="background:#222;color:#ddd;border:1px solid #666;padding:6px 10px;border-radius:6px;cursor:pointer">Close (Esc)</button>';
+        '<button id="rainbowCloseBtn" data-gp-focus="1" style="background:#222;color:#ddd;border:1px solid #666;padding:6px 10px;border-radius:6px;cursor:pointer">Close (Esc)</button>';
     const controls = document.createElement('div');
     controls.style.cssText = 'display:flex;gap:10px;align-items:center;flex-wrap:wrap;';
     const search = document.createElement('input');
@@ -5309,18 +5497,40 @@ function showRainbowAbilityPicker(onSelect) {
     function tierStyle(tier){ if (tier===3) return { border:'#c68b1a', bg:'#2a1d05', name:'#ffd37a' }; if (tier===2) return { border:'#3d7dd9', bg:'#0a1d33', name:'#aaccff' }; return { border:'#5aa84d', bg:'#0d2a0d', name:'#b9e8b2' }; }
     function buildItem(name, meta){
         const t = (meta && meta.tier) || 1; const st = tierStyle(t);
+        const owned = Array.isArray(game?.player?.abilities) && game.player.abilities.includes(name);
         const d = document.createElement('div');
-        d.style.cssText = 'border:2px solid '+st.border+';background:'+st.bg+';border-radius:8px;padding:10px;cursor:pointer;display:flex;flex-direction:column;gap:6px;box-shadow:inset 0 0 8px #000, 0 0 8px rgba(0,0,0,0.35)';
-        d.onmouseenter = ()=> d.style.transform = 'translateY(-2px)';
-        d.onmouseleave = ()=> d.style.transform = 'none';
+        d.style.cssText = 'border:2px solid '+st.border+';background:'+st.bg+';border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:6px;box-shadow:inset 0 0 8px #000, 0 0 8px rgba(0,0,0,0.35)';
+        // Hover/interactive affordances only if not owned
+        if (!owned) {
+            d.style.cursor = 'pointer';
+            d.onmouseenter = ()=> d.style.transform = 'translateY(-2px)';
+            d.onmouseleave = ()=> d.style.transform = 'none';
+        } else {
+            d.style.cursor = 'not-allowed';
+            d.style.filter = 'grayscale(0.6) opacity(0.65)';
+            d.setAttribute('aria-disabled','true');
+            d.title = 'Already owned';
+        }
         const title = document.createElement('div'); title.textContent = name; title.style.cssText = 'font-weight:700;color:'+st.name+';text-shadow:0 0 6px rgba(0,0,0,.6)';
         const desc = document.createElement('div'); desc.textContent = meta && meta.desc ? meta.desc : ''; desc.style.cssText = 'color:#ddd;font-size:12px;min-height:32px;line-height:1.25';
-        d.appendChild(title); d.appendChild(desc);
-        d.onclick = () => {
-            try { document.body.removeChild(overlay); } catch(_) {}
-            game.paused = wasPaused;
-            if (typeof onSelect === 'function') onSelect(name);
-        };
+        d.appendChild(title);
+        // Owned badge
+        if (owned) {
+            const badge = document.createElement('div');
+            badge.textContent = 'OWNED';
+            badge.style.cssText = 'align-self:flex-start;background:#2a2a2a;color:#bbb;border:1px solid #555;border-radius:4px;padding:2px 6px;font-size:11px;letter-spacing:0.5px;';
+            d.appendChild(badge);
+        }
+        d.appendChild(desc);
+        // Controller focus and click only when selectable
+        if (!owned) {
+            d.setAttribute('data-gp-focus','1');
+            d.onclick = () => {
+                try { document.body.removeChild(overlay); } catch(_) {}
+                game.paused = wasPaused;
+                if (typeof onSelect === 'function') onSelect(name);
+            };
+        }
         return d;
     }
     function filterAndRender(){
@@ -5339,10 +5549,31 @@ function showRainbowAbilityPicker(onSelect) {
     panel.appendChild(header); panel.appendChild(controls); panel.appendChild(grid);
     overlay.appendChild(panel); document.body.appendChild(overlay);
     document.getElementById('rainbowCloseBtn').onclick = () => { try { document.body.removeChild(overlay); } catch(_) {} game.paused = wasPaused; };
-    search.oninput = filterAndRender; onlyNewChk.onchange = filterAndRender; setTimeout(()=> search.focus(), 0);
+    search.oninput = filterAndRender; onlyNewChk.onchange = filterAndRender;
     const escHandler = (ev)=>{ if (ev.key==='Escape'){ ev.preventDefault(); try { document.body.removeChild(overlay); } catch(_) {} game.paused = wasPaused; window.removeEventListener('keydown', escHandler, true);} };
     window.addEventListener('keydown', escHandler, true);
     filterAndRender();
+    // Default controller focus to the first selectable card (skip owned/disabled); fall back to Close
+    try {
+        setTimeout(() => {
+            const cont = document.getElementById('rainbowAbilityOverlay');
+            if (!cont) return;
+            const items = gatherFocusables(cont);
+            if (items && items.length) {
+                game.uiNav = game.uiNav || {};
+                game.uiNav.container = cont;
+                game.uiNav.items = items;
+                let idx = 0;
+                // Prefer a grid card that is selectable (has data-gp-focus and lives in grid)
+                for (let i=0;i<items.length;i++) {
+                    const el = items[i];
+                    if (el.getAttribute && el.getAttribute('data-gp-focus')==='1' && grid.contains(el)) { idx = i; break; }
+                }
+                game.uiNav.index = idx;
+                applyGpFocus();
+            }
+        }, 0);
+    } catch(_) {}
 }
 
 function offerPermanentAbilityChoice() {
@@ -6813,7 +7044,7 @@ function offerPermanentAbilityChoice() {
 
         // Returns true if any ability selection modal/overlay is currently visible
         function isAnyAbilityModalOpen() {
-            const ids = ['startAbilityOverlay', 'rainbowAbilityOverlay', 'abilityChoiceOverlay'];
+            const ids = ['startAbilityOverlay', 'rainbowAbilityOverlay', 'abilityChoiceOverlay', 'confirmOverlay'];
             for (let i = 0; i < ids.length; i++) {
                 const el = document.getElementById(ids[i]);
                 if (!el) continue;
@@ -6824,10 +7055,126 @@ function offerPermanentAbilityChoice() {
             return false;
         }
 
+        // --- Gamepad helpers (controller fixes 2025-10-10) ---
+        function _applyDeadzone(ax, ay, deadzone) {
+            const mag = Math.hypot(ax, ay);
+            if (mag < deadzone) return { x: 0, y: 0 };
+            const n = (mag - deadzone) / (1 - deadzone);
+            const scale = n / (mag || 1);
+            return { x: ax * scale, y: ay * scale };
+        }
+
+        function updateGamepadInput() {
+            const inp = game.input;
+            if (!inp || !inp.gamepadEnabled) return;
+            const get = (navigator.getGamepads && navigator.getGamepads()) || [];
+            let pad = null;
+            if (inp.gpIndex != null && get[inp.gpIndex]) {
+                pad = get[inp.gpIndex];
+            }
+            if (!pad) {
+                // pick first connected standard-mapped pad
+                for (let i=0;i<get.length;i++) { if (get[i] && get[i].connected) { pad = get[i]; inp.gpIndex = i; break; } }
+            }
+            if (!pad) return;
+            // Axes: standard mapping: 0=LX,1=LY, 2=RX,3=RY
+            const ax0 = pad.axes[0] || 0, ay0 = pad.axes[1] || 0;
+            const ax1 = pad.axes[2] || 0, ay1 = pad.axes[3] || 0;
+            const dz = Math.min(0.6, Math.max(0.05, inp.gpDeadzone||0.25));
+            const mv = _applyDeadzone(ax0, ay0, dz);
+            const av = _applyDeadzone(ax1, ay1, dz);
+            // Clamp to [-1,1] to avoid rare >1 magnitudes from browser quirks
+            function clamp1(v){ return v>1?1:(v<-1?-1:v); }
+            mv.x = clamp1(mv.x); mv.y = clamp1(mv.y);
+            av.x = clamp1(av.x); av.y = clamp1(av.y);
+            // Some pads (e.g., MOGA XP5-A Plus) report right-stick Y as -1 at rest; treat this as invalid aim so movement can control facing
+            if (Math.abs(av.x) < 0.2 && (Math.abs(av.y + 1) < 0.12 || Math.abs(av.y) > 0.98)) {
+                // If aim appears pegged vertically with near-zero X, ignore it
+                av.x = 0; av.y = 0;
+            }
+            inp.gpMove.x = mv.x; inp.gpMove.y = mv.y;
+            inp.gpAim.x = av.x; inp.gpAim.y = av.y;
+            // Buttons: 0=A, 1=B, 2=X, 3=Y, 4=LB, 5=RB, 6=LT, 7=RT, 8=Back, 9=Start, 10=LS, 11=RS
+            const btn = (i)=>{ const b = pad.buttons[i]; return !!(b && (b.pressed || (b.value!=null && b.value>0.5))); };
+            // Manual mapping support
+            const map = (game.input && game.input.gpMap) || null;
+            // Resolve D-Pad state either via mapping or fallbacks
+            let dpx = 0, dpy = 0;
+            if (map && (map.dpadUp || map.dpadDown || map.dpadLeft || map.dpadRight)) {
+                const up = __gp_mappingPressed(pad, map.dpadUp);
+                const down = __gp_mappingPressed(pad, map.dpadDown);
+                const left = __gp_mappingPressed(pad, map.dpadLeft);
+                const right = __gp_mappingPressed(pad, map.dpadRight);
+                dpx = (right?1:0) - (left?1:0);
+                dpy = (down?1:0) - (up?1:0);
+            } else {
+                // D-Pad digital movement (12=Up, 13=Down, 14=Left, 15=Right)
+                const dUp = btn(12), dDown = btn(13), dLeft = btn(14), dRight = btn(15);
+                dpx = (dRight?1:0) - (dLeft?1:0);
+                dpy = (dDown?1:0) - (dUp?1:0);
+            }
+            // Fallback: D-Pad via POV "hat" (axis 9)
+            if (!map && dpx === 0 && dpy === 0 && Array.isArray(pad.axes) && pad.axes.length > 9) {
+                const hat = pad.axes[9];
+                const vec = __gp_hatToVec(hat);
+                if (vec) { dpx = vec.x; dpy = vec.y; }
+            }
+            // Fallback 2: older/alt mappings use separate axes 6 (horizontal) and 7 (vertical) for the D-Pad
+            if (!map && dpx === 0 && dpy === 0 && Array.isArray(pad.axes) && pad.axes.length >= 8) {
+                const dax = pad.axes[6] || 0, day = pad.axes[7] || 0;
+                if (Math.abs(dax) > 0.5) dpx = dax > 0 ? 1 : -1;
+                if (Math.abs(day) > 0.5) dpy = day > 0 ? 1 : -1; // +1 down, -1 up (matches standard)
+            }
+            if (dpx !== 0 || dpy !== 0) {
+                // Override analog move when D-Pad is pressed for crisp digital control (no deadzone)
+                inp.gpMove.x = dpx;
+                inp.gpMove.y = dpy;
+            }
+            // Clamp tiny drift post-deadzone
+            if (Math.abs(inp.gpMove.x) < 0.001) inp.gpMove.x = 0;
+            if (Math.abs(inp.gpMove.y) < 0.001) inp.gpMove.y = 0;
+            if (Math.abs(inp.gpAim.x) < 0.001) inp.gpAim.x = 0;
+            if (Math.abs(inp.gpAim.y) < 0.001) inp.gpAim.y = 0;
+            // Fire: manual mapping takes precedence; else A (0) only
+            let fireNow = false;
+            if (map && map.fire) fireNow = __gp_mappingPressed(pad, map.fire);
+            else fireNow = btn(0);
+            inp.gpFire = !!fireNow;
+            // Start toggles pause on rising edge; ignore if a modal is open.
+            // Also guard against triggers mistakenly toggling by checking their raw values and mapping.
+            const trigBtnL = btn(6), trigBtnR = btn(7);
+            const trigValL = (pad.buttons[6] && typeof pad.buttons[6].value === 'number') ? pad.buttons[6].value : 0;
+            const trigValR = (pad.buttons[7] && typeof pad.buttons[7].value === 'number') ? pad.buttons[7].value : 0;
+            const startNow = (map && map.pause) ? __gp_mappingPressed(pad, map.pause) : btn(9);
+            const last = inp._lastButtons || {};
+            if (startNow && !last.start && trigValL < 0.1 && trigValR < 0.1 && !trigBtnL && !trigBtnR) {
+                const now = performance.now ? performance.now() : Date.now();
+                if (!inp._lastStartAt || now - inp._lastStartAt > 250) {
+                    if (!(typeof isAnyAbilityModalOpen === 'function' && isAnyAbilityModalOpen())) {
+                        if (typeof togglePause === 'function') togglePause();
+                    }
+                    inp._lastStartAt = now;
+                }
+            }
+            // Snapshot for edge detection; explicitly track LS/RS to filter accidental actions
+            inp._lastButtons = {
+                start: startNow,
+                ls: btn(10),
+                rs: btn(11),
+                lt: trigBtnL,
+                rt: trigBtnR
+            };
+        }
+
         function setupControls() {
             document.addEventListener('keydown', e => {
                 const key = e.key.toLowerCase();
                 game.keys[key] = true;
+                // Toggle gamepad debug overlay with F6 (diagnostics)
+                if (e.key === 'F6') {
+                    const dbg = document.getElementById('gpDebug');
+                    if (dbg) dbg.style.display = (dbg.style.display === 'none' || !dbg.style.display) ? 'block' : 'none';
+                }
                 
                 // Handle pause
                 if (key === 'p') {
@@ -6856,6 +7203,12 @@ function offerPermanentAbilityChoice() {
             if (!game._loopStarted) game._loopStarted = true; // mark loop engaged once
             // Defensive: if multiple RAF chains somehow created, abort duplicates
             if (game._cancelExtraLoop) return;
+            // Always poll gamepad so Start can unpause and inputs are fresh even when paused (controller fixes 2025-10-10)
+            try { updateGamepadInput(); } catch(_) {}
+            // Allow menu navigation with D-Pad/left stick and confirm with A when overlays are open
+            try { handleGamepadMenuNavigation(); } catch(_) {}
+            // Update debug overlay if visible
+            try { updateGpDebug(); } catch(_) {}
             if (!game.paused && !game.gameOver) {
                 update();
             }
@@ -6902,10 +7255,185 @@ function offerPermanentAbilityChoice() {
             pauseAbilities.innerHTML = html;
         }
 
+        // --- Minimal gamepad debug overlay ---
+        (function ensureGpDebug(){
+            if (document.getElementById('gpDebug')) return;
+            const el = document.createElement('div');
+            el.id = 'gpDebug';
+            el.style.cssText = 'position:fixed;left:6px;top:6px;z-index:20000;background:rgba(0,0,0,0.6);color:#0f0;padding:6px 8px;border:1px solid #0a4;border-radius:6px;font:11px Courier New,monospace;white-space:pre;display:none;max-width:50vw;';
+            el.textContent = 'GP Debug';
+            document.body.appendChild(el);
+        })();
+        function updateGpDebug(){
+            const box = document.getElementById('gpDebug'); if (!box || box.style.display==='none') return;
+            const pads = (navigator.getGamepads && navigator.getGamepads()) || [];
+            const idx = game && game.input ? game.input.gpIndex : null;
+            const p = (idx!=null && pads[idx]) ? pads[idx] : pads.find(x=>x && x.connected);
+            const m = p ? (p.mapping||'') : '';
+            const bStates = [];
+            if (p && p.buttons) {
+                for (let i=0;i<Math.min(16,p.buttons.length);i++) {
+                    const b = p.buttons[i]; bStates.push((b && (b.pressed||((b.value||0)>0.5)))?1:0);
+                }
+            }
+            const mv = game.input ? game.input.gpMove : {x:0,y:0};
+            const av = game.input ? game.input.gpAim : {x:0,y:0};
+            const facing = game.player ? game.player.facing : '?';
+            const axesLen = p && p.axes ? p.axes.length : 0;
+            const a6 = p && p.axes && p.axes.length>6 ? p.axes[6] : 0;
+            const a7 = p && p.axes && p.axes.length>7 ? p.axes[7] : 0;
+            const a9 = p && p.axes && p.axes.length>9 ? p.axes[9] : 0;
+            // Mapped state preview
+            let mappedLine = '';
+            try {
+                const mp = game.input && game.input.gpMap;
+                if (mp) {
+                    const pressed = (ent)=>__gp_mappingPressed(p, ent) ? '1':'0';
+                    const up = mp.dpadUp?pressed(mp.dpadUp):'-';
+                    const dn = mp.dpadDown?pressed(mp.dpadDown):'-';
+                    const lf = mp.dpadLeft?pressed(mp.dpadLeft):'-';
+                    const rt = mp.dpadRight?pressed(mp.dpadRight):'-';
+                    const fire = mp.fire?pressed(mp.fire):'-';
+                    const pause = mp.pause?pressed(mp.pause):'-';
+                    mappedLine = `\nmapped: U${up} D${dn} L${lf} R${rt} F${fire} P${pause}`;
+                }
+            } catch(_) {}
+            box.textContent = `map:${m}\nbtn[0..15]: ${bStates.join('')}\nmove: ${mv.x.toFixed(2)}, ${mv.y.toFixed(2)}  aim: ${av.x.toFixed(2)}, ${av.y.toFixed(2)}\naxes(len=${axesLen}): a6=${(+a6).toFixed(2)} a7=${(+a7).toFixed(2)} a9=${(+a9).toFixed(2)}${mappedLine}\nfacing: ${facing}`;
+        }
+
+        // Expose mapping overlay at top-level scope
+        function startManualGamepadMapping() {
+            const existing = document.getElementById('gpMapOverlay'); if (existing) try { existing.remove(); } catch(_) {}
+            const ov = document.createElement('div'); ov.id='gpMapOverlay';
+            ov.style.cssText = 'position:fixed;inset:0;z-index:30000;background:rgba(0,0,0,0.86);display:flex;align-items:center;justify-content:center;font-family:Courier New,monospace;';
+            const panel = document.createElement('div');
+            panel.style.cssText = 'width:min(720px,92vw);background:#141414;border:2px solid #666;border-radius:10px;padding:16px;color:#eee;display:flex;flex-direction:column;gap:10px;';
+            const title = document.createElement('div'); title.style.cssText='font-weight:800;letter-spacing:1px;color:#fff'; title.textContent='Controller Mapping';
+            const info = document.createElement('div'); info.style.cssText='color:#bbb;font-size:12px'; info.textContent='Follow the prompts. Press the requested button/direction. Press Esc to cancel.';
+            const prompt = document.createElement('div'); prompt.id='gpMapPrompt'; prompt.style.cssText='background:#0c0c0c;border:1px solid #555;border-radius:8px;padding:10px;color:#aaffaa;min-height:46px;display:flex;align-items:center;';
+            const actions = document.createElement('div'); actions.style.cssText='display:flex;gap:8px;justify-content:flex-end;';
+            const btnCancel = document.createElement('button'); btnCancel.textContent='Cancel'; btnCancel.style.cssText='padding:6px 10px;background:#222;border:1px solid #777;color:#ddd;border-radius:6px;cursor:pointer;'; btnCancel.setAttribute('data-gp-focus','1');
+            const btnClear = document.createElement('button'); btnClear.textContent='Clear Mapping'; btnClear.style.cssText='padding:6px 10px;background:#222;border:1px solid #777;color:#ddd;border-radius:6px;cursor:pointer;'; btnClear.setAttribute('data-gp-focus','1');
+            panel.appendChild(title); panel.appendChild(info); panel.appendChild(prompt); actions.appendChild(btnClear); actions.appendChild(btnCancel); panel.appendChild(actions); ov.appendChild(panel); document.body.appendChild(ov);
+
+            let steps = [
+                { key:'pause', label:'Press the PAUSE button (Start)' },
+                { key:'fire', label:'Press the FIRE button (A)' },
+                { key:'dpadUp', label:'Press D-Pad UP' },
+                { key:'dpadDown', label:'Press D-Pad DOWN' },
+                { key:'dpadLeft', label:'Press D-Pad LEFT' },
+                { key:'dpadRight', label:'Press D-Pad RIGHT' }
+            ];
+            const result = {};
+            let idx = 0;
+            let lastSnapshot = null;
+            let paused = false;
+            try { paused = !!game.paused; game.paused = true; } catch(_) {}
+
+            function setPrompt(text, color='#aaffaa') { prompt.textContent = text; prompt.style.color = color; }
+            function snapshotPad(p) {
+                if (!p) return null;
+                const s = { buttons:[], axes:[] };
+                for (let i=0;i<Math.min(24, (p.buttons?p.buttons.length:0)); i++) {
+                    const b = p.buttons[i]; s.buttons[i] = { pressed: !!(b && (b.pressed || ((b.value||0)>0.5))), value: (b && typeof b.value==='number') ? b.value : 0 };
+                }
+                for (let i=0;i<Math.min(16, (p.axes?p.axes.length:0)); i++) {
+                    s.axes[i] = typeof p.axes[i] === 'number' ? p.axes[i] : 0;
+                }
+                return s;
+            }
+            function diffPad(prev, curr) {
+                if (!prev || !curr) return null;
+                // Buttons first
+                for (let i=0;i<Math.min(prev.buttons.length, curr.buttons.length); i++) {
+                    if (!prev.buttons[i].pressed && curr.buttons[i].pressed) {
+                        return { type:'button', index:i };
+                    }
+                }
+                // Axes: detect hat axis changes and strong digital pushes
+                for (let i=0;i<Math.min(prev.axes.length, curr.axes.length); i++) {
+                    const a0 = prev.axes[i], a1 = curr.axes[i];
+                    if (i === 9) {
+                        const v = __gp_hatToVec(a1);
+                        const v0 = __gp_hatToVec(a0);
+                        if (v && (!v0 || v.x !== v0.x || v.y !== v0.y)) {
+                            return { type:'axis', index:9, dir:'hat' };
+                        }
+                    } else {
+                        const thr = 0.6;
+                        // Rising over threshold in either direction
+                        if (Math.abs(a1) >= thr && Math.abs(a0) < thr) {
+                            return { type:'axis', index:i, threshold:thr, sign: (a1>0)?1:-1 };
+                        }
+                    }
+                }
+                return null;
+            }
+            function saveAndClose(ok=true) {
+                try { if (!paused) game.paused = false; else game.paused = paused; } catch(_) {}
+                window.removeEventListener('keydown', escHandler, true);
+                try { document.body.removeChild(ov); } catch(_) {}
+                if (ok) { saveInputPreferences(); reflectOptionStates(); }
+            }
+            function escHandler(e){ if (e.key==='Escape'){ e.preventDefault(); saveAndClose(false);} }
+            window.addEventListener('keydown', escHandler, true);
+            btnCancel.onclick = () => saveAndClose(false);
+            btnClear.onclick = () => { try { delete game.input.gpMap; localStorage.removeItem('pref_gp_map'); } catch(_) {} setPrompt('Mapping cleared. Close this overlay.', '#ffcc88'); };
+
+            function nextStep() {
+                if (idx >= steps.length) {
+                    game.input.gpMap = result;
+                    try { saveInputPreferences(); } catch(_) {}
+                    try { console.info('[Gamepad Mapping] Saved:', result); } catch(_) {}
+                    setPrompt('Saved mapping. You can close this overlay.', '#aaccff');
+                    return;
+                }
+                setPrompt(steps[idx].label + ' …');
+                // capture initial snapshot for edge detection
+                const pads = (navigator.getGamepads && navigator.getGamepads()) || [];
+                const p = pads.find(x=>x && x.connected);
+                lastSnapshot = snapshotPad(p);
+            }
+
+            const interval = setInterval(()=>{
+                if (!document.body.contains(ov)) { clearInterval(interval); return; }
+                const pads = (navigator.getGamepads && navigator.getGamepads()) || [];
+                const p = pads.find(x=>x && x.connected);
+                if (!p) return;
+                const curr = snapshotPad(p);
+                if (!lastSnapshot) { lastSnapshot = curr; return; }
+                const change = diffPad(lastSnapshot, curr);
+                if (change) {
+                    const key = steps[idx].key;
+                    if (key === 'dpadUp') {
+                        result.dpadUp = (change.dir==='hat') ? { type:'axis', index:9, dir:'hat', want:'up' } : change;
+                    } else if (key === 'dpadDown') {
+                        result.dpadDown = (change.dir==='hat') ? { type:'axis', index:9, dir:'hat', want:'down' } : change;
+                    } else if (key === 'dpadLeft') {
+                        result.dpadLeft = (change.dir==='hat') ? { type:'axis', index:9, dir:'hat', want:'left' } : change;
+                    } else if (key === 'dpadRight') {
+                        result.dpadRight = (change.dir==='hat') ? { type:'axis', index:9, dir:'hat', want:'right' } : change;
+                    } else if (key === 'pause') {
+                        result.pause = change;
+                    } else if (key === 'fire') {
+                        result.fire = change;
+                    }
+                    idx++;
+                    lastSnapshot = curr;
+                    nextStep();
+                }
+            }, 60);
+
+            // Kick it off
+            nextStep();
+        }
+        try { window.startManualGamepadMapping = startManualGamepadMapping; } catch(_) {}
+
         function initPauseTabs() {
             const btnA = document.getElementById('tabAbilities');
             const btnO = document.getElementById('tabOptions');
             if (!btnA || !btnO) return;
+            try { btnA.setAttribute('data-gp-focus','1'); btnO.setAttribute('data-gp-focus','1'); } catch(_) {}
             btnA.onclick = () => { switchPauseTab('abilities'); };
             btnO.onclick = () => { switchPauseTab('options'); };
             // Option buttons
@@ -6920,16 +7448,29 @@ function offerPermanentAbilityChoice() {
                 gpToggle.id = 'optToggleGamepad';
                 gpToggle.textContent = 'Gamepad: ON';
                 gpToggle.style.cssText = 'padding:8px 12px;background:#222;border:2px solid #555;color:#0f0;font-family:\'Courier New\', monospace;cursor:pointer;';
+                gpToggle.setAttribute('data-gp-focus','1');
                 const gpDead = document.createElement('div');
                 gpDead.id = 'optGpDeadzoneRow';
                 gpDead.style.cssText = 'display:flex;align-items:center;gap:8px;color:#ccc;font-family:Courier New,monospace;';
                 const gpDeadLbl = document.createElement('span'); gpDeadLbl.id='optGpDeadzoneLabel'; gpDeadLbl.textContent = 'Deadzone: 25%';
                 const gpDec = document.createElement('button'); gpDec.id='optGpDeadDec'; gpDec.textContent='-'; gpDec.style.cssText='padding:4px 8px;background:#222;border:2px solid #555;color:#0f0;cursor:pointer;';
+                gpDec.setAttribute('data-gp-focus','1');
                 const gpInc = document.createElement('button'); gpInc.id='optGpDeadInc'; gpInc.textContent='+'; gpInc.style.cssText='padding:4px 8px;background:#222;border:2px solid #555;color:#0f0;cursor:pointer;';
+                gpInc.setAttribute('data-gp-focus','1');
                 gpDead.appendChild(gpDeadLbl); gpDead.appendChild(gpDec); gpDead.appendChild(gpInc);
+                // Manual mapping button
+                const gpMapBtn = document.createElement('button');
+                gpMapBtn.id = 'optGpManualMap';
+                gpMapBtn.textContent = 'Controller Mapping…';
+                gpMapBtn.style.cssText = 'padding:8px 12px;background:#222;border:2px solid #888;color:#fff;font-family:\'Courier New\', monospace;cursor:pointer;';
+                gpMapBtn.setAttribute('data-gp-focus','1');
+                const gpMapNote = document.createElement('div');
+                gpMapNote.id = 'optGpMapNote';
+                gpMapNote.style.cssText = 'color:#aaa;font:11px Courier New,monospace;margin-top:6px;';
+                gpMapNote.textContent = 'Configure A/Start/D-Pad if auto-detect fails.';
                 // Insert into panel
                 const container = pauseOptions.querySelector('div');
-                if (container) { container.appendChild(gpToggle); container.appendChild(gpDead); }
+                if (container) { container.appendChild(gpToggle); container.appendChild(gpDead); container.appendChild(gpMapBtn); container.appendChild(gpMapNote); }
             }
             if (sfxBtn) sfxBtn.onclick = () => { toggleSfx(); reflectOptionStates(); };
             if (musicBtn) musicBtn.onclick = () => { toggleMusic(); reflectOptionStates(); };
@@ -6941,10 +7482,11 @@ function offerPermanentAbilityChoice() {
                 updatePotatoBadge();
             };
             if (resetBtn) resetBtn.onclick = () => {
-                if (confirm('Reset progress and clear permanent abilities?')) {
-                    localStorage.removeItem('permanentAbilities');
+                showConfirmOverlay('Reset progress and clear permanent abilities?', () => {
+                    try { localStorage.removeItem('permanentAbilities'); } catch(_) {}
+                    // Keep pause overlay visible state predictable across reloads
                     location.reload();
-                }
+                }, () => { /* canceled */ });
             };
             // Gamepad handlers
             const gpBtn = document.getElementById('optToggleGamepad');
@@ -6953,6 +7495,28 @@ function offerPermanentAbilityChoice() {
             if (gpBtn) gpBtn.onclick = () => { game.input.gamepadEnabled = !game.input.gamepadEnabled; saveInputPreferences(); reflectOptionStates(); };
             if (gpDec) gpDec.onclick = () => { game.input.gpDeadzone = Math.max(0.05, (game.input.gpDeadzone||0.25) - 0.05); saveInputPreferences(); reflectOptionStates(); };
             if (gpInc) gpInc.onclick = () => { game.input.gpDeadzone = Math.min(0.6, (game.input.gpDeadzone||0.25) + 0.05); saveInputPreferences(); reflectOptionStates(); };
+            // Ensure mapping button exists even if gamepad toggle section was already inserted previously
+            (function ensureGpMapButton(){
+                const pauseOptions = document.getElementById('pauseOptions');
+                if (!pauseOptions) return;
+                let gpMapBtn = document.getElementById('optGpManualMap');
+                if (!gpMapBtn) {
+                    const container = pauseOptions.querySelector('div');
+                    if (container) {
+                        gpMapBtn = document.createElement('button');
+                        gpMapBtn.id = 'optGpManualMap';
+                        gpMapBtn.textContent = 'Controller Mapping…';
+                        gpMapBtn.style.cssText = 'padding:8px 12px;background:#222;border:2px solid #888;color:#fff;font-family:\'Courier New\', monospace;cursor:pointer;';
+                        const note = document.createElement('div');
+                        note.id = 'optGpMapNote';
+                        note.style.cssText = 'color:#aaa;font:11px Courier New,monospace;margin-top:6px;';
+                        note.textContent = 'Configure A/Start/D-Pad if auto-detect fails.';
+                        container.appendChild(gpMapBtn); container.appendChild(note);
+                    }
+                }
+                gpMapBtn = document.getElementById('optGpManualMap');
+                if (gpMapBtn) gpMapBtn.onclick = () => { try { startManualGamepadMapping(); } catch(e) { console.warn('Mapping overlay failed', e); } };
+            })();
             reflectOptionStates();
         }
 
@@ -6970,6 +7534,53 @@ function offerPermanentAbilityChoice() {
                 const pct = Math.round( ( (game.input && game.input.gpDeadzone) || 0.25) * 100 );
                 gpLbl.textContent = 'Deadzone: ' + pct + '%';
             }
+        }
+
+        // === In-game confirmation modal (controller-friendly) ===
+        function showConfirmOverlay(message, onYes, onCancel) {
+            // Prevent duplicates
+            const old = document.getElementById('confirmOverlay');
+            if (old) { try { old.remove(); } catch(_) {} }
+            const overlay = document.createElement('div');
+            overlay.id = 'confirmOverlay';
+            overlay.style.cssText = 'position:fixed;inset:0;z-index:25000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.82);font-family:Courier New,monospace;';
+            const panel = document.createElement('div');
+            panel.style.cssText = 'min-width:300px;max-width:520px;background:#141414;border:2px solid #666;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px;box-shadow:0 10px 24px rgba(0,0,0,0.6)';
+            const text = document.createElement('div');
+            text.textContent = message || 'Are you sure?';
+            text.style.cssText = 'color:#eee;font-size:14px;line-height:1.4;';
+            const actions = document.createElement('div');
+            actions.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;';
+            const btnYes = document.createElement('button');
+            btnYes.textContent = 'Yes';
+            btnYes.style.cssText = 'padding:8px 14px;background:#222;border:2px solid #5a5;color:#bfb;color:#bfb;border-radius:6px;cursor:pointer;';
+            btnYes.setAttribute('data-gp-focus','1');
+            const btnNo = document.createElement('button');
+            btnNo.textContent = 'Cancel';
+            btnNo.style.cssText = 'padding:8px 14px;background:#222;border:2px solid #777;color:#ddd;border-radius:6px;cursor:pointer;';
+            btnNo.setAttribute('data-gp-focus','1');
+            actions.appendChild(btnNo); actions.appendChild(btnYes);
+            panel.appendChild(text); panel.appendChild(actions);
+            overlay.appendChild(panel);
+            document.body.appendChild(overlay);
+
+            const close = () => { try { overlay.remove(); } catch(_) {} };
+            btnYes.onclick = () => { try { onYes && onYes(); } catch(_) {} close(); };
+            btnNo.onclick = () => { try { onCancel && onCancel(); } catch(_) {} close(); };
+            // ESC to cancel
+            const esc = (e)=>{ if (e.key==='Escape') { e.preventDefault(); btnNo.click(); window.removeEventListener('keydown', esc, true);} };
+            window.addEventListener('keydown', esc, true);
+
+            // Ensure gamepad nav targets the confirm overlay immediately
+            try {
+                game.uiNav = game.uiNav || {};
+                game.uiNav.container = overlay;
+                game.uiNav.items = [btnNo, btnYes];
+                game.uiNav.index = 1; // default to Yes
+                applyGpFocus();
+            } catch(_) {}
+
+            return overlay;
         }
 
         function switchPauseTab(which) {
@@ -6990,6 +7601,197 @@ function offerPermanentAbilityChoice() {
                 contentO.style.display = 'block';
                 applyStyles(tabO, activeStyles); applyStyles(tabA, idleStyles);
             }
+        }
+
+        // === Gamepad UI Navigation (menus/overlays) ===
+        (function ensureGpFocusStyle(){
+            if (document.getElementById('gpFocusStyle')) return;
+            const st = document.createElement('style');
+            st.id = 'gpFocusStyle';
+            st.textContent = `
+                .gpFocus {
+                    outline: 2px solid #00ff88 !important;
+                    outline-offset: 2px !important;
+                    box-shadow: 0 0 0 2px rgba(0,255,136,0.3) !important;
+                    border-color: #00ff88 !important;
+                }
+            `;
+            document.head.appendChild(st);
+        })();
+
+        function isOverlayVisible(el){
+            if (!el) return false;
+            const cs = window.getComputedStyle ? window.getComputedStyle(el) : null;
+            return cs ? (cs.display !== 'none' && cs.visibility !== 'hidden' && cs.opacity !== '0') : (el.style.display !== 'none');
+        }
+
+        function getActiveUiContainer(){
+            // Preference order: mapping overlay, ability picker, pause overlay
+            const mapOv = document.getElementById('gpMapOverlay');
+            if (mapOv && document.body.contains(mapOv)) return mapOv;
+            const confirmOv = document.getElementById('confirmOverlay');
+            if (confirmOv && document.body.contains(confirmOv)) return confirmOv;
+            const abilOv = document.getElementById('startAbilityOverlay');
+            if (abilOv && document.body.contains(abilOv)) return abilOv;
+            // Permanent ability choice overlay
+            const permOv = document.getElementById('abilityChoiceOverlay');
+            if (permOv && document.body.contains(permOv)) return permOv;
+            // Rainbow ability picker overlay
+            const rbOv = document.getElementById('rainbowAbilityOverlay');
+            if (rbOv && document.body.contains(rbOv)) return rbOv;
+            const pauseOv = document.getElementById('pauseOverlay');
+            if (game.paused && pauseOv && isOverlayVisible(pauseOv)) return pauseOv;
+            // Fallback: if a standalone Play Again button is visible (post-final), treat it as the active container
+            const playAgainBtn = document.getElementById('postFinalPlayAgain');
+            if (playAgainBtn && document.body.contains(playAgainBtn)) return playAgainBtn; // gatherFocusables will include container if button
+            return null;
+        }
+
+        function gatherFocusables(container){
+            if (!container) return [];
+            const arr = [];
+            // If the container itself is a button, include it
+            if (container.tagName && container.tagName.toUpperCase() === 'BUTTON') {
+                arr.push(container);
+            }
+            // Always include buttons
+            container.querySelectorAll('button').forEach(b=>arr.push(b));
+            // Include explicit gp-focus markers (used in grids)
+            container.querySelectorAll('[data-gp-focus="1"]').forEach(el=>arr.push(el));
+            // Include pause tab buttons explicitly if present
+            const tabA = document.getElementById('tabAbilities');
+            const tabO = document.getElementById('tabOptions');
+            if (tabA && container.contains(tabA)) arr.unshift(tabA);
+            if (tabO && container.contains(tabO)) arr.unshift(tabO);
+            // Filter visible, unique
+            const seen = new Set();
+            const vis = arr.filter(el=>{
+                if (!el || !container.contains(el)) return false;
+                const key = el.tagName+"#"+(el.id||'')+"@"+(el.getAttribute('data-gp-focus')||'')+"@"+(el.textContent||'');
+                if (seen.has(key)) return false; seen.add(key);
+                const cs = window.getComputedStyle ? window.getComputedStyle(el) : null;
+                if (cs && (cs.display==='none' || cs.visibility==='hidden')) return false;
+                if (el.offsetParent === null && cs && cs.position !== 'fixed') return false;
+                return true;
+            });
+            return vis;
+        }
+
+        function gpUiNavReset(){
+            game.uiNav = game.uiNav || {};
+            const cont = getActiveUiContainer();
+            const items = gatherFocusables(cont);
+            game.uiNav.container = cont;
+            game.uiNav.items = items;
+            game.uiNav.index = items.length ? 0 : -1;
+            game.uiNav.lastDX = 0; game.uiNav.lastDY = 0; game.uiNav.lastMoveAt = 0; game.uiNav.lastFire = false; game.uiNav.lastFireAt = 0;
+            applyGpFocus();
+        }
+
+        function applyGpFocus(){
+            if (!game.uiNav) return;
+            // Clear old
+            document.querySelectorAll('.gpFocus').forEach(el=>el.classList.remove('gpFocus'));
+            const items = game.uiNav.items || [];
+            const i = game.uiNav.index|0;
+            if (i >= 0 && i < items.length) {
+                const el = items[i];
+                el.classList.add('gpFocus');
+                try { el.scrollIntoView({block:'nearest', inline:'nearest'}); } catch(_) {}
+            }
+        }
+
+        function moveGpFocus(delta){
+            if (!game.uiNav || !game.uiNav.items || !game.uiNav.items.length) return;
+            const n = game.uiNav.items.length;
+            game.uiNav.index = ( (game.uiNav.index|0) + delta + n ) % n;
+            applyGpFocus();
+        }
+
+        function handleGamepadMenuNavigation(){
+            const cont = getActiveUiContainer();
+            if (!cont) return; // no active UI
+            // Skip if typing
+            const ae = document.activeElement;
+            const tag = ae && ae.tagName ? String(ae.tagName).toUpperCase() : '';
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || (ae && ae.isContentEditable === true)) return;
+            // Ensure state container matches
+            if (!game.uiNav || game.uiNav.container !== cont) gpUiNavReset();
+            // Refresh items in case menu changed
+            const items = gatherFocusables(cont);
+            game.uiNav.items = items;
+            if (items.length && (game.uiNav.index == null || game.uiNav.index < 0 || game.uiNav.index >= items.length)) game.uiNav.index = 0;
+            applyGpFocus();
+
+            const inp = game.input;
+            if (!inp || !inp.gamepadEnabled) return;
+            // Digitalize nav from gpMove (supports dpad or stick)
+            const dx = (inp.gpMove.x > 0.5) ? 1 : (inp.gpMove.x < -0.5) ? -1 : 0;
+            const dy = (inp.gpMove.y > 0.5) ? 1 : (inp.gpMove.y < -0.5) ? -1 : 0; // down is +1 visually, but we use that as next
+            const now = performance.now ? performance.now() : Date.now();
+            const repeatDelay = 200; // ms between repeats
+
+            // Special case: when pause overlay Abilities tab is active, use left stick to scroll the list
+            // rather than moving focus vertically (so you can read long lists easily)
+            const pauseMenuEl = document.getElementById('pauseMenu');
+            const pauseAbilitiesEl = document.getElementById('pauseAbilities');
+            const inPauseAbilities = !!(game.paused && pauseMenuEl && pauseAbilitiesEl && pauseAbilitiesEl.style.display !== 'none' && cont && (cont.id === 'pauseOverlay'));
+            let consumedVertical = false;
+            if (inPauseAbilities) {
+                // Analog scroll for smoothness; fallback to digital step with repeat
+                const ay = inp.gpMove.y || 0;
+                if (Math.abs(ay) > 0.28) {
+                    // Scale speed with magnitude; smaller on low FX devices
+                    const base = 16;
+                    const speed = base + Math.min(1, Math.abs(ay)) * 24;
+                    pauseMenuEl.scrollTop += ay * speed;
+                    consumedVertical = true;
+                } else if (dy !== 0) {
+                    const canRepeat = (game.uiNav.lastDY === dy) ? (now - (game.uiNav.lastMoveAt||0) > repeatDelay) : true;
+                    if (canRepeat) {
+                        pauseMenuEl.scrollTop += dy * 64; // discrete step per repeat
+                        game.uiNav.lastMoveAt = now;
+                    }
+                    game.uiNav.lastDY = dy;
+                    consumedVertical = true;
+                } else {
+                    game.uiNav.lastDY = 0;
+                }
+            }
+
+            // Vertical has priority for typical lists
+            if (!consumedVertical && dy !== 0) {
+                const canRepeat = (game.uiNav.lastDY === dy) ? (now - (game.uiNav.lastMoveAt||0) > repeatDelay) : true;
+                if (canRepeat) {
+                    moveGpFocus(dy); // down -> +1, up -> -1
+                    game.uiNav.lastMoveAt = now;
+                }
+                game.uiNav.lastDY = dy;
+            } else if (!consumedVertical) {
+                game.uiNav.lastDY = 0;
+            }
+            // Horizontal navigation for rows/grids
+            if (dx !== 0 && dy === 0) {
+                const canRepeat = (game.uiNav.lastDX === dx) ? (now - (game.uiNav.lastMoveAt||0) > repeatDelay) : true;
+                if (canRepeat) {
+                    moveGpFocus(dx);
+                    game.uiNav.lastMoveAt = now;
+                }
+                game.uiNav.lastDX = dx;
+            } else if (dx === 0) {
+                game.uiNav.lastDX = 0;
+            }
+
+            // Confirm with A (gpFire) rising edge
+            const fireNow = !!inp.gpFire;
+            if (fireNow && !game.uiNav.lastFire) {
+                const i = game.uiNav.index|0; const target = (items && items[i]) || null;
+                if (target && typeof target.click === 'function') {
+                    try { target.click(); } catch(_) {}
+                }
+                game.uiNav.lastFireAt = now;
+            }
+            game.uiNav.lastFire = fireNow;
         }
 
         // Position the ability tooltip centered over the canvas and fully within the viewport
@@ -7249,8 +8051,6 @@ function offerPermanentAbilityChoice() {
                     game.fxSuppression.particleSkip = perf.lowFx ? 0.55 : 0;
                 }
             }
-            // Poll gamepad before handling player updates
-            updateGamepadInput();
             updatePlayer();
             updateEnemies();
             // Rebuild enemy spatial hash (throttle if low enemy count)
@@ -8089,8 +8889,9 @@ function offerPermanentAbilityChoice() {
             if (game.keys['a']) { dx -= speed; game.player.lastDirection = { x: -1, y: 0 }; game.player.facing = 'left'; }
             if (game.keys['d']) { dx += speed; game.player.lastDirection = { x: 1, y: 0 }; game.player.facing = 'right'; }
 
-            // Gamepad analog move/aim overrides when present
-            if (game.input && game.input.gamepadEnabled) {
+            // Gamepad analog move/aim when present; keyboard has priority if any WASD key is down
+            const anyKeyboardMove = !!(game.keys['w'] || game.keys['a'] || game.keys['s'] || game.keys['d']);
+            if (game.input && game.input.gamepadEnabled && !anyKeyboardMove) {
                 const mv = game.input.gpMove || {x:0,y:0};
                 const av = game.input.gpAim || {x:0,y:0};
                 const mvLen = Math.hypot(mv.x, mv.y);
@@ -8587,15 +9388,24 @@ function offerPermanentAbilityChoice() {
                     if (eff.areaEffect) meta.areaEffect = true;
                 });
                 if (chosenDamageType) meta.damageType = chosenDamageType;
-                // Choose weapon visual type
-                let appliedType = weaponType;
-                // If player owns multiple melee-weapon abilities, randomize the appearance per shot
+                // Choose weapon visual type for the BASE projectile
+                // Rule: randomize among owned NON-sword melee weapons so sword never suppresses them.
+                // If Sword Throw is owned, we spawn an extra sword projectile separately (handled below).
                 const ownedWeapons = ['sword','axe','spear','hammer','dagger','bread'].filter(w => game.player.abilities.some(a => ABILITIES[a] && ABILITIES[a].effect.weaponType === w));
-                if (ownedWeapons.length > 1) {
-                    appliedType = ownedWeapons[Math.floor(Math.random()*ownedWeapons.length)];
+                const hasSword = ownedWeapons.includes('sword');
+                const ownedNonSword = ownedWeapons.filter(w => w !== 'sword');
+                let appliedType = null;
+                if (ownedNonSword.length > 0) {
+                    appliedType = ownedNonSword[Math.floor(Math.random()*ownedNonSword.length)];
+                } else if (hasSword) {
+                    // Only sword owned: base remains generic; we'll add a sword projectile below
+                    appliedType = 'sword';
+                } else if (weaponType) {
+                    // Fallback: single owned melee type (non-standard cases)
+                    appliedType = weaponType;
                 }
                 if (appliedType) {
-                    // Do not tag the primary as 'sword' — we spawn an additional sword projectile separately
+                    // Do not tag the base as 'sword' — we spawn an additional sword projectile separately
                     weaponType = appliedType;
                     if (appliedType !== 'sword') meta.weaponType = appliedType;
                 }
@@ -8694,10 +9504,11 @@ function offerPermanentAbilityChoice() {
                     }
                 }
                 // Weapon-type adjustments
-                if (weaponType) {
+                if (weaponType || hasSword) {
                     const so = game.projectilesSoA;
-                    if (weaponType === 'sword') {
-                        // Spawn an additional sword projectile without replacing the base shot
+                    // If Sword Throw is owned, always spawn an additional sword projectile
+                    if (hasSword) {
+                        // Spawn sword without replacing the base shot (even if base is axe/bread/etc.)
                         const sAng = angle;
                         const sSpd = speed * 0.85;
                         const sIdx = game.spawnProjectile({
@@ -8732,7 +9543,8 @@ function offerPermanentAbilityChoice() {
                         };
                         if (chosenDamageType) metaSword.damageType = chosenDamageType;
                         game._projMeta.set(sIdx, metaSword);
-                    } else if (weaponType === 'axe') {
+                    }
+                    if (weaponType === 'axe') {
                         so.radius[primaryIdx] = Math.max(so.radius[primaryIdx], 16);
                         so.damage[primaryIdx] = Math.max(1, Math.floor(so.damage[primaryIdx]*1.6 + 12));
                         meta.knockback = true; meta.knockbackDistance = Math.max(meta.knockbackDistance||0, 55); meta.weaponType='axe'; meta.slowOnHit = true;
