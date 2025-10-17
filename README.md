@@ -15,6 +15,6 @@ Ability pickups are in the form of trash cans with the following rarity tiers:
 
 Abilities synergize with each other for unique shot pattern effects. Multishot abilities stack with each other for ridiculous projectile amounts
 
-Currently around 120 abilities and adding more each day. 
+Currently around 140 abilities and adding more each day. 
 
 Upon defeating the final boss the player is given 3 random choices from their currently owned abilities. One can be chosen to carry on permanently in future games. This stacks forever unless manually reset via the options menu. There is no limit to permanent abilities.
