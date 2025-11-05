@@ -1,0 +1,5 @@
+Born in the shadow of the storm drain and raised on crusty breadcrumbs and street smarts, Eggscobar clawed his way to the top of the Goose Ghetto’s criminal underwing. With feathers slicked back and a glare that could crack concrete, he’s the brains behind the yolk-smuggling empire that runs from the city park to the far end of the pond.
+
+Eggscobar’s early days were marked by turf wars over nesting spots and high-stakes raids on bakery dumpsters. But it wasn’t long before he turned honking into hustling, building a syndicate of goslings loyal to the beak. His operations include breadcrumb laundering, pond protection rackets, and the infamous “Shell Game” — a black-market egg trade that keeps the whole flock fed and feared.
+
+Despite constant surveillance from the Duck Department and rival crews like the Swan Syndicate, Eggscobar remains untouchable. His motto? “Fly low, strike fast, and never crack under pressure.” Whether he's gliding across the water or strutting down the sidewalk, every goose in the ghetto knows: when Eggscobar honks, you listen.

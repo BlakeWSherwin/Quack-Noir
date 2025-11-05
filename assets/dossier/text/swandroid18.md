@@ -1,0 +1,5 @@
+Built in the secret labs of the Swan Ascendancy, Swandroid 18 is the pinnacle of biomechanical elegance — a swan cyborg with unmatched agility, tactical brilliance, and a cold, calculated honk. Engineered using quantum neural matrices and reinforced feather-alloy plating, she was designed not just to destroy ducks, but to outthink them, outfly them, and outclass them.
+
+Swandroid 18 is a master of aerial combat and psychological warfare. Her wings contain micro-servo boosters for high-speed maneuvers, and her beak is equipped with a precision plasma cutter capable of slicing through duck armor mid-flight. She’s known for her signature move, the “Feather Blitz,” a rapid-fire honk strike that disorients enemies before she closes in for the final flap.
+
+Unlike other swan units, Swandroid 18 possesses a semi-autonomous personality core — cool, confident, and quietly rebellious. Though loyal to Cygnus Prime, she often questions the morality of total duck extinction, making her a wildcard in the Ascendancy’s ranks. She’s respected by Cardi Beak, feared by ducks, and watched closely by Honkutus of Cygnus.

@@ -1,0 +1,5 @@
+2 Honk Shakur isn’t just a goose — he’s a movement. Hatched in a cracked fountain during a city protest and raised on rhythm, resistance, and day-old bagels, Honk Shakur became the voice of the streets, the soul of the Goose Ghetto, and the honk that echoes through every alley and pond. He’s the crew’s conscience, philosopher, and lyrical firebrand — always speaking truth to feathered power.
+
+Known for his raw, rhythmic honks and powerful spoken-wing performances, 2 Honk rose to fame after dropping his debut mixtape, All Eyez on Beak, which exposed corruption in the Duck Department and rallied the flocks under one banner. His words inspire, his presence commands, and his past — filled with betrayal, exile, and redemption — fuels every verse he spits.
+
+Though he rolls with Eggscobar’s crew, Honk Shakur walks his own path. He’s tight with Goosey Elliot and Geese Robbins, often collaborating on underground broadcasts and pondside poetry nights. His signature move, the “Honk Bomb,” is a surprise lyrical ambush that leaves rival crews stunned and silent.

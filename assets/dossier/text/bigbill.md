@@ -1,0 +1,5 @@
+Big Bill is the kind of goose that makes the pond ripple when he steps in. Hatched in a scrapyard nest and raised on grit, gravel, and leftover hot dog buns, Bill is the Goose Ghetto’s heavy hitter — the enforcer you call when subtlety isn’t on the menu. Towering over most of the flock and built like a feathered freight train, Big Bill doesn’t honk often, but when he does, it echoes across the borough.
+
+He’s Eggscobar’s go-to for intimidation, demolition, and crowd control. Whether it’s clearing out rival flocks or flipping a park bench to send a message, Big Bill gets it done with brute force and zero hesitation. His signature move, the “Beak Breaker,” is a full-body charge that’s left more than a few mallards reconsidering their life choices.
+
+But beneath the brawn is a surprisingly tactical mind. Bill’s not just muscle — he’s a strategist when it comes to siege ops and turf lockdowns. He’s also fiercely protective of the crew, especially Lil Goosey, who he treats like a younger brother, and Goosey Elliot, whose respect he earned after saving her from a swan ambush during the “Featherfront Skirmish.”

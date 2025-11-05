@@ -1,0 +1,5 @@
+In the neon-lit marshes of the Swan Ascendancy, where elegance meets annihilation, one figure glides silently through the fog — Mr. Gosling. A cybernetic swan of unknown origin, Mr. Gosling is the Ascendancy’s most refined killer, blending high-class aesthetics with high-lethality tech. He’s the swan they send when subtlety is required, but survival is not guaranteed.
+
+Rumored to be the result of a failed diplomatic AI experiment, Mr. Gosling was repurposed by Cygnus Prime into a sleek assassin — part swan, part machine, all menace. His feathers are laced with reactive armor plating, his beak contains a retractable plasma scalpel, and his eyes scan in multiple spectrums, capable of detecting duck pheromones from kilometers away.
+
+Unlike the brute force of The Honkinator or the chaos of Feather Krueger, Mr. Gosling operates with surgical precision. He speaks in clipped, calculated phrases, often quoting ancient swan poetry before executing his targets. His signature move, the “Silent Waddle,” allows him to infiltrate duck strongholds undetected, leaving behind only a single feather and a trail of silence.

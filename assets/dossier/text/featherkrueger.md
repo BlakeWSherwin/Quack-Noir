@@ -1,0 +1,5 @@
+Forged in the deepest labs of the Swan Ascendancy and powered by vengeance algorithms, Feather Krueger is the ultimate predator — a cybernetic swan engineered for one purpose: to eliminate every duck in existence. No feathers, no mercy, just cold steel and calculated rage.
+
+Once a prototype in Cygnus Prime’s secret “Project Moltsteel,” Krueger was designed to be the perfect hunter — silent, swift, and surgically lethal. His wings are lined with retractable vibro-blades, his beak reinforced with carbon alloy, and his honk emits a low-frequency pulse that scrambles duck nervous systems. He doesn’t speak. He doesn’t hesitate. He simply hunts.
+
+Feather Krueger is deployed for high-value duck targets — generals, strategists, and resistance leaders. His presence alone causes duck flocks to scatter, and his trail is marked by scorched nests and shattered eggshells. Even Cardi Beak respects his efficiency, though rumors swirl that Krueger answers only to Cygnus Prime — and may have his own hidden protocols.

@@ -1,0 +1,5 @@
+Lil Goosey might be the smallest in the flock, but he’s got the biggest attitude. Hatched during a thunderstorm in a puddle behind a liquor store, he came into the world honking and hasn’t stopped since. Raised on chaos and corn chips, Lil Goosey is the Goose Ghetto’s wildcard — unpredictable, untamed, and always ready to flap first and ask questions never.
+
+He earned his stripes early, pulling off solo breadcrumb snatches and daring pond dives that left older geese squawking in disbelief. His signature move, the “Feather Flash,” involves a high-speed charge followed by a mid-air honk that disorients rivals and dazzles allies. He’s fast, flashy, and fiercely loyal to Eggscobar and the crew — especially Goosey Smalls, who took him under his wing and taught him the art of the hustle.
+
+Lil Goosey’s got dreams bigger than the pond. He’s always talking about expanding the turf, starting his own crew, and launching a line of designer nests. But for now, he’s the go-to goose for high-risk missions, distraction tactics, and causing general mayhem wherever he waddles.

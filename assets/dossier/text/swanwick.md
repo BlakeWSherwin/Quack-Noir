@@ -1,0 +1,5 @@
+Before the war, Swan Wick was just another elite swan — graceful, disciplined, and retired from the violence of the Ascendancy. He lived in peace on a secluded pond, far from the chaos of the Swan-Duck conflict. But when a rogue duck militia destroyed his nest and took the one thing he loved — a rare golden egg gifted to him by a fallen comrade — Swan Wick returned to the fold. Not for duty. For vengeance.
+
+Rebuilt with next-gen cybernetic enhancements and a vengeance protocol that overrides standard Ascendancy ethics, Swan Wick is now a one-bird army. His wings are equipped with retractable blade-feathers, his beak contains a micro-targeting system, and his honk — low, deliberate, and terrifying — is the last sound many ducks ever hear.
+
+Unlike other swan cyborgs, Swan Wick doesn’t follow orders. He follows a code. He’s a ghost in the marshes, a myth among duck resistance fighters, and a problem even Cygnus Prime can’t fully control. His signature move, the “Nestfall Maneuver,” is a high-speed aerial dive followed by a precision strike that leaves no survivors.
