@@ -8582,7 +8582,7 @@ function offerPermanentAbilityChoice() {
     ENEMY_TYPES['Mr Gosling'] = { health: 240, speed: 0.68, damage: 30, color: '#B3D1FF', size: 52, xp: 360, ranged: true, rangedCooldown: 1400, armor: 5, act: 'III' };
 
     // Act III boss: Cygnus Prime (street 5)
-    // Uses assets/swans/cygnusprime.png. Default side sprite faces right; left is mirrored.
+    // Uses assets/swans/spritesheets/cygnusprime-sheet-20-31.png. Spritesheet with 8 columns, 4 rows, 32 frames, using 20-31. Default side faces right; left is mirrored.
     ENEMY_TYPES['Cygnus Prime'] = { health: 1800, speed: 0.36, damage: 72, color: '#C0C8FF', size: 160, xp: 8000, ranged: true, rangedCooldown: 1100, armor: 12, act: 'III', boss: true, spawnStreet: 5 };
     // Act III ranged enemy: The Honkinator (exclusive to Act III)
     // Uses assets/swans/spritesheets/honkinator-sheet-0-24.png. Spritesheet with 8 columns, 4 rows, 32 frames, using 0-24. Default side faces right; left is mirrored.
@@ -9522,8 +9522,42 @@ function offerPermanentAbilityChoice() {
                     if (!game.enemySprites.cygnusPrime) {
                         try {
                             const cpImg = new Image();
-                            try { cpImg.src = (new URL('assets/swans/cygnusprime.png', document.baseURI)).href; } catch(_) { cpImg.src = 'assets/swans/cygnusprime.png'; }
+                            try { cpImg.src = (new URL('assets/swans/spritesheets/cygnusprime-sheet-20-31.png', document.baseURI)).href; } catch(_) { cpImg.src = 'assets/swans/spritesheets/cygnusprime-sheet-20-31.png'; }
                             game.enemySprites.cygnusPrime = { image: cpImg, loaded: false, _forcedBitmap: null };
+                            const atlasFrames = [
+                                {"x":0,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":768,"w":256,"h":256,"duration":1}
+                            ];
                             function cpBox(x1,y1,x2,y2){ return { x:x1, y:y1, w:(x2 - x1), h:(y2 - y1) }; }
                             cpImg.onload = function(ev){
                                 try {
@@ -9531,44 +9565,19 @@ function offerPermanentAbilityChoice() {
                                     const cont = game.enemySprites.cygnusPrime;
                                     try { if (cont && cont._forcedBitmap) { try { if (cont._forcedBitmap.close) cont._forcedBitmap.close(); } catch(_){} cont._forcedBitmap = null; try { console.info('[CygnusPrimeSprite] Image loaded; cleared forced bitmap fallback'); } catch(_){}} } catch(_){ }
                                     cont.loaded = true;
-                                    // Frames: front=down, rear=up, side=right
-                                    cont.frames = {
-                                        down: cpBox(0,28,486,630),
-                                        up:   cpBox(515,20,998,628),
-                                        right:cpBox(1045,26,1486,638)
-                                    };
-                                    try { const fs = cont.frames; fs.front = fs.down; fs.rear = fs.up; fs.side = fs.right; } catch(_){ }
-                                    // Pre-create side canvases: crop is RIGHT-facing (asset authored facing right)
-                                    try {
-                                        const rf = cont.frames.right;
-                                        if (rf && rf.w && rf.h && img && (img.naturalWidth || img.width) && typeof document !== 'undefined') {
-                                            const rightC = document.createElement('canvas'); rightC.width = rf.w; rightC.height = rf.h;
-                                            const rc = rightC.getContext('2d'); rc.imageSmoothingEnabled = true;
-                                            rc.drawImage(img, rf.x, rf.y, rf.w, rf.h, 0, 0, rf.w, rf.h);
-
-                                            const leftC = document.createElement('canvas'); leftC.width = rf.w; leftC.height = rf.h;
-                                            const lc = leftC.getContext('2d'); lc.imageSmoothingEnabled = true;
-                                            lc.translate(leftC.width, 0); lc.scale(-1,1);
-                                            lc.drawImage(rightC, 0, 0);
-
-                                            cont._rightCanvas = rightC; cont._leftCanvas = leftC;
-                                            cont.frames.right = { x:0,y:0,w:rightC.width,h:rightC.height };
-                                            cont.frames.left = { x:0,y:0,w:leftC.width,h:leftC.height };
-                                        }
-                                    } catch(_) {}
-
-                                    const refH = cont.frames.down.h || 256;
+                                    cont.frames = { seq: atlasFrames.slice(20,32) };
+                                    cont.anim = { frameStep: 8 };
+                                    const refH = 256;
                                     cont.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
                                     cont.computeHitbox = (enemy)=>{
                                         try {
                                             const size = enemy.size || 160; const scale = cont.baseScaleForSize(size);
-                                            const f = cont.frames.down || { w: size*2, h: size*2 };
-                                            const w = f.w * scale; const h = f.h * scale;
+                                            const w = 256 * scale; const h = 256 * scale;
                                             const hitW = w * 0.70; const hitH = h * 0.72;
                                             return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
                                         } catch(_) { return { w: enemy.size||160, h: enemy.size||160, ox: -(enemy.size||160)/2, oy: -(enemy.size||160)/2 }; }
                                     };
-                                    try { console.info('[CygnusPrimeSprite] Loaded cygnusprime image', cont.frames); } catch(_){ }
+                                    try { console.info('[CygnusPrimeSprite] Loaded cygnusprime spritesheet', cont.frames); } catch(_){ }
                                 } catch(e) { console.warn('[CygnusPrimeSprite] onload error', e); }
                             };
                             cpImg.onerror = function(ev){
@@ -9587,25 +9596,8 @@ function offerPermanentAbilityChoice() {
                                             fetch(href, { signal }).then(r=>{ clearTimeout(t); if (!r.ok) throw new Error('status '+r.status); return r.blob(); }).then(b=>createImageBitmap(b)).then(bmp=>{
                                                 clearTimeout(t);
                                                 cont._forcedBitmap = bmp; cont.loaded = true;
-                                                // If frames available, create right/left canvases from bitmap (crop is RIGHT-facing)
-                                                try {
-                                                    const rf = cont.frames && cont.frames.right;
-                                                    if (rf && rf.w && rf.h && typeof document !== 'undefined') {
-                                                        const rightC = document.createElement('canvas'); rightC.width = rf.w; rightC.height = rf.h;
-                                                        const rc = rightC.getContext('2d'); rc.imageSmoothingEnabled = true;
-                                                        rc.drawImage(bmp, rf.x, rf.y, rf.w, rf.h, 0, 0, rf.w, rf.h);
-
-                                                        const leftC = document.createElement('canvas'); leftC.width = rf.w; leftC.height = rf.h;
-                                                        const lc = leftC.getContext('2d'); lc.imageSmoothingEnabled = true;
-                                                        lc.translate(leftC.width, 0); lc.scale(-1,1);
-                                                        lc.drawImage(rightC, 0, 0);
-
-                                                        cont._rightCanvas = rightC; cont._leftCanvas = leftC;
-                                                        cont.frames.right = { x:0,y:0,w:rightC.width,h:rightC.height };
-                                                        cont.frames.left = { x:0,y:0,w:leftC.width,h:leftC.height };
-                                                        try { console.info('[CygnusPrimeSprite] created preflipped canvases from ImageBitmap'); } catch(_){ }
-                                                    }
-                                                } catch(e) { try { console.warn('[CygnusPrimeSprite] canvas creation failed', e); } catch(_){} }
+                                                cont.frames = { seq: atlasFrames.slice(20,32) };
+                                                cont.anim = { frameStep: 8 };
                                                 try { console.info('[CygnusPrimeSprite] createImageBitmap fallback succeeded'); } catch(_){ }
                                             }).catch(e=>{ clearTimeout(t); try { console.warn('[CygnusPrimeSprite] fetch/createImageBitmap fallback failed', e); } catch(_){} });
                                         }
@@ -26387,19 +26379,19 @@ function offerPermanentAbilityChoice() {
                             return;
                         }
                         // Cygnus Prime sprite override (Act III boss)
-                        if (enemy.type === 'Cygnus Prime' && game.enemySprites && game.enemySprites.cygnusPrime && (game.enemySprites.cygnusPrime.loaded || game.enemySprites.cygnusPrime._forcedBitmap || game.enemySprites.cygnusPrime._leftCanvas)) {
+                        if (enemy.type === 'Cygnus Prime' && game.enemySprites && game.enemySprites.cygnusPrime && (game.enemySprites.cygnusPrime.loaded || game.enemySprites.cygnusPrime._forcedBitmap)) {
                             const cp = game.enemySprites.cygnusPrime;
-                            const frameSet = cp.frames || {};
-                            let facing = enemy.facing || 'down';
-                            let box = frameSet[facing];
+                            const { seq } = cp.frames || {};
+                            const { frameStep } = cp.anim || {};
+                            const playerX = game.player ? game.player.x : 0;
+                            const facing = (playerX < enemy.x) ? 'left' : 'right';
+                            const animTicks = Math.floor(game.frame / (frameStep || 8));
+                            const box = seq ? seq[animTicks % seq.length] : null;
                             const img = cp.image;
-                            const leftCanvas = cp._leftCanvas;
-                            const rightCanvas = cp._rightCanvas;
                             const size = enemy.size;
-                            const scale = cp.baseScaleForSize ? cp.baseScaleForSize(size) : ((size*2)/(box?box.h:1));
-                            if (!box) { if (facing === 'left' && frameSet.right) box = frameSet.right; else box = frameSet.down || frameSet.right || frameSet.up; }
-                            const srcW = (box && box.w) ? box.w : (cp._forcedBitmap ? cp._forcedBitmap.width : (img && (img.naturalWidth || img.width)) || enemy.size*2);
-                            const srcH = (box && box.h) ? box.h : (cp._forcedBitmap ? cp._forcedBitmap.height : (img && (img.naturalHeight || img.height)) || enemy.size*2);
+                            const scale = cp.baseScaleForSize ? cp.baseScaleForSize(size) : ((size*2)/256);
+                            const srcW = (box && box.w) ? box.w : (cp._forcedBitmap ? cp._forcedBitmap.width : (img && (img.naturalWidth || img.width)) || size*2);
+                            const srcH = (box && box.h) ? box.h : (cp._forcedBitmap ? cp._forcedBitmap.height : (img && (img.naturalHeight || img.height)) || size*2);
                             const drawW = srcW * scale;
                             const drawH = srcH * scale;
 
@@ -26410,38 +26402,17 @@ function offerPermanentAbilityChoice() {
                             const dstH = Math.max(1, Math.round(drawH));
 
                             if (facing === 'left') {
-                                if (leftCanvas) {
-                                    try { ctx.drawImage(leftCanvas, 0, 0, leftCanvas.width, leftCanvas.height, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                } else if (cp._forcedBitmap) {
-                                    try { ctx.scale(-1,1); ctx.drawImage(cp._forcedBitmap, (box?box.x:0), (box?box.y:0), (box?box.w:cp._forcedBitmap.width), (box?box.h:cp._forcedBitmap.height), -Math.round(dstW/2), -Math.round(dstH/2), dstW, dstH); } catch(_){ }
-                                } else if (frameSet.right && img) {
-                                    try { ctx.scale(-1,1); ctx.drawImage(img, frameSet.right.x, frameSet.right.y, frameSet.right.w, frameSet.right.h, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                } else if (img && box) {
-                                    try { ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                }
-                            } else if (facing === 'right') {
-                                if (rightCanvas) {
-                                    try { ctx.drawImage(rightCanvas, 0, 0, rightCanvas.width, rightCanvas.height, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                } else if (cp._forcedBitmap) {
-                                    try { ctx.drawImage(cp._forcedBitmap, (box?box.x:0), (box?box.y:0), (box?box.w:cp._forcedBitmap.width), (box?box.h:cp._forcedBitmap.height), -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                } else if (img && frameSet.right) {
-                                    try { ctx.drawImage(img, frameSet.right.x, frameSet.right.y, frameSet.right.w, frameSet.right.h, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                } else if (img && box) {
-                                    try { ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                }
-                            } else {
-                                const fbox = frameSet.front || frameSet.down || box;
-                                const rbox = frameSet.rear || frameSet.up || box;
-                                const useBox = (facing === 'down') ? fbox : (facing === 'up' ? rbox : box);
-                                if (cp._forcedBitmap && useBox) {
-                                    try { ctx.drawImage(cp._forcedBitmap, useBox.x, useBox.y, useBox.w, useBox.h, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                } else if (img && useBox) {
-                                    try { ctx.drawImage(img, useBox.x, useBox.y, useBox.w, useBox.h, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                } else if (cp._forcedBitmap) {
-                                    try { ctx.drawImage(cp._forcedBitmap, 0, 0, cp._forcedBitmap.width, cp._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                }
+                                ctx.scale(-1, 1);
                             }
-                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(200,200,255,0.45)'; ctx.strokeRect(-dstW/2, -dstH/2, dstW, dstH); }
+
+                            if (cp._forcedBitmap && box) {
+                                ctx.drawImage(cp._forcedBitmap, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (img && box) {
+                                ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (cp._forcedBitmap) {
+                                ctx.drawImage(cp._forcedBitmap, 0, 0, cp._forcedBitmap.width, cp._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
+                            }
+                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(200,200,255,0.45)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                             ctx.restore();
                             return;
                         }
