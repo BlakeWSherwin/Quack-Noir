@@ -11139,76 +11139,74 @@ function offerPermanentAbilityChoice() {
                             try { if (!game.enemySprites.honkutusofcygnus) game.enemySprites.honkutusofcygnus = game.enemySprites.honkutusOfCygnus; } catch(_) {}
                             try { if (!game.enemySprites['Honkutus of Cygnus']) game.enemySprites['Honkutus of Cygnus'] = game.enemySprites.honkutusOfCygnus; } catch(_) {}
 
-                            // === Mr Gosling (Act III ranged enemy) sprite ===
+                            // === Mr Gosling (Act III ranged enemy) animated sprite loader ===
                             if (!game.enemySprites.mrGosling) {
                                 const mgImg = new Image();
-                                mgImg.src = 'assets/swans/mrgosling.png';
-                                game.enemySprites.mrGosling = { image: mgImg, loaded: false };
-                                function mgBox(x1,y1,x2,y2){ return { x:x1, y:y1, w:(x2 - x1), h:(y2 - y1) }; }
+                                try { mgImg.src = (new URL('assets/swans/spritesheets/mrgosling-sheet.png', document.baseURI)).href; } catch(_) { mgImg.src = 'assets/swans/spritesheets/mrgosling-sheet.png'; }
+                                game.enemySprites.mrGosling = { image: mgImg, loaded: false, _forcedBitmap: null };
+                                const atlasFrames = [
+                                    {"x":0,"y":0,"w":256,"h":256,"duration":1},
+                                    {"x":256,"y":0,"w":256,"h":256,"duration":1},
+                                    {"x":512,"y":0,"w":256,"h":256,"duration":1},
+                                    {"x":768,"y":0,"w":256,"h":256,"duration":1},
+                                    {"x":1024,"y":0,"w":256,"h":256,"duration":1},
+                                    {"x":1280,"y":0,"w":256,"h":256,"duration":1},
+                                    {"x":1536,"y":0,"w":256,"h":256,"duration":1},
+                                    {"x":1792,"y":0,"w":256,"h":256,"duration":1},
+                                    {"x":0,"y":256,"w":256,"h":256,"duration":1},
+                                    {"x":256,"y":256,"w":256,"h":256,"duration":1},
+                                    {"x":512,"y":256,"w":256,"h":256,"duration":1},
+                                    {"x":768,"y":256,"w":256,"h":256,"duration":1},
+                                    {"x":1024,"y":256,"w":256,"h":256,"duration":1},
+                                    {"x":1280,"y":256,"w":256,"h":256,"duration":1},
+                                    {"x":1536,"y":256,"w":256,"h":256,"duration":1},
+                                    {"x":1792,"y":256,"w":256,"h":256,"duration":1},
+                                    {"x":0,"y":512,"w":256,"h":256,"duration":1},
+                                    {"x":256,"y":512,"w":256,"h":256,"duration":1},
+                                    {"x":512,"y":512,"w":256,"h":256,"duration":1},
+                                    {"x":768,"y":512,"w":256,"h":256,"duration":1},
+                                    {"x":1024,"y":512,"w":256,"h":256,"duration":1},
+                                    {"x":1280,"y":512,"w":256,"h":256,"duration":1},
+                                    {"x":1536,"y":512,"w":256,"h":256,"duration":1},
+                                    {"x":1792,"y":512,"w":256,"h":256,"duration":1},
+                                    {"x":0,"y":768,"w":256,"h":256,"duration":1},
+                                    {"x":256,"y":768,"w":256,"h":256,"duration":1},
+                                    {"x":512,"y":768,"w":256,"h":256,"duration":1},
+                                    {"x":768,"y":768,"w":256,"h":256,"duration":1},
+                                    {"x":1024,"y":768,"w":256,"h":256,"duration":1},
+                                    {"x":1280,"y":768,"w":256,"h":256,"duration":1},
+                                    {"x":1536,"y":768,"w":256,"h":256,"duration":1},
+                                    {"x":1792,"y":768,"w":256,"h":256,"duration":1}
+                                ];
                                 mgImg.onload = function(ev){
                                     const img = (ev && ev.target) ? ev.target : this;
                                     try {
                                         game.enemySprites.mrGosling.loaded = true;
-                                        // Front: 81,29 -> 515,614 ; Rear: 540,24 -> 938,613 ; Side: 995,10 -> 1480,612
-                                        game.enemySprites.mrGosling.frames = {
-                                            down: mgBox(81,29,515,614),
-                                            up:   mgBox(540,24,938,613),
-                                            right:mgBox(995,10,1480,612)
-                                        };
-                                        try { const fs = game.enemySprites.mrGosling.frames; fs.front = fs.down; fs.rear = fs.up; fs.side = fs.right; } catch(_){ }
-                                        // Precreate canvases: RIGHT = original side crop, LEFT = mirrored copy
-                                        try {
-                                            const rf = game.enemySprites.mrGosling.frames.right;
-                                            if (rf && img && img.naturalWidth && img.naturalHeight && typeof document !== 'undefined') {
-                                                const rightC = document.createElement('canvas'); rightC.width = rf.w; rightC.height = rf.h;
-                                                const rc = rightC.getContext('2d'); rc.imageSmoothingEnabled = true;
-                                                rc.drawImage(img, rf.x, rf.y, rf.w, rf.h, 0, 0, rf.w, rf.h);
-
-                                                const leftC = document.createElement('canvas'); leftC.width = rf.w; leftC.height = rf.h;
-                                                const lc = leftC.getContext('2d'); lc.imageSmoothingEnabled = true;
-                                                lc.translate(leftC.width, 0); lc.scale(-1, 1);
-                                                lc.drawImage(rightC, 0, 0);
-
-                                                try { game.enemySprites.mrGosling._rightCanvas = rightC; } catch(_){ }
-                                                try { game.enemySprites.mrGosling._leftCanvas = leftC; } catch(_){ }
-                                                try { game.enemySprites.mrGosling.frames.right = { x:0,y:0,w:rightC.width,h:rightC.height }; } catch(_){ }
-                                                try { game.enemySprites.mrGosling.frames.left = { x:0,y:0,w:leftC.width,h:leftC.height }; } catch(_){ }
-                                            }
-                                        } catch(_){ }
-                                        const refH = game.enemySprites.mrGosling.frames.down.h || 256;
+                                        game.enemySprites.mrGosling.frames = { seq: atlasFrames };
+                                        game.enemySprites.mrGosling.anim = { frameStep: 8 };
+                                        const refH = 256;
                                         game.enemySprites.mrGosling.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
                                         game.enemySprites.mrGosling.computeHitbox = (enemy)=>{
                                             const size = enemy.size; const scale = game.enemySprites.mrGosling.baseScaleForSize(size);
-                                            const f = (game.enemySprites.mrGosling.frames.front || game.enemySprites.mrGosling.frames.down);
+                                            const f = game.enemySprites.mrGosling.frames.down || { w: 256, h: 256 };
                                             const w = Math.round((f.w || 32) * scale); const h = Math.round((f.h || 32) * scale);
                                             return { x: Math.round(enemy.x - w/2), y: Math.round(enemy.y - h/2), w, h };
                                         };
-                                        console.info('[MrGoslingSprite] Loaded mrgosling.png', game.enemySprites.mrGosling.frames);
+                                        console.info('[MrGoslingSprite] Loaded mrgosling spritesheet', game.enemySprites.mrGosling.frames);
                                     } catch(e) { console.warn('[MrGoslingSprite] onload error', e); }
                                 };
                                 mgImg.onerror = function(ev){ try { console.warn('[MrGoslingSprite] failed to load', ev, mgImg && mgImg.src); } catch(_){} };
                                 // Fetch->ImageBitmap preload & fallback canvas creation
                                 try {
                                     (async function(){
-                                        const resolved = (new URL('assets/swans/mrgosling.png', document.baseURI)).href;
+                                        const resolved = (new URL('assets/swans/spritesheets/mrgosling-sheet.png', document.baseURI)).href;
                                         const resp = await fetch(resolved);
                                         const blob = await resp.blob();
                                         const bitmap = await createImageBitmap(blob);
                                         const cb = game.enemySprites.mrGosling;
                                         cb._forcedBitmap = bitmap;
-                                        try {
-                                            const rf = cb.frames && cb.frames.right;
-                                            if (rf && typeof rf.x === 'number') {
-                                                const rightC = document.createElement('canvas'); rightC.width = rf.w; rightC.height = rf.h;
-                                                const rc = rightC.getContext('2d'); rc.drawImage(bitmap, rf.x, rf.y, rf.w, rf.h, 0, 0, rf.w, rf.h);
-                                                const leftC = document.createElement('canvas'); leftC.width = rf.w; leftC.height = rf.h;
-                                                const lc = leftC.getContext('2d'); lc.save(); lc.translate(rf.w,0); lc.scale(-1,1); lc.drawImage(rightC,0,0); lc.restore();
-                                                try { cb._rightCanvas = rightC; } catch(_){}
-                                                try { cb._leftCanvas = leftC; } catch(_){}
-                                                try { cb.frames.right = { x:0,y:0,w:rightC.width,h:rightC.height }; } catch(_){}
-                                                try { cb.frames.left = { x:0,y:0,w:leftC.width,h:leftC.height }; } catch(_){}
-                                            }
-                                        } catch(e) { try { console.warn('[MrGoslingSprite][PRELOAD] bitmap->canvas failed', e); } catch(_){} }
+                                        cb.loaded = true;
+                                        console.info('[MrGoslingSprite][PRELOAD] ImageBitmap created via fetch');
                                     })().catch(e => { try { console.warn('[MrGoslingSprite][PRELOAD] fetch fallback failed', e); } catch(_){} });
                                 } catch(_) {}
                             }
@@ -26544,21 +26542,19 @@ function offerPermanentAbilityChoice() {
                             return;
                         }
                         // Mr Gosling sprite override (Act III ranged)
-                        if (enemy.type === 'Mr Gosling' && game.enemySprites && game.enemySprites.mrGosling && (game.enemySprites.mrGosling.loaded || game.enemySprites.mrGosling._forcedBitmap || game.enemySprites.mrGosling._leftCanvas)) {
+                        if (enemy.type === 'Mr Gosling' && game.enemySprites && game.enemySprites.mrGosling && (game.enemySprites.mrGosling.loaded || game.enemySprites.mrGosling._forcedBitmap)) {
                             const mg = game.enemySprites.mrGosling;
-                            const frameSet = mg.frames || {};
-                            let facing = enemy.facing || 'down';
-                            let box = frameSet[facing];
+                            const { seq } = mg.frames || {};
+                            const { frameStep } = mg.anim || {};
+                            const playerX = game.player ? game.player.x : 0;
+                            const facing = (playerX < enemy.x) ? 'left' : 'right';
+                            const animTicks = Math.floor(game.frame / (frameStep || 8));
+                            const box = seq ? seq[animTicks % seq.length] : null;
                             const img = mg.image;
-                            const leftCanvas = mg._leftCanvas;
-                            const rightCanvas = mg._rightCanvas;
                             const size = enemy.size;
-                            const scale = mg.baseScaleForSize ? mg.baseScaleForSize(size) : ((size*2)/(box?box.h:1));
-                            if (!box) {
-                                if (facing === 'left' && frameSet.right) box = frameSet.right; else box = frameSet.down || frameSet.right || frameSet.up;
-                            }
-                            const srcW = (box && box.w) ? box.w : (mg._forcedBitmap ? mg._forcedBitmap.width : (img && (img.naturalWidth || img.width)) || enemy.size*2);
-                            const srcH = (box && box.h) ? box.h : (mg._forcedBitmap ? mg._forcedBitmap.height : (img && (img.naturalHeight || img.height)) || enemy.size*2);
+                            const scale = mg.baseScaleForSize ? mg.baseScaleForSize(size) : ((size*2)/256);
+                            const srcW = (box && box.w) ? box.w : (mg._forcedBitmap ? mg._forcedBitmap.width : (img && (img.naturalWidth || img.width)) || size*2);
+                            const srcH = (box && box.h) ? box.h : (mg._forcedBitmap ? mg._forcedBitmap.height : (img && (img.naturalHeight || img.height)) || size*2);
                             const drawW = srcW * scale;
                             const drawH = srcH * scale;
 
@@ -26567,38 +26563,17 @@ function offerPermanentAbilityChoice() {
                             try { if (enemy) enemy._noFallback = true; } catch(_){ }
                             const dstW = Math.max(1, Math.round(drawW));
                             const dstH = Math.max(1, Math.round(drawH));
+
                             if (facing === 'left') {
-                                if (leftCanvas) {
-                                    ctx.drawImage(leftCanvas, 0, 0, leftCanvas.width, leftCanvas.height, -dstW/2, -dstH/2, dstW, dstH);
-                                } else if (mg._forcedBitmap) {
-                                    try { ctx.scale(-1,1); ctx.drawImage(mg._forcedBitmap, (box?box.x:0), (box?box.y:0), (box?box.w:mg._forcedBitmap.width), (box?box.h:mg._forcedBitmap.height), -Math.round(dstW/2), -Math.round(dstH/2), dstW, dstH); } catch(_){ }
-                                } else if (frameSet.right && img) {
-                                    ctx.scale(-1,1);
-                                    ctx.drawImage(img, (frameSet.right.x), (frameSet.right.y), (frameSet.right.w), (frameSet.right.h), -dstW/2, -dstH/2, dstW, dstH);
-                                } else if (img && box) {
-                                    ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
-                                }
-                            } else if (facing === 'right') {
-                                if (rightCanvas) {
-                                    ctx.drawImage(rightCanvas, 0, 0, rightCanvas.width, rightCanvas.height, -dstW/2, -dstH/2, dstW, dstH);
-                                } else if (mg._forcedBitmap) {
-                                    try { ctx.drawImage(mg._forcedBitmap, (box?box.x:0), (box?box.y:0), (box?box.w:mg._forcedBitmap.width), (box?box.h:mg._forcedBitmap.height), -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                } else if (img && frameSet.right) {
-                                    ctx.drawImage(img, frameSet.right.x, frameSet.right.y, frameSet.right.w, frameSet.right.h, -dstW/2, -dstH/2, dstW, dstH);
-                                } else if (img && box) {
-                                    ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
-                                }
-                            } else {
-                                const fbox = frameSet.front || frameSet.down || box;
-                                const rbox = frameSet.rear || frameSet.up || box;
-                                const useBox = (facing === 'down') ? fbox : (facing === 'up' ? rbox : box);
-                                if (mg._forcedBitmap && useBox) {
-                                    try { ctx.drawImage(mg._forcedBitmap, useBox.x, useBox.y, useBox.w, useBox.h, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                } else if (img && useBox) {
-                                    ctx.drawImage(img, useBox.x, useBox.y, useBox.w, useBox.h, -dstW/2, -dstH/2, dstW, dstH);
-                                } else if (mg._forcedBitmap) {
-                                    try { ctx.drawImage(mg._forcedBitmap, 0, 0, mg._forcedBitmap.width, mg._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                }
+                                ctx.scale(-1, 1);
+                            }
+
+                            if (mg._forcedBitmap && box) {
+                                ctx.drawImage(mg._forcedBitmap, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (img && box) {
+                                ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (mg._forcedBitmap) {
+                                ctx.drawImage(mg._forcedBitmap, 0, 0, mg._forcedBitmap.width, mg._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
                             }
                             if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(220,200,220,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                             ctx.restore();
