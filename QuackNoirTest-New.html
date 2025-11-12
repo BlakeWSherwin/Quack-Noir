@@ -10260,33 +10260,32 @@ function offerPermanentAbilityChoice() {
                 // === Goose Willis (Act II ranged grunt) sprite ===
                 if (!game.enemySprites.gooseWillis) {
                     const gwImg = new Image();
-                    gwImg.src = 'assets/geese/goosewillis.png';
+                    gwImg.src = 'assets/geese/spritesheets/goosewillis-sheet-2-8.png';
                     game.enemySprites.gooseWillis = { image: gwImg, loaded: false };
-                    function box(x1,y1,x2,y2){ return { x:x1, y:y1, w:(x2 - x1), h:(y2 - y1) }; }
                     gwImg.onload = function(ev) {
                         const img = (ev && ev.target) ? ev.target : this;
                         try {
                             game.enemySprites.gooseWillis.loaded = true;
-                            game.enemySprites.gooseWillis.frames = {
-                                down: box(63,120,400,920),
-                                up:   box(526,118,883,920),
-                                right:box(970,119,1514,919)
-                            };
-                            const refH = game.enemySprites.gooseWillis.frames.down.h || 256;
+                            // Spritesheet atlas frames 1-7 (frames 2-8 in 1-based, 7 total frames)
+                            game.enemySprites.gooseWillis.frames = [
+                                {x:256,y:0,w:256,h:256}, {x:512,y:0,w:256,h:256}, {x:768,y:0,w:256,h:256}, {x:1024,y:0,w:256,h:256},
+                                {x:1280,y:0,w:256,h:256}, {x:1536,y:0,w:256,h:256}, {x:1792,y:0,w:256,h:256}
+                            ];
+                            const refH = 256;
                             game.enemySprites.gooseWillis.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
                             game.enemySprites.gooseWillis.computeHitbox = (enemy)=> {
                                 const size = enemy.size; const scale = game.enemySprites.gooseWillis.baseScaleForSize(size);
-                                const f = game.enemySprites.gooseWillis.frames.down;
+                                const f = game.enemySprites.gooseWillis.frames[0];
                                 const w = f.w * scale; const h = f.h * scale;
-                                const hitW = w * 0.62;
-                                const hitH = h * 0.66;
-                                return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
+                                const hitW = w * 0.5;
+                                const hitH = h * 0.6;
+                                return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.1 };
                             };
-                            console.info('[GooseWillisSprite] Loaded goosewillis.png', game.enemySprites.gooseWillis.frames);
+                            console.info('[GooseWillisSprite] Loaded goosewillis-sheet-2-8.png', game.enemySprites.gooseWillis.frames.length, 'frames');
                         } catch(e) { console.warn('[GooseWillisSprite] onload error', e); }
                     };
                     gwImg.onerror = function(ev){ try { console.warn('[GooseWillisSprite] failed to load', ev, gwImg && gwImg.src); } catch(_){} };
-                    try { const resolved = (new URL('assets/geese/goosewillis.png', document.baseURI)).href; gwImg.src = resolved; } catch(_) { /* keep assigned src */ }
+                    try { const resolved = (new URL('assets/geese/spritesheets/goosewillis-sheet-2-8.png', document.baseURI)).href; gwImg.src = resolved; } catch(_) { /* keep assigned src */ }
                 }
 
                 // === Lil Goosey (Act II small ranged grunt) sprite ===
@@ -10329,65 +10328,35 @@ function offerPermanentAbilityChoice() {
                 // === Goosey Elliot (Act II melee grunt) sprite ===
                 if (!game.enemySprites.gooseyElliot) {
                     const geImg = new Image();
-                    geImg.src = 'assets/geese/gooseyelliot.png';
+                    geImg.src = 'assets/geese/spritesheets/gooseyelliot-sheet-12-31.png';
                     game.enemySprites.gooseyElliot = { image: geImg, loaded: false };
-                    function box(x1,y1,x2,y2){ return { x:x1, y:y1, w:(x2 - x1), h:(y2 - y1) }; }
                     geImg.onload = function(ev) {
                         const img = (ev && ev.target) ? ev.target : this;
                         try {
                             game.enemySprites.gooseyElliot.loaded = true;
-                            game.enemySprites.gooseyElliot.frames = {
-                                down: box(0,34,299,761),
-                                up:   box(383,31,697,764),
-                                // Side frame: artist exported as left-facing at this coord range
-                                right: box(730,34,1047,782)
-                            };
-                            // Asset note: this sprite's 'right' frame was authored mirrored (appears left-facing).
-                            // Create an explicit left-facing copy at load time so the renderer can draw it directly
-                            // (avoids needing to ctx.scale(-1,1) at render time and fixes facing bugs).
-                            try {
-                                const rf = game.enemySprites.gooseyElliot.frames.right;
-                                if (rf && img && img.naturalWidth && img.naturalHeight && typeof document !== 'undefined') {
-                                    try {
-                                        // The source right frame in this asset is actually authored left-facing.
-                                        // Normalize both canonical directions by producing two canvases:
-                                        //  - _leftCanvas: direct copy of the authored left-facing crop
-                                        //  - _rightCanvas: horizontally-flipped copy (true right-facing)
-                                        const leftC = document.createElement('canvas');
-                                        leftC.width = rf.w; leftC.height = rf.h;
-                                        const lc = leftC.getContext('2d');
-                                        lc.drawImage(img, rf.x, rf.y, rf.w, rf.h, 0, 0, rf.w, rf.h);
-
-                                        const rightC = document.createElement('canvas');
-                                        rightC.width = rf.w; rightC.height = rf.h;
-                                        const rc = rightC.getContext('2d');
-                                        rc.translate(rightC.width, 0); rc.scale(-1, 1);
-                                        rc.drawImage(img, rf.x, rf.y, rf.w, rf.h, 0, 0, rf.w, rf.h);
-
-                                        // Store both canvases and set frames to reference the offscreen canvases
-                                        try { game.enemySprites.gooseyElliot._leftCanvas = leftC; } catch(_){}
-                                        try { game.enemySprites.gooseyElliot._rightCanvas = rightC; } catch(_){}
-                                        try { game.enemySprites.gooseyElliot.frames.left = { x:0, y:0, w: leftC.width, h: leftC.height }; } catch(_){}
-                                        try { game.enemySprites.gooseyElliot.frames.right = { x:0, y:0, w: rightC.width, h: rightC.height }; } catch(_){}
-                                        console.info('[GooseyElliotSprite] created preflipped left/right canvases', game.enemySprites.gooseyElliot.frames);
-                                    } catch(e) { /* non-fatal: skip preflip if any step fails */ }
-                                }
-                            } catch(_){ }
-                            const refH = game.enemySprites.gooseyElliot.frames.down.h || 256;
+                            // Spritesheet atlas frames 11-30 (frames 12-31 in 1-based, 20 total frames)
+                            game.enemySprites.gooseyElliot.frames = [
+                                {x:1024,y:256,w:256,h:256}, {x:1280,y:256,w:256,h:256}, {x:1536,y:256,w:256,h:256}, {x:1792,y:256,w:256,h:256},
+                                {x:0,y:512,w:256,h:256}, {x:256,y:512,w:256,h:256}, {x:512,y:512,w:256,h:256}, {x:768,y:512,w:256,h:256},
+                                {x:1024,y:512,w:256,h:256}, {x:1280,y:512,w:256,h:256}, {x:1536,y:512,w:256,h:256}, {x:1792,y:512,w:256,h:256},
+                                {x:0,y:768,w:256,h:256}, {x:256,y:768,w:256,h:256}, {x:512,y:768,w:256,h:256}, {x:768,y:768,w:256,h:256},
+                                {x:1024,y:768,w:256,h:256}, {x:1280,y:768,w:256,h:256}, {x:1536,y:768,w:256,h:256}, {x:1792,y:768,w:256,h:256}
+                            ];
+                            const refH = 256;
                             game.enemySprites.gooseyElliot.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
                             game.enemySprites.gooseyElliot.computeHitbox = (enemy)=> {
                                 const size = enemy.size; const scale = game.enemySprites.gooseyElliot.baseScaleForSize(size);
-                                const f = game.enemySprites.gooseyElliot.frames.down;
+                                const f = game.enemySprites.gooseyElliot.frames[0];
                                 const w = f.w * scale; const h = f.h * scale;
-                                const hitW = w * 0.68;
-                                const hitH = h * 0.70;
-                                return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
+                                const hitW = w * 0.5;
+                                const hitH = h * 0.6;
+                                return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.1 };
                             };
-                            console.info('[GooseyElliotSprite] Loaded gooseyelliot.png', game.enemySprites.gooseyElliot.frames);
+                            console.info('[GooseyElliotSprite] Loaded gooseyelliot-sheet-12-31.png', game.enemySprites.gooseyElliot.frames.length, 'frames');
                         } catch(e) { console.warn('[GooseyElliotSprite] onload error', e); }
                     };
                     geImg.onerror = function(ev){ try { console.warn('[GooseyElliotSprite] failed to load', ev, geImg && geImg.src); } catch(_){} };
-                    try { const resolved = (new URL('assets/geese/gooseyelliot.png', document.baseURI)).href; geImg.src = resolved; } catch(_) { /* keep assigned src */ }
+                    try { const resolved = (new URL('assets/geese/spritesheets/gooseyelliot-sheet-12-31.png', document.baseURI)).href; geImg.src = resolved; } catch(_) { /* keep assigned src */ }
                 }
 
                 // === Goosey Smalls (Act II melee grunt) sprite ===
@@ -26096,21 +26065,30 @@ function offerPermanentAbilityChoice() {
                         if (enemy.type === 'Goose Willis' && game.enemySprites && game.enemySprites.gooseWillis && game.enemySprites.gooseWillis.loaded) {
                             const ws = game.enemySprites.gooseWillis;
                             const frameSet = ws.frames;
-                            let facing = enemy.facing || 'down';
-                            let box = frameSet[facing];
+                            let facing = (game && game.player && game.player.x >= enemy.x) ? 'right' : 'left';
+                            let box = null;
                             const img = ws.image;
                             const size = enemy.size;
-                            const scale = ws.baseScaleForSize ? ws.baseScaleForSize(size) : ((size*2)/(box?box.h:1));
-                            if (!box) {
-                                if (facing === 'left' && frameSet.right) box = frameSet.right; else box = frameSet.down || frameSet.right || frameSet.up;
+                            const scale = ws.baseScaleForSize ? ws.baseScaleForSize(size) : ((size*2)/256);
+                            if (Array.isArray(frameSet)) {
+                                // Animated frames
+                                const frameStep = 5;
+                                const nowFrame = game.frame || Math.floor(Date.now() / 16);
+                                const idx = Math.floor(nowFrame / frameStep) % frameSet.length;
+                                box = frameSet[idx];
+                            } else {
+                                // Fallback to static
+                                box = frameSet[facing];
+                                if (!box) {
+                                    if (facing === 'left' && frameSet.right) box = frameSet.right; else box = frameSet.down || frameSet.right || frameSet.up;
+                                }
                             }
                             if (box && img) {
                                 const drawW = box.w * scale;
                                 const drawH = box.h * scale;
                                 ctx.save(); ctx.translate(enemy.x, enemy.y);
                                 if (facing === 'left') {
-                                    if (frameSet.right) { ctx.scale(-1,1); ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH); }
-                                    else { ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH); }
+                                    ctx.scale(-1,1); ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
                                 } else {
                                     ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
                                 }
@@ -26195,39 +26173,33 @@ function offerPermanentAbilityChoice() {
                         if (enemy.type === 'Goosey Elliot' && game.enemySprites && game.enemySprites.gooseyElliot && game.enemySprites.gooseyElliot.loaded) {
                             const ge = game.enemySprites.gooseyElliot;
                             const frameSet = ge.frames;
-                            let facing = enemy.facing || 'down';
-                            let box = frameSet[facing];
+                            let facing = (game && game.player && game.player.x >= enemy.x) ? 'right' : 'left';
+                            let box = null;
                             const img = ge.image;
                             const size = enemy.size;
-                            const scale = ge.baseScaleForSize ? ge.baseScaleForSize(size) : ((size*2)/(box?box.h:1));
-                            if (!box) {
-                                if (facing === 'left' && frameSet.right) box = frameSet.right; else box = frameSet.down || frameSet.right || frameSet.up;
-                            }
-                            if (box) {
-                                // Prefer using preflipped offscreen canvases when available to ensure correct facing
-                                const leftCanvas = game.enemySprites.gooseyElliot._leftCanvas;
-                                const rightCanvas = game.enemySprites.gooseyElliot._rightCanvas;
-
-                                // Determine which visual to draw (canvas or source image crop)
-                                let drawW = box.w * scale;
-                                let drawH = box.h * scale;
-                                ctx.save(); ctx.translate(enemy.x, enemy.y);
-
-                                if (facing === 'left') {
-                                    if (leftCanvas) {
-                                        ctx.drawImage(leftCanvas, 0, 0, leftCanvas.width, leftCanvas.height, -drawW/2, -drawH/2, drawW, drawH);
-                                    } else if (frameSet.right && img) {
-                                        // source right frame is actually left-facing in this asset: draw the crop directly
-                                        ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
-                                    }
-                                } else {
-                                    if (rightCanvas) {
-                                        ctx.drawImage(rightCanvas, 0, 0, rightCanvas.width, rightCanvas.height, -drawW/2, -drawH/2, drawW, drawH);
-                                    } else if (img) {
-                                        ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
-                                    }
+                            const scale = ge.baseScaleForSize ? ge.baseScaleForSize(size) : ((size*2)/256);
+                            if (Array.isArray(frameSet)) {
+                                // Animated frames
+                                const frameStep = 5;
+                                const nowFrame = game.frame || Math.floor(Date.now() / 16);
+                                const idx = Math.floor(nowFrame / frameStep) % frameSet.length;
+                                box = frameSet[idx];
+                            } else {
+                                // Fallback to static
+                                box = frameSet[facing];
+                                if (!box) {
+                                    if (facing === 'left' && frameSet.right) box = frameSet.right; else box = frameSet.down || frameSet.right || frameSet.up;
                                 }
-
+                            }
+                            if (box && img) {
+                                const drawW = box.w * scale;
+                                const drawH = box.h * scale;
+                                ctx.save(); ctx.translate(enemy.x, enemy.y);
+                                if (facing === 'left') {
+                                    ctx.scale(-1,1); ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
+                                } else {
+                                    ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
+                                }
                                 if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(200,220,200,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                                 ctx.restore();
                                 return;
