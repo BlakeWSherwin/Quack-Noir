@@ -9813,28 +9813,45 @@ function offerPermanentAbilityChoice() {
             // === Punk enemy sprite sheet ===
             if (!game.enemySprites.punk) {
                 const punkImg = new Image();
-                punkImg.src = 'assets/KnifeDuck3.png';
+                punkImg.src = 'assets/knifeduck2-sheet.png';
                 game.enemySprites.punk = { image: punkImg, loaded: false };
                 punkImg.onload = () => {
                     game.enemySprites.punk.loaded = true;
-                    function box(x1,y1,x2,y2){ return { x:x1, y:y1, w:(x2 - x1), h:(y2 - y1) }; }
-                    game.enemySprites.punk.frames = {
-                        down: box(0,164,411,887),
-                        up: box(510,166,873,883),
-                        right: box(1011,164,1467,883)
-                    };
-                    const refH = game.enemySprites.punk.frames.down.h;
-                    game.enemySprites.punk.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
-                    game.enemySprites.punk.computeHitbox = (enemy)=> {
-                        const size = enemy.size; const scale = game.enemySprites.punk.baseScaleForSize(size);
-                        const f = game.enemySprites.punk.frames.down;
-                        const w = f.w * scale; const h = f.h * scale;
+                    const atlas = {"frames":{"0":{"x":0,"y":0,"w":256,"h":256,"duration":1},"1":{"x":256,"y":0,"w":256,"h":256,"duration":1},"2":{"x":512,"y":0,"w":256,"h":256,"duration":1},"3":{"x":768,"y":0,"w":256,"h":256,"duration":1},"4":{"x":1024,"y":0,"w":256,"h":256,"duration":1},"5":{"x":1280,"y":0,"w":256,"h":256,"duration":1},"6":{"x":1536,"y":0,"w":256,"h":256,"duration":1},"7":{"x":1792,"y":0,"w":256,"h":256,"duration":1},"8":{"x":0,"y":256,"w":256,"h":256,"duration":1},"9":{"x":256,"y":256,"w":256,"h":256,"duration":1},"10":{"x":512,"y":256,"w":256,"h":256,"duration":1},"11":{"x":768,"y":256,"w":256,"h":256,"duration":1},"12":{"x":1024,"y":256,"w":256,"h":256,"duration":1},"13":{"x":1280,"y":256,"w":256,"h":256,"duration":1},"14":{"x":1536,"y":256,"w":256,"h":256,"duration":1},"15":{"x":1792,"y":256,"w":256,"h":256,"duration":1},"16":{"x":0,"y":512,"w":256,"h":256,"duration":1},"17":{"x":256,"y":512,"w":256,"h":256,"duration":1},"18":{"x":512,"y":512,"w":256,"h":256,"duration":1},"19":{"x":768,"y":512,"w":256,"h":256,"duration":1},"20":{"x":1024,"y":512,"w":256,"h":256,"duration":1},"21":{"x":1280,"y":512,"w":256,"h":256,"duration":1},"22":{"x":1536,"y":512,"w":256,"h":256,"duration":1},"23":{"x":1792,"y":512,"w":256,"h":256,"duration":1},"24":{"x":0,"y":768,"w":256,"h":256,"duration":1},"25":{"x":256,"y":768,"w":256,"h":256,"duration":1},"26":{"x":512,"y":768,"w":256,"h":256,"duration":1},"27":{"x":768,"y":768,"w":256,"h":256,"duration":1},"28":{"x":1024,"y":768,"w":256,"h":256,"duration":1},"29":{"x":1280,"y":768,"w":256,"h":256,"duration":1},"30":{"x":1536,"y":768,"w":256,"h":256,"duration":1},"31":{"x":1792,"y":768,"w":256,"h":256,"duration":1}},"meta":{"size":{"w":2048,"h":1024},"frame_size":{"w":256,"h":256},"background_mode":"spriteclean"}};
+                    const frames = [];
+                    for (let i = 0; i <= 31; i++) {
+                        frames.push(atlas.frames[i.toString()]);
+                    }
+                    const container = game.enemySprites.punk;
+                    container.frames = frames;
+                    const makeSequence = (id, seqFrames, options)=> ({
+                        frames: seqFrames,
+                        frameStep: options.frameStep || 5,
+                        mirrorX: options.mirrorX || false,
+                        source: options.source || null,
+                        id: id
+                    });
+                    const rightSequence = makeSequence('right', frames, { frameStep: 5 });
+                    const leftSequence = makeSequence('left', frames, { frameStep: 5, mirrorX: true, source: 'right' });
+                    container.animations = { right: rightSequence, left: leftSequence };
+                    container.defaultAnimation = rightSequence;
+                    container.anim = { sequence: frames, frameStep: 5 };
+                    container.animFrameStep = 5;
+                    const refH = 256;
+                    container.referenceHeight = refH;
+                    container.referenceWidth = 256;
+                    container.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
+                    container.computeHitbox = (enemy)=> {
+                        const size = enemy.size; const scale = container.baseScaleForSize(size);
+                        const w = 256 * scale; const h = 256 * scale;
                         const hitW = w * 0.70;
-                        const hitH = h * 0.72;
-                        return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
+                        const hitH = h * 0.74;
+                        return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.05 };
                     };
-                    console.info('[PunkSprite] Loaded KnifeDuck3.png', game.enemySprites.punk.frames);
+                    container.image = punkImg;
+                    console.info('[PunkSprite] Loaded knifeduck2-sheet.png', { frames: frames.length });
                 };
+                punkImg.onerror = (ev)=> { try { console.warn('[PunkSprite] failed to load assets/knifeduck2-sheet.png', ev); } catch(_){} };
             }
 
             // === Gangster enemy sprite sheet ===
@@ -25758,28 +25775,43 @@ function offerPermanentAbilityChoice() {
                         // Punk sprite override
                         if (enemy.type === 'Punk' && game.enemySprites && game.enemySprites.punk && game.enemySprites.punk.loaded) {
                             const ps = game.enemySprites.punk;
-                            const frameSet = ps.frames;
-                            let facing = enemy.facing || 'down';
-                            let box = frameSet[facing];
+                            const animations = ps.animations;
+                            // Determine facing based on player's position relative to enemy's center
+                            const playerX = (game && game.player) ? game.player.x : 0;
+                            let facing = playerX < enemy.x ? 'left' : 'right';
                             const img = ps.image;
                             const size = enemy.size;
-                            const scale = ps.baseScaleForSize ? ps.baseScaleForSize(size) : ((size*2)/(box?box.h:1));
-                            if (!box) {
-                                if (facing === 'left' && frameSet.right) box = frameSet.right; else box = frameSet.down || frameSet.right || frameSet.up;
+                            const scale = ps.baseScaleForSize ? ps.baseScaleForSize(size) : ((size*2)/256);
+                            // Get sequence
+                            let sequenceEntry = null;
+                            if (animations && animations[facing]) {
+                                sequenceEntry = animations[facing];
+                            } else if (facing === 'left' && animations && animations.right) {
+                                sequenceEntry = animations.right;
+                            } else {
+                                sequenceEntry = ps.defaultAnimation || (ps.anim && ps.anim.sequence ? { frames: ps.anim.sequence, frameStep: ps.anim.frameStep || 5 } : null);
                             }
-                            if (box && img) {
-                                const drawW = box.w * scale;
-                                const drawH = box.h * scale;
-                                ctx.save(); ctx.translate(enemy.x, enemy.y);
-                                if (facing === 'left') {
-                                    if (frameSet.right) { ctx.scale(-1,1); ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH); }
-                                    else { ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH); }
-                                } else {
+                            if (sequenceEntry && sequenceEntry.frames && sequenceEntry.frames.length) {
+                                const framesForSequence = sequenceEntry.frames;
+                                const mirrorSequence = sequenceEntry.mirrorX === true;
+                                const nowFrame = (game && typeof game.frame === 'number') ? game.frame : Math.floor(Date.now() / 16);
+                                const frameStep = Math.max(1, sequenceEntry.frameStep || ps.animFrameStep || 5);
+                                const sequenceLength = framesForSequence.length;
+                                const frameIndex = Math.floor(nowFrame / frameStep) % sequenceLength;
+                                const box = framesForSequence[frameIndex];
+                                if (box && img) {
+                                    const drawW = box.w * scale;
+                                    const drawH = box.h * scale;
+                                    ctx.save();
+                                    ctx.translate(enemy.x, enemy.y);
+                                    if (mirrorSequence && facing === 'left') {
+                                        ctx.scale(-1, 1);
+                                    }
                                     ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
+                                    if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(255,0,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                                    ctx.restore();
+                                    return;
                                 }
-                                if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(255,0,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
-                                ctx.restore();
-                                return;
                             }
                         }
                         // Eggscobar sprite override (Act II only)
