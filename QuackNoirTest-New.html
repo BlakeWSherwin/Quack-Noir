@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
@@ -8570,7 +8570,7 @@ function offerPermanentAbilityChoice() {
     ENEMY_TYPES['Cardi Beak'] = { health: 180, speed: 0.78, damage: 22, color: '#FF77AA', size: 42, xp: 220, ranged: true, rangedCooldown: 1400, armor: 2, act: 'III' };
 
     // Act III ranged enemy: Feather Krueger (exclusive to Act III)
-    // Uses assets/swans/featherkrueger.png (frames provided in loader). Default side faces right.
+    // Uses assets/swans/spritesheets/featherkrueger-sheet-6-31.png (animated spritesheet, frames 6-31, left/right facing only, mirrors for left).
     ENEMY_TYPES['Feather Krueger'] = { health: 220, speed: 0.66, damage: 28, color: '#88CCFF', size: 48, xp: 320, ranged: true, rangedCooldown: 1200, armor: 4, act: 'III' };
 
     // Act III ranged enemy: Honkutus of Cygnus (exclusive to Act III)
@@ -10980,21 +10980,52 @@ function offerPermanentAbilityChoice() {
                 // === Feather Krueger (Act III ranged enemy) sprite ===
                 if (!game.enemySprites.featherKrueger) {
                     const fkImg = new Image();
-                    fkImg.src = 'assets/swans/featherkrueger.png';
+                    fkImg.src = 'assets/swans/spritesheets/featherkrueger-sheet-6-31.png';
                     game.enemySprites.featherKrueger = { image: fkImg, loaded: false };
-                    function fkBox(x1,y1,x2,y2){ return { x:x1, y:y1, w:(x2 - x1), h:(y2 - y1) }; }
                     fkImg.onload = function(ev){
                         const img = (ev && ev.target) ? ev.target : this;
                         try {
                             game.enemySprites.featherKrueger.loaded = true;
-                            // Front: 66,28 -> 505,484 ; Rear: 538,23 -> 1021,488 ; Side: 1025,24 -> 1471,491
+                            // Spritesheet: 8 columns, 4 rows, 32 frames, use frames 6-31 (26 frames)
+                            const atlasFrames = [
+                                {x:1536,y:0,w:256,h:256,duration:1}, // frame 6
+                                {x:1792,y:0,w:256,h:256,duration:1}, // 7
+                                {x:0,y:256,w:256,h:256,duration:1}, // 8
+                                {x:256,y:256,w:256,h:256,duration:1}, // 9
+                                {x:512,y:256,w:256,h:256,duration:1}, // 10
+                                {x:768,y:256,w:256,h:256,duration:1}, // 11
+                                {x:1024,y:256,w:256,h:256,duration:1}, // 12
+                                {x:1280,y:256,w:256,h:256,duration:1}, // 13
+                                {x:1536,y:256,w:256,h:256,duration:1}, // 14
+                                {x:1792,y:256,w:256,h:256,duration:1}, // 15
+                                {x:0,y:512,w:256,h:256,duration:1}, // 16
+                                {x:256,y:512,w:256,h:256,duration:1}, // 17
+                                {x:512,y:512,w:256,h:256,duration:1}, // 18
+                                {x:768,y:512,w:256,h:256,duration:1}, // 19
+                                {x:1024,y:512,w:256,h:256,duration:1}, // 20
+                                {x:1280,y:512,w:256,h:256,duration:1}, // 21
+                                {x:1536,y:512,w:256,h:256,duration:1}, // 22
+                                {x:1792,y:512,w:256,h:256,duration:1}, // 23
+                                {x:0,y:768,w:256,h:256,duration:1}, // 24
+                                {x:256,y:768,w:256,h:256,duration:1}, // 25
+                                {x:512,y:768,w:256,h:256,duration:1}, // 26
+                                {x:768,y:768,w:256,h:256,duration:1}, // 27
+                                {x:1024,y:768,w:256,h:256,duration:1}, // 28
+                                {x:1280,y:768,w:256,h:256,duration:1}, // 29
+                                {x:1536,y:768,w:256,h:256,duration:1}, // 30
+                                {x:1792,y:768,w:256,h:256,duration:1}  // 31
+                            ];
                             game.enemySprites.featherKrueger.frames = {
-                                down: fkBox(66,28,505,484),
-                                up:   fkBox(538,23,1021,488),
-                                right:fkBox(1025,24,1471,491)
+                                seq: atlasFrames,
+                                right: atlasFrames[0], // first frame for static
+                                down: atlasFrames[0], // use first frame for down
+                                up: atlasFrames[0], // use first frame for up
+                                front: atlasFrames[0],
+                                rear: atlasFrames[0]
                             };
-                            try { const fs = game.enemySprites.featherKrueger.frames; fs.front = fs.down; fs.rear = fs.up; fs.side = fs.right; } catch(_){ }
-                            // Precreate canvases: RIGHT = original side crop, LEFT = mirrored copy
+                            game.enemySprites.featherKrueger.anim = { frameStep: 8 };
+                            // For left, create mirrored canvases if needed, but since animating, handle in draw
+                            // Precreate right canvas for first frame
                             try {
                                 const rf = game.enemySprites.featherKrueger.frames.right;
                                 if (rf && img && img.naturalWidth && img.naturalHeight && typeof document !== 'undefined') {
@@ -11022,7 +11053,7 @@ function offerPermanentAbilityChoice() {
                                 const hitW = w * 0.64; const hitH = h * 0.68;
                                 return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
                             };
-                            console.info('[FeatherKruegerSprite] Loaded featherkrueger.png', game.enemySprites.featherKrueger.frames);
+                            console.info('[FeatherKruegerSprite] Loaded featherkrueger-sheet-6-31.png', game.enemySprites.featherKrueger.frames);
                         } catch(e){ console.warn('[FeatherKruegerSprite] onload error', e); }
                     };
                     // Provide renderer-friendly aliases so lookups that lowercase/remove-spaces will find the loader
@@ -11179,7 +11210,7 @@ function offerPermanentAbilityChoice() {
                         } catch(_) {}
                     }
                     fkImg.onerror = function(ev){ try { console.warn('[FeatherKruegerSprite] failed to load', ev, fkImg && fkImg.src); } catch(_){ } };
-                    try { const resolved = (new URL('assets/swans/featherkrueger.png', document.baseURI)).href; fkImg.src = resolved;
+                    try { const resolved = (new URL('assets/swans/spritesheets/featherkrueger-sheet-6-31.png', document.baseURI)).href; fkImg.src = resolved;
                         setTimeout(function(){
                             try {
                                 if (!game || !game.enemySprites || !game.enemySprites.featherKrueger || game.enemySprites.featherKrueger.loaded) return;
@@ -11192,13 +11223,44 @@ function offerPermanentAbilityChoice() {
                                                     if (game && game.enemySprites && game.enemySprites.featherKrueger) {
                                                         const cb = game.enemySprites.featherKrueger;
                                                         cb._forcedBitmap = bitmap;
-                                                        cb.frames = cb.frames || {};
-                                                        cb.frames.down = cb.frames.down || fkBox(66,28,505,484);
-                                                        cb.frames.up = cb.frames.up || fkBox(538,23,1021,488);
-                                                        cb.frames.right = cb.frames.right || fkBox(1025,24,1471,491);
-                                                        try { cb.frames.front = cb.frames.front || cb.frames.down; } catch(_){ }
-                                                        try { cb.frames.rear = cb.frames.rear || cb.frames.up; } catch(_){ }
-                                                        try { cb.frames.side = cb.frames.side || cb.frames.right; } catch(_){ }
+                                                        // Set up animation frames for new spritesheet
+                                                        const atlasFrames = [
+                                                            {x:1536,y:0,w:256,h:256,duration:1}, // frame 6
+                                                            {x:1792,y:0,w:256,h:256,duration:1}, // 7
+                                                            {x:0,y:256,w:256,h:256,duration:1}, // 8
+                                                            {x:256,y:256,w:256,h:256,duration:1}, // 9
+                                                            {x:512,y:256,w:256,h:256,duration:1}, // 10
+                                                            {x:768,y:256,w:256,h:256,duration:1}, // 11
+                                                            {x:1024,y:256,w:256,h:256,duration:1}, // 12
+                                                            {x:1280,y:256,w:256,h:256,duration:1}, // 13
+                                                            {x:1536,y:256,w:256,h:256,duration:1}, // 14
+                                                            {x:1792,y:256,w:256,h:256,duration:1}, // 15
+                                                            {x:0,y:512,w:256,h:256,duration:1}, // 16
+                                                            {x:256,y:512,w:256,h:256,duration:1}, // 17
+                                                            {x:512,y:512,w:256,h:256,duration:1}, // 18
+                                                            {x:768,y:512,w:256,h:256,duration:1}, // 19
+                                                            {x:1024,y:512,w:256,h:256,duration:1}, // 20
+                                                            {x:1280,y:512,w:256,h:256,duration:1}, // 21
+                                                            {x:1536,y:512,w:256,h:256,duration:1}, // 22
+                                                            {x:1792,y:512,w:256,h:256,duration:1}, // 23
+                                                            {x:0,y:768,w:256,h:256,duration:1}, // 24
+                                                            {x:256,y:768,w:256,h:256,duration:1}, // 25
+                                                            {x:512,y:768,w:256,h:256,duration:1}, // 26
+                                                            {x:768,y:768,w:256,h:256,duration:1}, // 27
+                                                            {x:1024,y:768,w:256,h:256,duration:1}, // 28
+                                                            {x:1280,y:768,w:256,h:256,duration:1}, // 29
+                                                            {x:1536,y:768,w:256,h:256,duration:1}, // 30
+                                                            {x:1792,y:768,w:256,h:256,duration:1}  // 31
+                                                        ];
+                                                        cb.frames = {
+                                                            seq: atlasFrames,
+                                                            right: atlasFrames[0],
+                                                            down: atlasFrames[0],
+                                                            up: atlasFrames[0],
+                                                            front: atlasFrames[0],
+                                                            rear: atlasFrames[0]
+                                                        };
+                                                        cb.anim = { frameStep: 8 };
                                                         const refH = cb.frames.down.h || 256;
                                                         cb.baseScaleForSize = cb.baseScaleForSize || ((enemySize)=> ((enemySize*2)/refH));
                                                         cb.computeHitbox = cb.computeHitbox || (enemy=>{
@@ -26644,18 +26706,27 @@ function offerPermanentAbilityChoice() {
                         if (enemy.type === 'Feather Krueger' && game.enemySprites && game.enemySprites.featherKrueger && (game.enemySprites.featherKrueger.loaded || game.enemySprites.featherKrueger._forcedBitmap || game.enemySprites.featherKrueger._leftCanvas)) {
                             const fk = game.enemySprites.featherKrueger;
                             const frameSet = fk.frames || {};
-                            let facing = enemy.facing || 'down';
-                            let box = frameSet[facing];
+                            const seq = frameSet.seq || [];
                             const img = fk.image;
                             const leftCanvas = fk._leftCanvas;
                             const rightCanvas = fk._rightCanvas;
                             const size = enemy.size;
-                            const scale = fk.baseScaleForSize ? fk.baseScaleForSize(size) : ((size*2)/(box?box.h:1));
-                            if (!box) {
-                                if (facing === 'left' && frameSet.right) box = frameSet.right; else box = frameSet.down || frameSet.right || frameSet.up;
+                            // Determine facing based on player position for centering
+                            const playerX = (game && game.player) ? game.player.x : 0;
+                            const facing = (playerX < enemy.x) ? 'left' : 'right';
+                            // Calculate current animation frame
+                            let box = frameSet.right; // default
+                            if (seq.length > 0) {
+                                const frameStep = Math.max(1, (fk.anim && fk.anim.frameStep) || 8);
+                                const nowFrame = (game && typeof game.frame === 'number') ? game.frame : Math.floor(Date.now() / 16);
+                                if (typeof enemy._fkAnimSeed !== 'number') enemy._fkAnimSeed = nowFrame;
+                                const animTicks = Math.max(0, nowFrame - enemy._fkAnimSeed);
+                                let frameIdx = Math.floor(animTicks / frameStep) % seq.length;
+                                box = seq[frameIdx];
                             }
-                            const srcW = (box && box.w) ? box.w : (fk._forcedBitmap ? fk._forcedBitmap.width : (img && (img.naturalWidth || img.width)) || enemy.size*2);
-                            const srcH = (box && box.h) ? box.h : (fk._forcedBitmap ? fk._forcedBitmap.height : (img && (img.naturalHeight || img.height)) || enemy.size*2);
+                            const scale = fk.baseScaleForSize ? fk.baseScaleForSize(size) : ((size*2)/(box?box.h:256));
+                            const srcW = (box && box.w) ? box.w : 256;
+                            const srcH = (box && box.h) ? box.h : 256;
                             const drawW = srcW * scale;
                             const drawH = srcH * scale;
 
@@ -26665,37 +26736,15 @@ function offerPermanentAbilityChoice() {
                             const dstW = Math.max(1, Math.round(drawW));
                             const dstH = Math.max(1, Math.round(drawH));
                             if (facing === 'left') {
-                                if (leftCanvas) {
-                                    ctx.drawImage(leftCanvas, 0, 0, leftCanvas.width, leftCanvas.height, -dstW/2, -dstH/2, dstW, dstH);
-                                } else if (fk._forcedBitmap) {
-                                    try { ctx.scale(-1,1); ctx.drawImage(fk._forcedBitmap, (box?box.x:0), (box?box.y:0), (box?box.w:fk._forcedBitmap.width), (box?box.h:fk._forcedBitmap.height), -Math.round(dstW/2), -Math.round(dstH/2), dstW, dstH); } catch(_){ }
-                                } else if (frameSet.right && img) {
-                                    ctx.scale(-1,1);
-                                    ctx.drawImage(img, (frameSet.right.x), (frameSet.right.y), (frameSet.right.w), (frameSet.right.h), -dstW/2, -dstH/2, dstW, dstH);
-                                } else if (img && box) {
-                                    ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
-                                }
-                            } else if (facing === 'right') {
-                                if (rightCanvas) {
-                                    ctx.drawImage(rightCanvas, 0, 0, rightCanvas.width, rightCanvas.height, -dstW/2, -dstH/2, dstW, dstH);
-                                } else if (fk._forcedBitmap) {
-                                    try { ctx.drawImage(fk._forcedBitmap, (box?box.x:0), (box?box.y:0), (box?box.w:fk._forcedBitmap.width), (box?box.h:fk._forcedBitmap.height), -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                } else if (img && frameSet.right) {
-                                    ctx.drawImage(img, frameSet.right.x, frameSet.right.y, frameSet.right.w, frameSet.right.h, -dstW/2, -dstH/2, dstW, dstH);
-                                } else if (img && box) {
+                                // Mirror horizontally
+                                ctx.scale(-1, 1);
+                                if (img && box) {
                                     ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
                                 }
                             } else {
-                                // up/down use front/rear frames
-                                const fbox = frameSet.front || frameSet.down || box;
-                                const rbox = frameSet.rear || frameSet.up || box;
-                                const useBox = (facing === 'down') ? fbox : (facing === 'up' ? rbox : box);
-                                if (fk._forcedBitmap && useBox) {
-                                    try { ctx.drawImage(fk._forcedBitmap, useBox.x, useBox.y, useBox.w, useBox.h, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                } else if (img && useBox) {
-                                    ctx.drawImage(img, useBox.x, useBox.y, useBox.w, useBox.h, -dstW/2, -dstH/2, dstW, dstH);
-                                } else if (fk._forcedBitmap) {
-                                    try { ctx.drawImage(fk._forcedBitmap, 0, 0, fk._forcedBitmap.width, fk._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
+                                // Right: use normal
+                                if (img && box) {
+                                    ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
                                 }
                             }
                             if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(200,180,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
