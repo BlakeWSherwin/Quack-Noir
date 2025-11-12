@@ -10292,33 +10292,38 @@ function offerPermanentAbilityChoice() {
                 // === Lil Goosey (Act II small ranged grunt) sprite ===
                 if (!game.enemySprites.lilGoosey) {
                     const lgImg = new Image();
-                    lgImg.src = 'assets/geese/lilgoosey.png';
+                    lgImg.src = 'assets/geese/spritesheets/lilgoosey-sheet-1-31.png';
                     game.enemySprites.lilGoosey = { image: lgImg, loaded: false };
-                    function box(x1,y1,x2,y2){ return { x:x1, y:y1, w:(x2 - x1), h:(y2 - y1) }; }
                     lgImg.onload = function(ev) {
                         const img = (ev && ev.target) ? ev.target : this;
                         try {
                             game.enemySprites.lilGoosey.loaded = true;
-                            game.enemySprites.lilGoosey.frames = {
-                                down: box(70,137,409,929),
-                                up:   box(533,136,879,928),
-                                right:box(946,140,1493,924)
-                            };
-                            const refH = game.enemySprites.lilGoosey.frames.down.h || 256;
+                            // Spritesheet atlas frames 0-30 (31 total frames, excluding 31)
+                            game.enemySprites.lilGoosey.frames = [
+                                {x:0,y:0,w:256,h:256}, {x:256,y:0,w:256,h:256}, {x:512,y:0,w:256,h:256}, {x:768,y:0,w:256,h:256},
+                                {x:1024,y:0,w:256,h:256}, {x:1280,y:0,w:256,h:256}, {x:1536,y:0,w:256,h:256}, {x:1792,y:0,w:256,h:256},
+                                {x:0,y:256,w:256,h:256}, {x:256,y:256,w:256,h:256}, {x:512,y:256,w:256,h:256}, {x:768,y:256,w:256,h:256},
+                                {x:1024,y:256,w:256,h:256}, {x:1280,y:256,w:256,h:256}, {x:1536,y:256,w:256,h:256}, {x:1792,y:256,w:256,h:256},
+                                {x:0,y:512,w:256,h:256}, {x:256,y:512,w:256,h:256}, {x:512,y:512,w:256,h:256}, {x:768,y:512,w:256,h:256},
+                                {x:1024,y:512,w:256,h:256}, {x:1280,y:512,w:256,h:256}, {x:1536,y:512,w:256,h:256}, {x:1792,y:512,w:256,h:256},
+                                {x:0,y:768,w:256,h:256}, {x:256,y:768,w:256,h:256}, {x:512,y:768,w:256,h:256}, {x:768,y:768,w:256,h:256},
+                                {x:1024,y:768,w:256,h:256}, {x:1280,y:768,w:256,h:256}, {x:1536,y:768,w:256,h:256}
+                            ];
+                            const refH = 256;
                             game.enemySprites.lilGoosey.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
                             game.enemySprites.lilGoosey.computeHitbox = (enemy)=> {
                                 const size = enemy.size; const scale = game.enemySprites.lilGoosey.baseScaleForSize(size);
-                                const f = game.enemySprites.lilGoosey.frames.down;
+                                const f = game.enemySprites.lilGoosey.frames[0];
                                 const w = f.w * scale; const h = f.h * scale;
-                                const hitW = w * 0.62;
-                                const hitH = h * 0.66;
-                                return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
+                                const hitW = w * 0.5;
+                                const hitH = h * 0.6;
+                                return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.1 };
                             };
-                            console.info('[LilGooseySprite] Loaded lilgoosey.png', game.enemySprites.lilGoosey.frames);
+                            console.info('[LilGooseySprite] Loaded lilgoosey-sheet-1-31.png', game.enemySprites.lilGoosey.frames.length, 'frames');
                         } catch(e) { console.warn('[LilGooseySprite] onload error', e); }
                     };
                     lgImg.onerror = function(ev){ try { console.warn('[LilGooseySprite] failed to load', ev, lgImg && lgImg.src); } catch(_){} };
-                    try { const resolved = (new URL('assets/geese/lilgoosey.png', document.baseURI)).href; lgImg.src = resolved; } catch(_) { /* keep assigned src */ }
+                    try { const resolved = (new URL('assets/geese/spritesheets/lilgoosey-sheet-1-31.png', document.baseURI)).href; lgImg.src = resolved; } catch(_) { /* keep assigned src */ }
                 }
 
                 // === Goosey Elliot (Act II melee grunt) sprite ===
@@ -10388,33 +10393,38 @@ function offerPermanentAbilityChoice() {
                 // === Goosey Smalls (Act II melee grunt) sprite ===
                 if (!game.enemySprites.gooseySmalls) {
                     const gsImg = new Image();
-                    gsImg.src = 'assets/geese/gooseysmalls.png';
+                    gsImg.src = 'assets/geese/spritesheets/gooseysmalls-sheet-2-31.png';
                     game.enemySprites.gooseySmalls = { image: gsImg, loaded: false };
-                    function box(x1,y1,x2,y2){ return { x:x1, y:y1, w:(x2 - x1), h:(y2 - y1) }; }
                     gsImg.onload = function(ev) {
                         const img = (ev && ev.target) ? ev.target : this;
                         try {
                             game.enemySprites.gooseySmalls.loaded = true;
-                            game.enemySprites.gooseySmalls.frames = {
-                                down: box(68,143,465,920),
-                                up:   box(534,129,896,914),
-                                right:box(965,141,1445,920)
-                            };
-                            const refH = game.enemySprites.gooseySmalls.frames.down.h || 256;
+                            // Spritesheet atlas frames 1-30 (frames 2-31 in 1-based, 30 total frames)
+                            game.enemySprites.gooseySmalls.frames = [
+                                {x:256,y:0,w:256,h:256}, {x:512,y:0,w:256,h:256}, {x:768,y:0,w:256,h:256}, {x:1024,y:0,w:256,h:256},
+                                {x:1280,y:0,w:256,h:256}, {x:1536,y:0,w:256,h:256}, {x:1792,y:0,w:256,h:256}, {x:0,y:256,w:256,h:256},
+                                {x:256,y:256,w:256,h:256}, {x:512,y:256,w:256,h:256}, {x:768,y:256,w:256,h:256}, {x:1024,y:256,w:256,h:256},
+                                {x:1280,y:256,w:256,h:256}, {x:1536,y:256,w:256,h:256}, {x:1792,y:256,w:256,h:256}, {x:0,y:512,w:256,h:256},
+                                {x:256,y:512,w:256,h:256}, {x:512,y:512,w:256,h:256}, {x:768,y:512,w:256,h:256}, {x:1024,y:512,w:256,h:256},
+                                {x:1280,y:512,w:256,h:256}, {x:1536,y:512,w:256,h:256}, {x:1792,y:512,w:256,h:256}, {x:0,y:768,w:256,h:256},
+                                {x:256,y:768,w:256,h:256}, {x:512,y:768,w:256,h:256}, {x:768,y:768,w:256,h:256}, {x:1024,y:768,w:256,h:256},
+                                {x:1280,y:768,w:256,h:256}, {x:1536,y:768,w:256,h:256}
+                            ];
+                            const refH = 256;
                             game.enemySprites.gooseySmalls.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
                             game.enemySprites.gooseySmalls.computeHitbox = (enemy)=> {
                                 const size = enemy.size; const scale = game.enemySprites.gooseySmalls.baseScaleForSize(size);
-                                const f = game.enemySprites.gooseySmalls.frames.down;
+                                const f = game.enemySprites.gooseySmalls.frames[0];
                                 const w = f.w * scale; const h = f.h * scale;
-                                const hitW = w * 0.64;
-                                const hitH = h * 0.68;
-                                return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
+                                const hitW = w * 0.5;
+                                const hitH = h * 0.6;
+                                return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.1 };
                             };
-                            console.info('[GooseySmallsSprite] Loaded gooseysmalls.png', game.enemySprites.gooseySmalls.frames);
+                            console.info('[GooseySmallsSprite] Loaded gooseysmalls-sheet-2-31.png', game.enemySprites.gooseySmalls.frames.length, 'frames');
                         } catch(e) { console.warn('[GooseySmallsSprite] onload error', e); }
                     };
                     gsImg.onerror = function(ev){ try { console.warn('[GooseySmallsSprite] failed to load', ev, gsImg && gsImg.src); } catch(_){} };
-                    try { const resolved = (new URL('assets/geese/gooseysmalls.png', document.baseURI)).href; gsImg.src = resolved; } catch(_) { /* keep assigned src */ }
+                    try { const resolved = (new URL('assets/geese/spritesheets/gooseysmalls-sheet-2-31.png', document.baseURI)).href; gsImg.src = resolved; } catch(_) { /* keep assigned src */ }
                 }
 
                     // === Fowl Pacino (Act II melee grunt) sprite ===
@@ -26113,21 +26123,30 @@ function offerPermanentAbilityChoice() {
                         if (enemy.type === 'Lil Goosey' && game.enemySprites && game.enemySprites.lilGoosey && game.enemySprites.lilGoosey.loaded) {
                             const lg = game.enemySprites.lilGoosey;
                             const frameSet = lg.frames;
-                            let facing = enemy.facing || 'down';
-                            let box = frameSet[facing];
+                            let facing = (game && game.player && game.player.x >= enemy.x) ? 'right' : 'left';
+                            let box = null;
                             const img = lg.image;
                             const size = enemy.size;
-                            const scale = lg.baseScaleForSize ? lg.baseScaleForSize(size) : ((size*2)/(box?box.h:1));
-                            if (!box) {
-                                if (facing === 'left' && frameSet.right) box = frameSet.right; else box = frameSet.down || frameSet.right || frameSet.up;
+                            const scale = lg.baseScaleForSize ? lg.baseScaleForSize(size) : ((size*2)/256);
+                            if (Array.isArray(frameSet)) {
+                                // Animated frames
+                                const frameStep = 5;
+                                const nowFrame = game.frame || Math.floor(Date.now() / 16);
+                                const idx = Math.floor(nowFrame / frameStep) % frameSet.length;
+                                box = frameSet[idx];
+                            } else {
+                                // Fallback to static
+                                box = frameSet[facing];
+                                if (!box) {
+                                    if (facing === 'left' && frameSet.right) box = frameSet.right; else box = frameSet.down || frameSet.right || frameSet.up;
+                                }
                             }
                             if (box && img) {
                                 const drawW = box.w * scale;
                                 const drawH = box.h * scale;
                                 ctx.save(); ctx.translate(enemy.x, enemy.y);
                                 if (facing === 'left') {
-                                    if (frameSet.right) { ctx.scale(-1,1); ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH); }
-                                    else { ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH); }
+                                    ctx.scale(-1,1); ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
                                 } else {
                                     ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
                                 }
@@ -26140,21 +26159,30 @@ function offerPermanentAbilityChoice() {
                         if (enemy.type === 'Goosey Smalls' && game.enemySprites && game.enemySprites.gooseySmalls && game.enemySprites.gooseySmalls.loaded) {
                             const gs = game.enemySprites.gooseySmalls;
                             const frameSet = gs.frames;
-                            let facing = enemy.facing || 'down';
-                            let box = frameSet[facing];
+                            let facing = (game && game.player && game.player.x >= enemy.x) ? 'right' : 'left';
+                            let box = null;
                             const img = gs.image;
                             const size = enemy.size;
-                            const scale = gs.baseScaleForSize ? gs.baseScaleForSize(size) : ((size*2)/(box?box.h:1));
-                            if (!box) {
-                                if (facing === 'left' && frameSet.right) box = frameSet.right; else box = frameSet.down || frameSet.right || frameSet.up;
+                            const scale = gs.baseScaleForSize ? gs.baseScaleForSize(size) : ((size*2)/256);
+                            if (Array.isArray(frameSet)) {
+                                // Animated frames
+                                const frameStep = 5;
+                                const nowFrame = game.frame || Math.floor(Date.now() / 16);
+                                const idx = Math.floor(nowFrame / frameStep) % frameSet.length;
+                                box = frameSet[idx];
+                            } else {
+                                // Fallback to static
+                                box = frameSet[facing];
+                                if (!box) {
+                                    if (facing === 'left' && frameSet.right) box = frameSet.right; else box = frameSet.down || frameSet.right || frameSet.up;
+                                }
                             }
                             if (box && img) {
                                 const drawW = box.w * scale;
                                 const drawH = box.h * scale;
                                 ctx.save(); ctx.translate(enemy.x, enemy.y);
                                 if (facing === 'left') {
-                                    if (frameSet.right) { ctx.scale(-1,1); ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH); }
-                                    else { ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH); }
+                                    ctx.scale(-1,1); ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
                                 } else {
                                     ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
                                 }
