@@ -10447,35 +10447,38 @@ function offerPermanentAbilityChoice() {
                     // === Geese Robbins (Act II ranged grunt) sprite ===
                     if (!game.enemySprites.geeseRobbins) {
                         const grImg = new Image();
-                        grImg.src = 'assets/geese/geeserobbins.png';
+                        grImg.src = 'assets/geese/spritesheets/geeserobbins-sheet-1-31.png';
                         game.enemySprites.geeseRobbins = { image: grImg, loaded: false };
-                        function box(x1,y1,x2,y2){ return { x:x1, y:y1, w:(x2 - x1), h:(y2 - y1) }; }
                         grImg.onload = function(ev) {
                             const img = (ev && ev.target) ? ev.target : this;
                             try {
                                 game.enemySprites.geeseRobbins.loaded = true;
-                                game.enemySprites.geeseRobbins.frames = {
-                                    down: box(38,39,512,743),
-                                    up:   box(537,42,975,743),
-                                    right:box(1047,44,1504,743)
-                                };
-                                // Geese Robbins sprite authored with correct left/right facing in the sheet.
-                                // No preflipped canvases necessary; use the source frames and standard draw-time mirroring.
-                                const refH = game.enemySprites.geeseRobbins.frames.down.h || 256;
+                                // Spritesheet atlas frames 0-30 (frames 1-31 in 1-based, 31 total frames)
+                                game.enemySprites.geeseRobbins.frames = [
+                                    {x:0,y:0,w:256,h:256}, {x:256,y:0,w:256,h:256}, {x:512,y:0,w:256,h:256}, {x:768,y:0,w:256,h:256},
+                                    {x:1024,y:0,w:256,h:256}, {x:1280,y:0,w:256,h:256}, {x:1536,y:0,w:256,h:256}, {x:1792,y:0,w:256,h:256},
+                                    {x:0,y:256,w:256,h:256}, {x:256,y:256,w:256,h:256}, {x:512,y:256,w:256,h:256}, {x:768,y:256,w:256,h:256},
+                                    {x:1024,y:256,w:256,h:256}, {x:1280,y:256,w:256,h:256}, {x:1536,y:256,w:256,h:256}, {x:1792,y:256,w:256,h:256},
+                                    {x:0,y:512,w:256,h:256}, {x:256,y:512,w:256,h:256}, {x:512,y:512,w:256,h:256}, {x:768,y:512,w:256,h:256},
+                                    {x:1024,y:512,w:256,h:256}, {x:1280,y:512,w:256,h:256}, {x:1536,y:512,w:256,h:256}, {x:1792,y:512,w:256,h:256},
+                                    {x:0,y:768,w:256,h:256}, {x:256,y:768,w:256,h:256}, {x:512,y:768,w:256,h:256}, {x:768,y:768,w:256,h:256},
+                                    {x:1024,y:768,w:256,h:256}, {x:1280,y:768,w:256,h:256}, {x:1536,y:768,w:256,h:256}
+                                ];
+                                const refH = 256;
                                 game.enemySprites.geeseRobbins.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
                                 game.enemySprites.geeseRobbins.computeHitbox = (enemy)=> {
                                     const size = enemy.size; const scale = game.enemySprites.geeseRobbins.baseScaleForSize(size);
-                                    const f = game.enemySprites.geeseRobbins.frames.down;
+                                    const f = game.enemySprites.geeseRobbins.frames[0];
                                     const w = f.w * scale; const h = f.h * scale;
-                                    const hitW = w * 0.6;
-                                    const hitH = h * 0.62;
-                                    return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
+                                    const hitW = w * 0.5;
+                                    const hitH = h * 0.6;
+                                    return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.1 };
                                 };
-                                console.info('[GeeseRobbinsSprite] Loaded geeserobbins.png', game.enemySprites.geeseRobbins.frames);
+                                console.info('[GeeseRobbinsSprite] Loaded geeserobbins-sheet-1-31.png', game.enemySprites.geeseRobbins.frames.length, 'frames');
                             } catch(e) { console.warn('[GeeseRobbinsSprite] onload error', e); }
                         };
                         grImg.onerror = function(ev){ try { console.warn('[GeeseRobbinsSprite] failed to load', ev, grImg && grImg.src); } catch(_){} };
-                        try { const resolved = (new URL('assets/geese/geeserobbins.png', document.baseURI)).href; grImg.src = resolved; } catch(_) { /* keep assigned src */ }
+                        try { const resolved = (new URL('assets/geese/spritesheets/geeserobbins-sheet-1-31.png', document.baseURI)).href; grImg.src = resolved; } catch(_) { /* keep assigned src */ }
                     }
 
                     // === 2Honk Shakur (Act II special ranged) sprite ===
@@ -26239,24 +26242,32 @@ function offerPermanentAbilityChoice() {
                         if (enemy.type === 'Geese Robbins' && game.enemySprites && game.enemySprites.geeseRobbins && game.enemySprites.geeseRobbins.loaded) {
                             const gr = game.enemySprites.geeseRobbins;
                             const frameSet = gr.frames;
-                            let facing = enemy.facing || 'down';
-                            let box = frameSet[facing];
+                            let facing = (game && game.player && game.player.x >= enemy.x) ? 'right' : 'left';
+                            let box = null;
                             const img = gr.image;
                             const size = enemy.size;
-                            const scale = gr.baseScaleForSize ? gr.baseScaleForSize(size) : ((size*2)/(box?box.h:1));
-                            if (!box) {
-                                if (facing === 'left' && frameSet.right) box = frameSet.right; else box = frameSet.down || frameSet.right || frameSet.up;
+                            const scale = gr.baseScaleForSize ? gr.baseScaleForSize(size) : ((size*2)/256);
+                            if (Array.isArray(frameSet)) {
+                                // Animated frames
+                                const frameStep = 5;
+                                const nowFrame = game.frame || Math.floor(Date.now() / 16);
+                                const idx = Math.floor(nowFrame / frameStep) % frameSet.length;
+                                box = frameSet[idx];
+                            } else {
+                                // Fallback to static
+                                box = frameSet[facing];
+                                if (!box) {
+                                    if (facing === 'left' && frameSet.right) box = frameSet.right; else box = frameSet.down || frameSet.right || frameSet.up;
+                                }
                             }
-                            if (box) {
+                            if (box && img) {
                                 const drawW = box.w * scale;
                                 const drawH = box.h * scale;
                                 ctx.save(); ctx.translate(enemy.x, enemy.y);
                                 if (facing === 'left') {
-                                    // If the sprite sheet provides a right-facing frame only, mirror it at draw time.
-                                    if (frameSet.right && img) { ctx.scale(-1,1); ctx.drawImage(img, frameSet.right.x, frameSet.right.y, frameSet.right.w, frameSet.right.h, -drawW/2, -drawH/2, drawW, drawH); }
-                                    else if (img) { ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH); }
+                                    ctx.scale(-1,1); ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
                                 } else {
-                                    if (img) { ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH); }
+                                    ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
                                 }
                                 if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(180,200,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                                 ctx.restore();
