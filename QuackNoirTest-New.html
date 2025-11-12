@@ -8982,84 +8982,35 @@ function offerPermanentAbilityChoice() {
             // === Eggscobar (Act II exclusive) sprite ===
             if (!game.enemySprites.eggscobar) {
                 const egImg = new Image();
-                egImg.src = 'assets/geese/eggscobar.png';
+                egImg.src = 'assets/geese/spritesheets/eggscobar-sheet-12-31.png';
                 game.enemySprites.eggscobar = { image: egImg, loaded: false };
-                // Helper to create box object
-                function box(x1,y1,x2,y2){ return { x:x1, y:y1, w:(x2 - x1), h:(y2 - y1) }; }
                 egImg.onload = function(ev) {
                     const img = (ev && ev.target) ? ev.target : this;
                     try {
                         game.enemySprites.eggscobar.loaded = true;
-                        // Provided bounding coordinates (front/rear/side)
-                        game.enemySprites.eggscobar.frames = {
-                            down: box(92,139,449,897),
-                            up: box(545,139,929,898),
-                            right: box(959,135,1438,900)
-                        };
-                        const refH = game.enemySprites.eggscobar.frames.down.h || 256;
+                        // Spritesheet atlas frames 11-30 (frames 12-31 in 1-based, 20 total frames)
+                        game.enemySprites.eggscobar.frames = [
+                            {x:1024,y:256,w:256,h:256}, {x:1280,y:256,w:256,h:256}, {x:1536,y:256,w:256,h:256}, {x:1792,y:256,w:256,h:256},
+                            {x:0,y:512,w:256,h:256}, {x:256,y:512,w:256,h:256}, {x:512,y:512,w:256,h:256}, {x:768,y:512,w:256,h:256},
+                            {x:1024,y:512,w:256,h:256}, {x:1280,y:512,w:256,h:256}, {x:1536,y:512,w:256,h:256}, {x:1792,y:512,w:256,h:256},
+                            {x:0,y:768,w:256,h:256}, {x:256,y:768,w:256,h:256}, {x:512,y:768,w:256,h:256}, {x:768,y:768,w:256,h:256},
+                            {x:1024,y:768,w:256,h:256}, {x:1280,y:768,w:256,h:256}, {x:1536,y:768,w:256,h:256}, {x:1792,y:768,w:256,h:256}
+                        ];
+                        const refH = 256;
                         game.enemySprites.eggscobar.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
                         game.enemySprites.eggscobar.computeHitbox = (enemy)=> {
                             const size = enemy.size; const scale = game.enemySprites.eggscobar.baseScaleForSize(size);
-                            const f = game.enemySprites.eggscobar.frames.down;
+                            const f = game.enemySprites.eggscobar.frames[0];
                             const w = f.w * scale; const h = f.h * scale;
-                            // Tight hitbox relative to visual sprite
-                            const hitW = w * 0.62;
-                            const hitH = h * 0.66;
-                            return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
+                            const hitW = w * 0.5;
+                            const hitH = h * 0.6;
+                            return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.1 };
                         };
-                        try { console.info('[EggscobarSprite] Loaded eggscobar image', game.enemySprites.eggscobar.frames); } catch(_){}
-                            // If the normal Image path hasn't completed shortly after load begin,
-                            // proactively attempt a fetch->createImageBitmap fallback and build
-                            // preflipped canvases from the bitmap so the renderer draws the real sprite
-                            // instead of a placeholder/fallback graphic.
-                            try {
-                                setTimeout(function(){
-                                    try {
-                                        const cont = game && game.enemySprites && game.enemySprites.swanomaly;
-                                        if (!cont || cont.loaded) return;
-                                        const href = (soImg && soImg.src) ? soImg.src : '';
-                                        if (!href || href.indexOf('file:') === 0) return;
-                                        if (typeof fetch !== 'function' || typeof createImageBitmap !== 'function') return;
-                                        try { console.info('[SwanomalySprite][PRELOAD] attempting fetch->createImageBitmap fallback', href); } catch(_){ }
-                                        const ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-                                        const sig = ac ? ac.signal : null;
-                                        const to = setTimeout(()=>{ try{ if (ac) ac.abort(); }catch(_){} }, 3000);
-                                        fetch(href, { signal: sig }).then(r=>{ clearTimeout(to); if (!r.ok) throw new Error('status '+r.status); return r.blob(); }).then(b=>createImageBitmap(b)).then(bmp=>{
-                                            try { clearTimeout(to); } catch(_){}
-                                            try {
-                                                cont._forcedBitmap = bmp;
-                                                cont.loaded = true;
-                                                // If frames were already assigned, create canonical left/right canvases
-                                                const rf = cont.frames && cont.frames.right;
-                                                if (rf && rf.w && rf.h && typeof document !== 'undefined') {
-                                                    try {
-                                                        // Source crop represents the RIGHT-facing image in this asset.
-                                                        // Create the RIGHT canvas directly from the bitmap crop and mirror
-                                                        // it to produce the LEFT-facing canvas.
-                                                        const rightC = document.createElement('canvas'); rightC.width = rf.w; rightC.height = rf.h;
-                                                        const rc = rightC.getContext('2d'); rc.imageSmoothingEnabled = true;
-                                                        rc.drawImage(bmp, rf.x, rf.y, rf.w, rf.h, 0, 0, rf.w, rf.h);
-
-                                                        const leftC = document.createElement('canvas'); leftC.width = rf.w; leftC.height = rf.h;
-                                                        const lc = leftC.getContext('2d'); lc.imageSmoothingEnabled = true;
-                                                        lc.translate(leftC.width, 0); lc.scale(-1,1);
-                                                        lc.drawImage(rightC, 0, 0);
-
-                                                        cont._rightCanvas = rightC; cont._leftCanvas = leftC;
-                                                        cont.frames.right = { x:0, y:0, w: rightC.width, h: rightC.height };
-                                                        cont.frames.left = { x:0, y:0, w: leftC.width, h: leftC.height };
-                                                        try { console.info('[SwanomalySprite][PRELOAD] created preflipped canvases from ImageBitmap'); } catch(_){ }
-                                                    } catch(e) { try { console.warn('[SwanomalySprite][PRELOAD] canvas creation failed', e); } catch(_){} }
-                                                }
-                                            } catch(e) { try { console.warn('[SwanomalySprite][PRELOAD] store failed', e); } catch(_){} }
-                                        }).catch(e=>{ clearTimeout(to); try { console.warn('[SwanomalySprite][PRELOAD] fetch->bitmap failed', e); } catch(_){} });
-                                    } catch(_){}
-                                }, 600);
-                            } catch(_){}
+                        try { console.info('[EggscobarSprite] Loaded eggscobar-sheet-12-31.png', game.enemySprites.eggscobar.frames.length, 'frames'); } catch(_){}
                     } catch(e) { console.warn('[EggscobarSprite] onload error', e); }
                 };
                 egImg.onerror = function(ev){ try { console.warn('[EggscobarSprite] failed to load', ev, egImg && egImg.src); } catch(_){} };
-                try { const resolved = (new URL('assets/geese/eggscobar.png', document.baseURI)).href; egImg.src = resolved; } catch(_) { /* keep assigned src */ }
+                try { const resolved = (new URL('assets/geese/spritesheets/eggscobar-sheet-12-31.png', document.baseURI)).href; egImg.src = resolved; } catch(_) { /* keep assigned src */ }
             }
             // === Enforcer enemy sprite sheet ===
             if (!game.enemySprites.enforcer) {
@@ -10230,31 +10181,35 @@ function offerPermanentAbilityChoice() {
                 // === Big Bill (Act II boss) sprite sheet ===
                 if (!game.enemySprites.bigBill) {
                     const bbImg = new Image();
-                    bbImg.src = 'assets/geese/bigbill.png';
+                    bbImg.src = 'assets/geese/spritesheets/bigbill-sheet.png';
                     game.enemySprites.bigBill = { image: bbImg, loaded: false };
                     bbImg.onload = () => {
                         game.enemySprites.bigBill.loaded = true;
-                        function box(x1,y1,x2,y2){ return { x:x1, y:y1, w:(x2 - x1), h:(y2 - y1) }; }
-                        // Provided bounding boxes (front/down, rear/up, side/right)
-                        game.enemySprites.bigBill.frames = {
-                            down: box(23,14,373,633),
-                            up:   box(411,13,766,634),
-                            right:box(776,22,1167,634)
-                        };
-                        const refH = game.enemySprites.bigBill.frames.down.h;
+                        // Spritesheet atlas frames 0-31 (32 total frames)
+                        game.enemySprites.bigBill.frames = [
+                            {x:0,y:0,w:256,h:256}, {x:256,y:0,w:256,h:256}, {x:512,y:0,w:256,h:256}, {x:768,y:0,w:256,h:256},
+                            {x:1024,y:0,w:256,h:256}, {x:1280,y:0,w:256,h:256}, {x:1536,y:0,w:256,h:256}, {x:1792,y:0,w:256,h:256},
+                            {x:0,y:256,w:256,h:256}, {x:256,y:256,w:256,h:256}, {x:512,y:256,w:256,h:256}, {x:768,y:256,w:256,h:256},
+                            {x:1024,y:256,w:256,h:256}, {x:1280,y:256,w:256,h:256}, {x:1536,y:256,w:256,h:256}, {x:1792,y:256,w:256,h:256},
+                            {x:0,y:512,w:256,h:256}, {x:256,y:512,w:256,h:256}, {x:512,y:512,w:256,h:256}, {x:768,y:512,w:256,h:256},
+                            {x:1024,y:512,w:256,h:256}, {x:1280,y:512,w:256,h:256}, {x:1536,y:512,w:256,h:256}, {x:1792,y:512,w:256,h:256},
+                            {x:0,y:768,w:256,h:256}, {x:256,y:768,w:256,h:256}, {x:512,y:768,w:256,h:256}, {x:768,y:768,w:256,h:256},
+                            {x:1024,y:768,w:256,h:256}, {x:1280,y:768,w:256,h:256}, {x:1536,y:768,w:256,h:256}, {x:1792,y:768,w:256,h:256}
+                        ];
+                        const refH = 256;
                         game.enemySprites.bigBill.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
                         game.enemySprites.bigBill.computeHitbox = (enemy)=> {
                             const size = enemy.size; const scale = game.enemySprites.bigBill.baseScaleForSize(size);
-                            const f = game.enemySprites.bigBill.frames.down;
+                            const f = game.enemySprites.bigBill.frames[0];
                             const w = f.w * scale; const h = f.h * scale;
-                            const hitW = w * 0.72;
-                            const hitH = h * 0.76;
-                            return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.05 };
+                            const hitW = w * 0.5;
+                            const hitH = h * 0.6;
+                            return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.1 };
                         };
-                        console.info('[BigBillSprite] Loaded bigbill.png', game.enemySprites.bigBill.frames);
+                        console.info('[BigBillSprite] Loaded bigbill-sheet.png', game.enemySprites.bigBill.frames.length, 'frames');
                     };
                     bbImg.onerror = (ev)=> { try { console.warn('[BigBillSprite] failed to load', ev, bbImg && bbImg.src); } catch(_){} };
-                    try { const resolved = (new URL('assets/geese/bigbill.png', document.baseURI)).href; bbImg.src = resolved; } catch(_) { /* keep assigned src */ }
+                    try { const resolved = (new URL('assets/geese/spritesheets/bigbill-sheet.png', document.baseURI)).href; bbImg.src = resolved; } catch(_) { /* keep assigned src */ }
                 }
 
                 // === Goose Willis (Act II ranged grunt) sprite ===
@@ -10473,34 +10428,35 @@ function offerPermanentAbilityChoice() {
                     // === 2Honk Shakur (Act II special ranged) sprite ===
                     if (!game.enemySprites['2honkShakur']) {
                         const hsImg = new Image();
-                        hsImg.src = 'assets/geese/2honkshakur.png';
+                        hsImg.src = 'assets/geese/spritesheets/2honkshakur-sheet.png';
                         game.enemySprites['2honkShakur'] = { image: hsImg, loaded: false };
-                        function box(x1,y1,x2,y2){ return { x:x1, y:y1, w:(x2 - x1), h:(y2 - y1) }; }
-                        hsImg.onload = function(ev) {
-                            const img = (ev && ev.target) ? ev.target : this;
-                            try {
-                                game.enemySprites['2honkShakur'].loaded = true;
-                                game.enemySprites['2honkShakur'].frames = {
-                                    down: box(0,15,404,717),
-                                    up:   box(459,19,837,730),
-                                    right:box(916,19,1423,718)
-                                };
-                                const refH = game.enemySprites['2honkShakur'].frames.down.h || 256;
-                                game.enemySprites['2honkShakur'].baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
-                                game.enemySprites['2honkShakur'].computeHitbox = (enemy)=> {
-                                    const size = enemy.size; const scale = game.enemySprites['2honkShakur'].baseScaleForSize(size);
-                                    const f = game.enemySprites['2honkShakur'].frames.down;
-                                    const w = f.w * scale; const h = f.h * scale;
-                                    const hitW = w * 0.64;
-                                    const hitH = h * 0.66;
-                                    return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
-                                };
-                                try { game.enemySprites['2honkShakur'].image = img; } catch(_){}
-                                console.info('[2HonkShakurSprite] Loaded 2honkshakur.png', game.enemySprites['2honkShakur'].frames);
-                            } catch(e) { console.warn('[2HonkShakurSprite] onload error', e); }
+                        hsImg.onload = () => {
+                            game.enemySprites['2honkShakur'].loaded = true;
+                            // Spritesheet atlas frames 0-31 (32 total frames)
+                            game.enemySprites['2honkShakur'].frames = [
+                                {x:0,y:0,w:256,h:256}, {x:256,y:0,w:256,h:256}, {x:512,y:0,w:256,h:256}, {x:768,y:0,w:256,h:256},
+                                {x:1024,y:0,w:256,h:256}, {x:1280,y:0,w:256,h:256}, {x:1536,y:0,w:256,h:256}, {x:1792,y:0,w:256,h:256},
+                                {x:0,y:256,w:256,h:256}, {x:256,y:256,w:256,h:256}, {x:512,y:256,w:256,h:256}, {x:768,y:256,w:256,h:256},
+                                {x:1024,y:256,w:256,h:256}, {x:1280,y:256,w:256,h:256}, {x:1536,y:256,w:256,h:256}, {x:1792,y:256,w:256,h:256},
+                                {x:0,y:512,w:256,h:256}, {x:256,y:512,w:256,h:256}, {x:512,y:512,w:256,h:256}, {x:768,y:512,w:256,h:256},
+                                {x:1024,y:512,w:256,h:256}, {x:1280,y:512,w:256,h:256}, {x:1536,y:512,w:256,h:256}, {x:1792,y:512,w:256,h:256},
+                                {x:0,y:768,w:256,h:256}, {x:256,y:768,w:256,h:256}, {x:512,y:768,w:256,h:256}, {x:768,y:768,w:256,h:256},
+                                {x:1024,y:768,w:256,h:256}, {x:1280,y:768,w:256,h:256}, {x:1536,y:768,w:256,h:256}, {x:1792,y:768,w:256,h:256}
+                            ];
+                            const refH = 256;
+                            game.enemySprites['2honkShakur'].baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
+                            game.enemySprites['2honkShakur'].computeHitbox = (enemy)=> {
+                                const size = enemy.size; const scale = game.enemySprites['2honkShakur'].baseScaleForSize(size);
+                                const f = game.enemySprites['2honkShakur'].frames[0];
+                                const w = f.w * scale; const h = f.h * scale;
+                                const hitW = w * 0.5;
+                                const hitH = h * 0.6;
+                                return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.1 };
+                            };
+                            console.info('[2HonkShakurSprite] Loaded 2honkshakur-sheet.png', game.enemySprites['2honkShakur'].frames.length, 'frames');
                         };
-                        hsImg.onerror = function(ev){ try { console.warn('[2HonkShakurSprite] failed to load', ev, hsImg && hsImg.src); } catch(_){} };
-                        try { const resolved = (new URL('assets/geese/2honkshakur.png', document.baseURI)).href; hsImg.src = resolved; } catch(_) { /* keep assigned src */ }
+                        hsImg.onerror = (ev)=> { try { console.warn('[2HonkShakurSprite] failed to load', ev, hsImg && hsImg.src); } catch(_){} };
+                        try { const resolved = (new URL('assets/geese/spritesheets/2honkshakur-sheet.png', document.baseURI)).href; hsImg.src = resolved; } catch(_) { /* keep assigned src */ }
                     }
 
             // === Boss Gangster enemy sprite sheet ===
@@ -25815,21 +25771,30 @@ function offerPermanentAbilityChoice() {
                         if (enemy.type === 'Eggscobar' && game.enemySprites && game.enemySprites.eggscobar && game.enemySprites.eggscobar.loaded) {
                             const es = game.enemySprites.eggscobar;
                             const frameSet = es.frames;
-                            let facing = enemy.facing || 'down';
-                            let box = frameSet[facing];
+                            let facing = (game && game.player && game.player.x >= enemy.x) ? 'right' : 'left';
+                            let box = null;
                             const img = es.image;
                             const size = enemy.size;
-                            const scale = es.baseScaleForSize ? es.baseScaleForSize(size) : ((size*2)/(box?box.h:1));
-                            if (!box) {
-                                if (facing === 'left' && frameSet.right) box = frameSet.right; else box = frameSet.down || frameSet.right || frameSet.up;
+                            const scale = es.baseScaleForSize ? es.baseScaleForSize(size) : ((size*2)/256);
+                            if (Array.isArray(frameSet)) {
+                                // Animated frames
+                                const frameStep = 5;
+                                const nowFrame = game.frame || Math.floor(Date.now() / 16);
+                                const idx = Math.floor(nowFrame / frameStep) % frameSet.length;
+                                box = frameSet[idx];
+                            } else {
+                                // Fallback to static
+                                box = frameSet[facing];
+                                if (!box) {
+                                    if (facing === 'left' && frameSet.right) box = frameSet.right; else box = frameSet.down || frameSet.right || frameSet.up;
+                                }
                             }
                             if (box && img) {
                                 const drawW = box.w * scale;
                                 const drawH = box.h * scale;
                                 ctx.save(); ctx.translate(enemy.x, enemy.y);
                                 if (facing === 'left') {
-                                    if (frameSet.right) { ctx.scale(-1,1); ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH); }
-                                    else { ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH); }
+                                    ctx.scale(-1,1); ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
                                 } else {
                                     ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
                                 }
@@ -26657,23 +26622,22 @@ function offerPermanentAbilityChoice() {
                         // 2Honk Shakur sprite override (Act II special ranged)
                         if (enemy.type === '2Honk Shakur' && game.enemySprites && game.enemySprites['2honkShakur'] && game.enemySprites['2honkShakur'].loaded) {
                             const hs = game.enemySprites['2honkShakur'];
-                            const frameSet = hs.frames;
-                            let facing = enemy.facing || 'down';
-                            let box = frameSet[facing];
+                            const frames = hs.frames;
                             const img = hs.image;
                             const size = enemy.size;
-                            const scale = hs.baseScaleForSize ? hs.baseScaleForSize(size) : ((size*2)/(box?box.h:1));
-                            if (!box) { if (facing === 'left' && frameSet.right) box = frameSet.right; else box = frameSet.down || frameSet.right || frameSet.up; }
-                            if (box && img) {
-                                const drawW = box.w * scale;
-                                const drawH = box.h * scale;
+                            const scale = hs.baseScaleForSize ? hs.baseScaleForSize(size) : ((size*2)/256);
+                            const facing = (game.player.x >= enemy.x) ? 'right' : 'left';
+                            const nowFrame = game.frame || Date.now();
+                            const idx = Math.floor(nowFrame / 5) % frames.length;
+                            const frame = frames[idx];
+                            if (frame && img) {
+                                const drawW = frame.w * scale;
+                                const drawH = frame.h * scale;
                                 ctx.save(); ctx.translate(enemy.x, enemy.y);
                                 if (facing === 'left') {
-                                    if (frameSet.right) { ctx.scale(-1,1); ctx.drawImage(img, frameSet.right.x, frameSet.right.y, frameSet.right.w, frameSet.right.h, -drawW/2, -drawH/2, drawW, drawH); }
-                                    else { ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH); }
-                                } else {
-                                    ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
+                                    ctx.scale(-1, 1);
                                 }
+                                ctx.drawImage(img, frame.x, frame.y, frame.w, frame.h, -drawW/2, -drawH/2, drawW, drawH);
                                 if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(230,200,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                                 ctx.restore();
                                 return;
@@ -26863,25 +26827,22 @@ function offerPermanentAbilityChoice() {
                         // Big Bill (Act II boss) sprite override
                         if (enemy.type === 'Big Bill' && game.enemySprites && game.enemySprites.bigBill && game.enemySprites.bigBill.loaded) {
                             const bb = game.enemySprites.bigBill;
-                            const frameSet = bb.frames;
-                            let facing = enemy.facing || 'down';
-                            let box = frameSet[facing];
+                            const frames = bb.frames;
                             const img = bb.image;
                             const size = enemy.size;
-                            const scale = bb.baseScaleForSize ? bb.baseScaleForSize(size) : ((size*2)/(box?box.h:1));
-                            if (!box) {
-                                if (facing === 'left' && frameSet.right) box = frameSet.right; else box = frameSet.down || frameSet.right || frameSet.up;
-                            }
-                            if (box && img) {
-                                const drawW = box.w * scale;
-                                const drawH = box.h * scale;
+                            const scale = bb.baseScaleForSize ? bb.baseScaleForSize(size) : ((size*2)/256);
+                            const facing = (game.player.x >= enemy.x) ? 'right' : 'left';
+                            const nowFrame = game.frame || Date.now();
+                            const idx = Math.floor(nowFrame / 5) % frames.length;
+                            const frame = frames[idx];
+                            if (frame && img) {
+                                const drawW = frame.w * scale;
+                                const drawH = frame.h * scale;
                                 ctx.save(); ctx.translate(enemy.x, enemy.y);
                                 if (facing === 'left') {
-                                    if (frameSet.right) { ctx.scale(-1,1); ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH); }
-                                    else { ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH); }
-                                } else {
-                                    ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
+                                    ctx.scale(-1, 1);
                                 }
+                                ctx.drawImage(img, frame.x, frame.y, frame.w, frame.h, -drawW/2, -drawH/2, drawW, drawH);
                                 if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(200,140,60,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                                 ctx.restore();
                                 return;
