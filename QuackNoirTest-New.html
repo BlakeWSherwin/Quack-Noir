@@ -8596,6 +8596,7 @@ function offerPermanentAbilityChoice() {
     // Act III melee enemy: Swanomaly (non-ranged, Act III exclusive)
     ENEMY_TYPES['Swanomaly'] = { health: 220, speed: 0.52, damage: 18, color: '#E6F4FF', size: 56, xp: 420, ranged: false, armor: 3, act: 'III' };
     // Act III ranged enemy: Swan Wick (exclusive to Act III)
+    // Uses assets/swans/spritesheets/swanwick-sheet-3-29.png (animated spritesheet, frames 3-29, left/right facing only, mirrors for left).
     // Uses assets/swans/swanwick.png. Default side faces right; left is mirrored.
     ENEMY_TYPES['Swan Wick'] = { health: 200, speed: 0.70, damage: 20, color: '#DDEEFF', size: 44, xp: 360, ranged: true, rangedCooldown: 1300, armor: 2, act: 'III' };
 
@@ -9356,9 +9357,8 @@ function offerPermanentAbilityChoice() {
                     if (!game.enemySprites.swanwick) {
                         try {
                             const swImg = new Image();
-                            try { swImg.src = (new URL('assets/swans/swanwick.png', document.baseURI)).href; } catch(_) { swImg.src = 'assets/swans/swanwick.png'; }
+                            try { swImg.src = (new URL('assets/swans/spritesheets/swanwick-sheet-3-29.png', document.baseURI)).href; } catch(_) { swImg.src = 'assets/swans/spritesheets/swanwick-sheet-3-29.png'; }
                             game.enemySprites.swanwick = { image: swImg, loaded: false, _forcedBitmap: null };
-                            function swBox(x1,y1,x2,y2){ return { x:x1, y:y1, w:(x2 - x1), h:(y2 - y1) }; }
                             swImg.onload = function(ev){
                                 try {
                                     const img = (ev && ev.target) ? ev.target : this;
@@ -9366,37 +9366,65 @@ function offerPermanentAbilityChoice() {
                                     // If a createImageBitmap fallback was used earlier, clear it so the real Image is preferred
                                     try { if (cont && cont._forcedBitmap) { try { if (cont._forcedBitmap.close) cont._forcedBitmap.close(); } catch(_){} cont._forcedBitmap = null; try { console.info('[SwanWickSprite] Image loaded; cleared forced bitmap fallback'); } catch(_){} } } catch(_){}
                                     cont.loaded = true;
-                                    // Frames: front=down, rear=up, side=right
+                                    // Spritesheet: 8 columns, 4 rows, 32 frames, use frames 3-29 (27 frames)
+                                    const atlasFrames = [
+                                        {x:768,y:0,w:256,h:256,duration:1}, // frame 3
+                                        {x:1024,y:0,w:256,h:256,duration:1}, // 4
+                                        {x:1280,y:0,w:256,h:256,duration:1}, // 5
+                                        {x:1536,y:0,w:256,h:256,duration:1}, // 6
+                                        {x:1792,y:0,w:256,h:256,duration:1}, // 7
+                                        {x:0,y:256,w:256,h:256,duration:1}, // 8
+                                        {x:256,y:256,w:256,h:256,duration:1}, // 9
+                                        {x:512,y:256,w:256,h:256,duration:1}, // 10
+                                        {x:768,y:256,w:256,h:256,duration:1}, // 11
+                                        {x:1024,y:256,w:256,h:256,duration:1}, // 12
+                                        {x:1280,y:256,w:256,h:256,duration:1}, // 13
+                                        {x:1536,y:256,w:256,h:256,duration:1}, // 14
+                                        {x:1792,y:256,w:256,h:256,duration:1}, // 15
+                                        {x:0,y:512,w:256,h:256,duration:1}, // 16
+                                        {x:256,y:512,w:256,h:256,duration:1}, // 17
+                                        {x:512,y:512,w:256,h:256,duration:1}, // 18
+                                        {x:768,y:512,w:256,h:256,duration:1}, // 19
+                                        {x:1024,y:512,w:256,h:256,duration:1}, // 20
+                                        {x:1280,y:512,w:256,h:256,duration:1}, // 21
+                                        {x:1536,y:512,w:256,h:256,duration:1}, // 22
+                                        {x:1792,y:512,w:256,h:256,duration:1}, // 23
+                                        {x:0,y:768,w:256,h:256,duration:1}, // 24
+                                        {x:256,y:768,w:256,h:256,duration:1}, // 25
+                                        {x:512,y:768,w:256,h:256,duration:1}, // 26
+                                        {x:768,y:768,w:256,h:256,duration:1}, // 27
+                                        {x:1024,y:768,w:256,h:256,duration:1}, // 28
+                                        {x:1280,y:768,w:256,h:256,duration:1}  // 29
+                                    ];
                                     cont.frames = {
-                                        down: swBox(133,21,537,667),
-                                        up:   swBox(601,23,938,668),
-                                        right:swBox(967,46,1462,671)
+                                        seq: atlasFrames,
+                                        right: atlasFrames[0],
+                                        down: atlasFrames[0],
+                                        up: atlasFrames[0],
+                                        front: atlasFrames[0],
+                                        rear: atlasFrames[0]
                                     };
-                                    try { const fs = cont.frames; fs.front = fs.down; fs.rear = fs.up; fs.side = fs.right; } catch(_){ }
-                                    // Pre-create preflipped canvases for side frame
+                                    cont.anim = { frameStep: 8 };
+                                    // For left, create mirrored canvases if needed, but since animating, handle in draw
+                                    // Precreate right canvas for first frame
                                     try {
                                         const rf = cont.frames.right;
-                                        if (rf && rf.w && rf.h && img && (img.naturalWidth || img.width) && typeof document !== 'undefined') {
-                                            // Some side frames in assets are authored left-facing in the "right" region.
-                                            // Normalize by treating the cropped source as the LEFT-facing image and
-                                            // creating the RIGHT-facing canvas by mirroring. This ensures facing
-                                            // semantics align with renderer expectations.
-                                            const leftC = document.createElement('canvas'); leftC.width = rf.w; leftC.height = rf.h;
-                                            const lc = leftC.getContext('2d'); lc.imageSmoothingEnabled = true;
-                                            lc.drawImage(img, rf.x, rf.y, rf.w, rf.h, 0, 0, rf.w, rf.h);
-
+                                        if (rf && img && img.naturalWidth && img.naturalHeight && typeof document !== 'undefined') {
                                             const rightC = document.createElement('canvas'); rightC.width = rf.w; rightC.height = rf.h;
                                             const rc = rightC.getContext('2d'); rc.imageSmoothingEnabled = true;
-                                            rc.translate(rightC.width, 0); rc.scale(-1,1);
-                                            rc.drawImage(leftC, 0, 0);
+                                            rc.drawImage(img, rf.x, rf.y, rf.w, rf.h, 0, 0, rf.w, rf.h);
 
-                                            // Store canonical canvases: _rightCanvas is the true right-facing image
-                                            // and _leftCanvas is the true left-facing image (direct crop).
-                                            cont._rightCanvas = rightC; cont._leftCanvas = leftC;
-                                            cont.frames.right = { x:0, y:0, w: rightC.width, h: rightC.height };
-                                            cont.frames.left = { x:0, y:0, w: leftC.width, h: leftC.height };
+                                            const leftC = document.createElement('canvas'); leftC.width = rf.w; leftC.height = rf.h;
+                                            const lc = leftC.getContext('2d'); lc.imageSmoothingEnabled = true;
+                                            lc.translate(leftC.width, 0); lc.scale(-1, 1);
+                                            lc.drawImage(rightC, 0, 0);
+
+                                            try { cont._rightCanvas = rightC; } catch(_){ }
+                                            try { cont._leftCanvas = leftC; } catch(_){ }
+                                            try { cont.frames.right = { x:0,y:0,w:rightC.width,h:rightC.height }; } catch(_){ }
+                                            try { cont.frames.left = { x:0,y:0,w:leftC.width,h:leftC.height }; } catch(_){ }
                                         }
-                                    } catch(_) {}
+                                    } catch(_){ }
 
                                     const refH = cont.frames.down.h || 256;
                                     cont.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
@@ -9409,7 +9437,7 @@ function offerPermanentAbilityChoice() {
                                             return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
                                         } catch(_) { return { w: enemy.size||44, h: enemy.size||44, ox: -(enemy.size||44)/2, oy: -(enemy.size||44)/2 }; }
                                     };
-                                    try { console.info('[SwanWickSprite] Loaded swanwick image', cont.frames); } catch(_){}
+                                    try { console.info('[SwanWickSprite] Loaded swanwick-sheet-3-29.png', cont.frames); } catch(_){}
                                 } catch(e) { console.warn('[SwanWickSprite] onload error', e); }
                             };
                             swImg.onerror = function(ev){
@@ -9428,6 +9456,54 @@ function offerPermanentAbilityChoice() {
                                             fetch(href, { signal }).then(r=>{ clearTimeout(t); if (!r.ok) throw new Error('status '+r.status); return r.blob(); }).then(b=>createImageBitmap(b)).then(bmp=>{
                                                 clearTimeout(t);
                                                 cont._forcedBitmap = bmp; cont.loaded = true;
+                                                // Set up animation frames for fallback
+                                                const atlasFrames = [
+                                                    {x:768,y:0,w:256,h:256,duration:1}, // frame 3
+                                                    {x:1024,y:0,w:256,h:256,duration:1}, // 4
+                                                    {x:1280,y:0,w:256,h:256,duration:1}, // 5
+                                                    {x:1536,y:0,w:256,h:256,duration:1}, // 6
+                                                    {x:1792,y:0,w:256,h:256,duration:1}, // 7
+                                                    {x:0,y:256,w:256,h:256,duration:1}, // 8
+                                                    {x:256,y:256,w:256,h:256,duration:1}, // 9
+                                                    {x:512,y:256,w:256,h:256,duration:1}, // 10
+                                                    {x:768,y:256,w:256,h:256,duration:1}, // 11
+                                                    {x:1024,y:256,w:256,h:256,duration:1}, // 12
+                                                    {x:1280,y:256,w:256,h:256,duration:1}, // 13
+                                                    {x:1536,y:256,w:256,h:256,duration:1}, // 14
+                                                    {x:1792,y:256,w:256,h:256,duration:1}, // 15
+                                                    {x:0,y:512,w:256,h:256,duration:1}, // 16
+                                                    {x:256,y:512,w:256,h:256,duration:1}, // 17
+                                                    {x:512,y:512,w:256,h:256,duration:1}, // 18
+                                                    {x:768,y:512,w:256,h:256,duration:1}, // 19
+                                                    {x:1024,y:512,w:256,h:256,duration:1}, // 20
+                                                    {x:1280,y:512,w:256,h:256,duration:1}, // 21
+                                                    {x:1536,y:512,w:256,h:256,duration:1}, // 22
+                                                    {x:1792,y:512,w:256,h:256,duration:1}, // 23
+                                                    {x:0,y:768,w:256,h:256,duration:1}, // 24
+                                                    {x:256,y:768,w:256,h:256,duration:1}, // 25
+                                                    {x:512,y:768,w:256,h:256,duration:1}, // 26
+                                                    {x:768,y:768,w:256,h:256,duration:1}, // 27
+                                                    {x:1024,y:768,w:256,h:256,duration:1}, // 28
+                                                    {x:1280,y:768,w:256,h:256,duration:1}  // 29
+                                                ];
+                                                cont.frames = {
+                                                    seq: atlasFrames,
+                                                    right: atlasFrames[0],
+                                                    down: atlasFrames[0],
+                                                    up: atlasFrames[0],
+                                                    front: atlasFrames[0],
+                                                    rear: atlasFrames[0]
+                                                };
+                                                cont.anim = { frameStep: 8 };
+                                                const refH = cont.frames.down.h || 256;
+                                                cont.baseScaleForSize = cont.baseScaleForSize || ((enemySize)=> ((enemySize*2)/refH));
+                                                cont.computeHitbox = cont.computeHitbox || (enemy=>{
+                                                    const size = enemy.size || 44; const scale = cont.baseScaleForSize(size);
+                                                    const f = cont.frames.down || { w: size*2, h: size*2 };
+                                                    const w = f.w * scale; const h = f.h * scale;
+                                                    const hitW = w * 0.64; const hitH = h * 0.68;
+                                                    return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
+                                                });
                                                 try { console.info('[SwanWickSprite] createImageBitmap fallback succeeded'); } catch(_){ }
                                             }).catch(e=>{ clearTimeout(t); try { console.warn('[SwanWickSprite] fetch/createImageBitmap fallback failed', e); } catch(_){} });
                                         }
@@ -26464,62 +26540,48 @@ function offerPermanentAbilityChoice() {
                         if (enemy.type === 'Swan Wick' && game.enemySprites && game.enemySprites.swanwick && (game.enemySprites.swanwick.loaded || game.enemySprites.swanwick._forcedBitmap || game.enemySprites.swanwick._leftCanvas)) {
                             const sw = game.enemySprites.swanwick;
                             const frameSet = sw.frames || {};
-                            let facing = enemy.facing || 'down';
-                            let box = frameSet[facing];
+                            const seq = frameSet.seq || [];
                             const img = sw.image;
                             const leftCanvas = sw._leftCanvas;
                             const rightCanvas = sw._rightCanvas;
                             const size = enemy.size;
-                            const scale = sw.baseScaleForSize ? sw.baseScaleForSize(size) : ((size*2)/(box?box.h:1));
-                            if (!box) {
-                                if (facing === 'left' && frameSet.right) box = frameSet.right; else box = frameSet.down || frameSet.right || frameSet.up;
+                            // Determine facing based on player position for centering
+                            const playerX = (game && game.player) ? game.player.x : 0;
+                            const facing = (playerX < enemy.x) ? 'left' : 'right';
+                            // Calculate current animation frame
+                            let box = frameSet.right; // default
+                            if (seq.length > 0) {
+                                const frameStep = Math.max(1, (sw.anim && sw.anim.frameStep) || 8);
+                                const nowFrame = (game && typeof game.frame === 'number') ? game.frame : Math.floor(Date.now() / 16);
+                                if (typeof enemy._swAnimSeed !== 'number') enemy._swAnimSeed = nowFrame;
+                                const animTicks = Math.max(0, nowFrame - enemy._swAnimSeed);
+                                let frameIdx = Math.floor(animTicks / frameStep) % seq.length;
+                                box = seq[frameIdx];
                             }
-                            // Compute source/draw sizes similar to other overrides
-                            const srcW = (box && box.w) ? box.w : (sw._forcedBitmap ? sw._forcedBitmap.width : (img && (img.naturalWidth || img.width)) || enemy.size*2);
-                            const srcH = (box && box.h) ? box.h : (sw._forcedBitmap ? sw._forcedBitmap.height : (img && (img.naturalHeight || img.height)) || enemy.size*2);
+                            const scale = sw.baseScaleForSize ? sw.baseScaleForSize(size) : ((size*2)/(box?box.h:256));
+                            const srcW = (box && box.w) ? box.w : 256;
+                            const srcH = (box && box.h) ? box.h : 256;
                             const drawW = srcW * scale;
                             const drawH = srcH * scale;
+
                             ctx.save(); ctx.translate(enemy.x, enemy.y);
                             if (typeof ctx.imageSmoothingEnabled !== 'undefined') try{ ctx.imageSmoothingEnabled = true; } catch(_){ }
                             try { if (enemy) enemy._noFallback = true; } catch(_){ }
                             const dstW = Math.max(1, Math.round(drawW));
                             const dstH = Math.max(1, Math.round(drawH));
-                            try {
-                                if (facing === 'left') {
-                                    if (leftCanvas) {
-                                        try { ctx.drawImage(leftCanvas, 0, 0, leftCanvas.width, leftCanvas.height, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                    } else if (sw._forcedBitmap) {
-                                        try { ctx.scale(-1,1); ctx.drawImage(sw._forcedBitmap, (box?box.x:0), (box?box.y:0), (box?box.w:sw._forcedBitmap.width), (box?box.h:sw._forcedBitmap.height), -Math.round(dstW/2), -Math.round(dstH/2), dstW, dstH); } catch(_){ }
-                                    } else if (frameSet.right && img) {
-                                        try { ctx.scale(-1,1); ctx.drawImage(img, frameSet.right.x, frameSet.right.y, frameSet.right.w, frameSet.right.h, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                    } else if (img && box) {
-                                        try { ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                    }
-                                } else if (facing === 'right') {
-                                    if (rightCanvas) {
-                                        try { ctx.drawImage(rightCanvas, 0, 0, rightCanvas.width, rightCanvas.height, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                    } else if (sw._forcedBitmap) {
-                                        try { ctx.drawImage(sw._forcedBitmap, (box?box.x:0), (box?box.y:0), (box?box.w:sw._forcedBitmap.width), (box?box.h:sw._forcedBitmap.height), -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                    } else if (img && frameSet.right) {
-                                        try { ctx.drawImage(img, frameSet.right.x, frameSet.right.y, frameSet.right.w, frameSet.right.h, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                    } else if (img && box) {
-                                        try { ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                    }
-                                } else {
-                                    // up/down use front/rear frames
-                                    const fbox = frameSet.front || frameSet.down || box;
-                                    const rbox = frameSet.rear || frameSet.up || box;
-                                    const useBox = (facing === 'down') ? fbox : (facing === 'up' ? rbox : box);
-                                    if (sw._forcedBitmap && useBox) {
-                                        try { ctx.drawImage(sw._forcedBitmap, useBox.x, useBox.y, useBox.w, useBox.h, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                    } else if (img && useBox) {
-                                        try { ctx.drawImage(img, useBox.x, useBox.y, useBox.w, useBox.h, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                    } else if (sw._forcedBitmap) {
-                                        try { ctx.drawImage(sw._forcedBitmap, 0, 0, sw._forcedBitmap.width, sw._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                    }
+                            if (facing === 'left') {
+                                // Mirror horizontally
+                                ctx.scale(-1, 1);
+                                if (img && box) {
+                                    ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
                                 }
-                            } catch(e) { try { console.warn('[SwanWickSprite][DRAW] error', e); } catch(_){} }
-                            if (game._debugSpriteBounds) { try { ctx.strokeStyle = 'rgba(200,200,255,0.45)'; ctx.strokeRect(-dstW/2, -dstH/2, dstW, dstH); } catch(_){} }
+                            } else {
+                                // Right: use normal
+                                if (img && box) {
+                                    ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                                }
+                            }
+                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(200,200,255,0.45)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                             ctx.restore();
                             return;
                         }
