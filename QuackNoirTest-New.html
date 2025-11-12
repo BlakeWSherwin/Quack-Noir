@@ -9714,102 +9714,72 @@ function offerPermanentAbilityChoice() {
                         } catch(e) { console.warn('[HonkinatorSprite] install failed', e); }
                     }
 
-                    // === Swandroid 18 (Act III melee, non-ranged) sprite loader ===
+                    // === Swandroid 18 (Act III melee, non-ranged) animated sprite loader ===
                     if (!game.enemySprites.swandroid18) {
                         try {
                             const saImg = new Image();
-                            try { saImg.src = (new URL('assets/swans/swandroid18.jpeg', document.baseURI)).href; } catch(_) { saImg.src = 'assets/swans/swandroid18.jpeg'; }
+                            try { saImg.src = (new URL('assets/swans/spritesheets/swandroid18-sheet.png', document.baseURI)).href; } catch(_) { saImg.src = 'assets/swans/spritesheets/swandroid18-sheet.png'; }
                             game.enemySprites.swandroid18 = { image: saImg, loaded: false, _forcedBitmap: null };
-                            try { console.info('[Swandroid18Sprite] requesting', saImg && saImg.src, 'baseURI', (typeof document !== 'undefined' && document.baseURI) ? document.baseURI : null); } catch(_){}
-                            // If the normal Image onload doesn't fire (file:// edge-cases or decoding glitches),
-                            // attempt a fetch->blob->createImageBitmap preload after a short delay so we can
-                            // create the _forcedBitmap and preflipped canvases used by the renderer.
-                            try {
-                                setTimeout(function(){
-                                    try {
-                                        const cont = game && game.enemySprites && game.enemySprites.swandroid18;
-                                        if (!cont || cont.loaded) return;
-                                        const href = (saImg && saImg.src) ? saImg.src : null;
-                                        if (!href) return;
-                                        // Attempt fetch->createImageBitmap as a proactive preload (3000ms abort)
-                                        if (typeof fetch === 'function' && typeof createImageBitmap === 'function') {
-                                            try { console.info('[Swandroid18Sprite] attempting proactive fetch/createImageBitmap preload for', href); } catch(_){ }
-                                            const ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-                                            const signal = ac ? ac.signal : null;
-                                            const t = setTimeout(()=>{ try{ if (ac) ac.abort(); }catch(_){} }, 3000);
-                                            fetch(href, { signal }).then(r=>{ clearTimeout(t); if (!r.ok) throw new Error('status '+r.status); return r.blob(); }).then(b=>createImageBitmap(b)).then(bmp=>{
-                                                clearTimeout(t);
-                                                cont._forcedBitmap = bmp; cont.loaded = true;
-                                                try { console.info('[Swandroid18Sprite][PRELOAD] ImageBitmap created via fetch and stored', { w: bmp.width, h: bmp.height }); } catch(_){ }
-                                                try {
-                                                    // If frames already present, create preflipped canvases from the bitmap
-                                                    const rf = cont.frames && cont.frames.right;
-                                                    if (rf && rf.w && rf.h && typeof document !== 'undefined') {
-                                                        const rightC = document.createElement('canvas'); rightC.width = rf.w; rightC.height = rf.h;
-                                                        const rc = rightC.getContext('2d'); rc.imageSmoothingEnabled = true;
-                                                        rc.drawImage(bmp, rf.x, rf.y, rf.w, rf.h, 0, 0, rf.w, rf.h);
-
-                                                        const leftC = document.createElement('canvas'); leftC.width = rf.w; leftC.height = rf.h;
-                                                        const lc = leftC.getContext('2d'); lc.imageSmoothingEnabled = true;
-                                                        lc.translate(leftC.width, 0); lc.scale(-1,1);
-                                                        lc.drawImage(rightC, 0, 0);
-
-                                                        cont._rightCanvas = rightC; cont._leftCanvas = leftC;
-                                                        cont.frames.right = { x:0,y:0,w:rightC.width,h:rightC.height };
-                                                        cont.frames.left = { x:0,y:0,w:leftC.width,h:leftC.height };
-                                                        try { console.info('[Swandroid18Sprite][PRELOAD] created preflipped canvases from ImageBitmap'); } catch(_){ }
-                                                    }
-                                                } catch(e) { try { console.warn('[Swandroid18Sprite][PRELOAD] canvas creation failed', e); } catch(_){} }
-                                            }).catch(e=>{ clearTimeout(t); try { console.warn('[Swandroid18Sprite][PRELOAD] fetch/createImageBitmap preload failed', e); } catch(_){} });
-                                        }
-                                    } catch(_){}
-                                }, 600);
-                            } catch(_){}
-                            function saBox(x1,y1,x2,y2){ return { x:x1, y:y1, w:(x2 - x1), h:(y2 - y1) }; }
+                            const atlasFrames = [
+                                {"x":0,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":768,"w":256,"h":256,"duration":1}
+                            ];
                             saImg.onload = function(ev){
                                 try {
                                     const img = (ev && ev.target) ? ev.target : this;
                                     const cont = game.enemySprites.swandroid18;
-                                    try { if (cont && cont._forcedBitmap) { try { if (cont._forcedBitmap.close) cont._forcedBitmap.close(); } catch(_){} cont._forcedBitmap = null; try { console.info('[Swandroid18Sprite] Image loaded; cleared forced bitmap fallback'); } catch(_){ } } } catch(_){ }
-                                    cont.loaded = true;
-                                    // Frames: front=down, rear=up, side=right (side crop authored facing RIGHT)
-                                    cont.frames = {
-                                        down: saBox(59,122,458,955),
-                                        up:   saBox(530,123,962,966),
-                                        right:saBox(1015,110,1464,956)
-                                    };
-                                    try { const fs = cont.frames; fs.front = fs.down; fs.rear = fs.up; fs.side = fs.right; } catch(_){ }
-                                    // Pre-create canvases: RIGHT = original side crop, LEFT = mirrored copy
+                                    // If a createImageBitmap fallback was previously used, prefer the real Image now.
                                     try {
-                                        const rf = cont.frames.right;
-                                        if (rf && rf.w && rf.h && img && (img.naturalWidth || img.width) && typeof document !== 'undefined') {
-                                            const rightC = document.createElement('canvas'); rightC.width = rf.w; rightC.height = rf.h;
-                                            const rc = rightC.getContext('2d'); rc.imageSmoothingEnabled = true;
-                                            rc.drawImage(img, rf.x, rf.y, rf.w, rf.h, 0, 0, rf.w, rf.h);
-
-                                            const leftC = document.createElement('canvas'); leftC.width = rf.w; leftC.height = rf.h;
-                                            const lc = leftC.getContext('2d'); lc.imageSmoothingEnabled = true;
-                                            lc.translate(leftC.width, 0); lc.scale(-1,1);
-                                            lc.drawImage(rightC, 0, 0);
-
-                                            cont._rightCanvas = rightC; cont._leftCanvas = leftC;
-                                            cont.frames.right = { x:0,y:0,w:rightC.width,h:rightC.height };
-                                            cont.frames.left = { x:0,y:0,w:leftC.width,h:leftC.height };
+                                        if (cont && cont._forcedBitmap) {
+                                            try { if (cont._forcedBitmap.close) cont._forcedBitmap.close(); } catch(_){}
+                                            cont._forcedBitmap = null;
+                                            try { console.info('[Swandroid18Sprite] Image loaded; cleared forced bitmap fallback'); } catch(_){}
                                         }
                                     } catch(_){}
-
-                                    const refH = cont.frames.down.h || 256;
+                                    cont.loaded = true;
+                                    cont.frames = { seq: atlasFrames };
+                                    cont.anim = { frameStep: 8 };
+                                    const refH = 256;
                                     cont.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
                                     cont.computeHitbox = (enemy)=>{
                                         try {
                                             const size = enemy.size || 52; const scale = cont.baseScaleForSize(size);
-                                            const f = cont.frames.down || { w: size*2, h: size*2 };
-                                            const w = f.w * scale; const h = f.h * scale;
+                                            const w = 256 * scale; const h = 256 * scale;
                                             const hitW = w * 0.64; const hitH = h * 0.68;
                                             return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
                                         } catch(_) { return { w: enemy.size||52, h: enemy.size||52, ox: -(enemy.size||52)/2, oy: -(enemy.size||52)/2 }; }
                                     };
-                                    try { console.info('[Swandroid18Sprite] Loaded swandroid18 image', cont.frames); } catch(_){ }
+                                    try { console.info('[Swandroid18Sprite] Loaded swandroid18 spritesheet', cont.frames); } catch(_){}
                                 } catch(e) { console.warn('[Swandroid18Sprite] onload error', e); }
                             };
                             saImg.onerror = function(ev){
@@ -9829,24 +9799,6 @@ function offerPermanentAbilityChoice() {
                                                 clearTimeout(t);
                                                 cont._forcedBitmap = bmp; cont.loaded = true;
                                                 try { console.info('[Swandroid18Sprite] createImageBitmap fallback succeeded'); } catch(_){ }
-                                                try {
-                                                    const rf = cont.frames && cont.frames.right;
-                                                    if (rf && rf.w && rf.h && typeof document !== 'undefined') {
-                                                        const rightC = document.createElement('canvas'); rightC.width = rf.w; rightC.height = rf.h;
-                                                        const rc = rightC.getContext('2d'); rc.imageSmoothingEnabled = true;
-                                                        rc.drawImage(bmp, rf.x, rf.y, rf.w, rf.h, 0, 0, rf.w, rf.h);
-
-                                                        const leftC = document.createElement('canvas'); leftC.width = rf.w; leftC.height = rf.h;
-                                                        const lc = leftC.getContext('2d'); lc.imageSmoothingEnabled = true;
-                                                        lc.translate(leftC.width, 0); lc.scale(-1,1);
-                                                        lc.drawImage(rightC, 0, 0);
-
-                                                        cont._rightCanvas = rightC; cont._leftCanvas = leftC;
-                                                        cont.frames.right = { x:0,y:0,w:rightC.width,h:rightC.height };
-                                                        cont.frames.left = { x:0,y:0,w:leftC.width,h:leftC.height };
-                                                        try { console.info('[Swandroid18Sprite] created preflipped canvases from ImageBitmap'); } catch(_){ }
-                                                    }
-                                                } catch(e) { try { console.warn('[Swandroid18Sprite] canvas creation failed', e); } catch(_){} }
                                             }).catch(e=>{ clearTimeout(t); try { console.warn('[Swandroid18Sprite] fetch/createImageBitmap fallback failed', e); } catch(_){} });
                                         }
                                     } catch(e) { try { console.warn('[Swandroid18Sprite] fallback error', e); } catch(_){} }
@@ -25833,77 +25785,42 @@ function offerPermanentAbilityChoice() {
                         }
                         // Swandroid 18 sprite override (Act III melee, non-ranged)
                         // Accept minor naming variants by matching any type that contains 'swandroid'
-                        if (typeStr.indexOf('swandroid') !== -1 && game.enemySprites && game.enemySprites.swandroid18) {
+                        if (typeStr.indexOf('swandroid') !== -1 && game.enemySprites && game.enemySprites.swandroid18 && (game.enemySprites.swandroid18.loaded || game.enemySprites.swandroid18._forcedBitmap)) {
                             const sa = game.enemySprites.swandroid18;
-                            if (sa && (sa.loaded || sa._forcedBitmap || sa._rightCanvas || sa._leftCanvas)) {
-                                const frameSet = sa.frames || {};
-                                let facing = enemy.facing || 'down';
-                                let box = frameSet[facing];
-                                const img = sa.image;
-                                const leftCanvas = sa._leftCanvas;
-                                const rightCanvas = sa._rightCanvas;
-                                const size = enemy.size;
-                                const scale = sa.baseScaleForSize ? sa.baseScaleForSize(size) : ((size * 2) / (box ? box.h : 1));
-                                if (!box) {
-                                    if (facing === 'left' && frameSet.right) box = frameSet.right;
-                                    else box = frameSet.down || frameSet.right || frameSet.up;
-                                }
-                                const srcW = (box && box.w) ? box.w : (sa._forcedBitmap ? sa._forcedBitmap.width : (img && (img.naturalWidth || img.width)) || enemy.size * 2);
-                                const srcH = (box && box.h) ? box.h : (sa._forcedBitmap ? sa._forcedBitmap.height : (img && (img.naturalHeight || img.height)) || enemy.size * 2);
-                                const drawW = srcW * scale;
-                                const drawH = srcH * scale;
+                            const { seq } = sa.frames || {};
+                            const { frameStep } = sa.anim || {};
+                            const playerX = game.player ? game.player.x : 0;
+                            const facing = (playerX < enemy.x) ? 'left' : 'right';
+                            const animTicks = Math.floor(game.frame / (frameStep || 8));
+                            const box = seq ? seq[animTicks % seq.length] : null;
+                            const img = sa.image;
+                            const size = enemy.size;
+                            const scale = sa.baseScaleForSize ? sa.baseScaleForSize(size) : ((size*2)/256);
+                            const srcW = (box && box.w) ? box.w : (sa._forcedBitmap ? sa._forcedBitmap.width : (img && (img.naturalWidth || img.width)) || size*2);
+                            const srcH = (box && box.h) ? box.h : (sa._forcedBitmap ? sa._forcedBitmap.height : (img && (img.naturalHeight || img.height)) || size*2);
+                            const drawW = srcW * scale;
+                            const drawH = srcH * scale;
 
-                                ctx.save();
-                                ctx.translate(enemy.x, enemy.y);
-                                if (typeof ctx.imageSmoothingEnabled !== 'undefined') {
-                                    try { ctx.imageSmoothingEnabled = true; } catch(_){ }
-                                }
-                                try { if (enemy) enemy._noFallback = true; } catch(_){ }
-                                const dstW = Math.max(1, Math.round(drawW));
-                                const dstH = Math.max(1, Math.round(drawH));
+                            ctx.save(); ctx.translate(enemy.x, enemy.y);
+                            if (typeof ctx.imageSmoothingEnabled !== 'undefined') try{ ctx.imageSmoothingEnabled = true; } catch(_){ }
+                            try { if (enemy) enemy._noFallback = true; } catch(_){ }
+                            const dstW = Math.max(1, Math.round(drawW));
+                            const dstH = Math.max(1, Math.round(drawH));
 
-                                if (facing === 'left') {
-                                    if (leftCanvas) {
-                                        ctx.drawImage(leftCanvas, 0, 0, leftCanvas.width, leftCanvas.height, -dstW / 2, -dstH / 2, dstW, dstH);
-                                    } else if (sa._forcedBitmap) {
-                                        ctx.scale(-1, 1);
-                                        ctx.drawImage(sa._forcedBitmap, (box ? box.x : 0), (box ? box.y : 0), (box ? box.w : sa._forcedBitmap.width), (box ? box.h : sa._forcedBitmap.height), -Math.round(dstW / 2), -Math.round(dstH / 2), dstW, dstH);
-                                    } else if (frameSet.right && img) {
-                                        ctx.scale(-1, 1);
-                                        ctx.drawImage(img, frameSet.right.x, frameSet.right.y, frameSet.right.w, frameSet.right.h, -dstW / 2, -dstH / 2, dstW, dstH);
-                                    } else if (img && box) {
-                                        ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW / 2, -dstH / 2, dstW, dstH);
-                                    }
-                                } else if (facing === 'right') {
-                                    if (rightCanvas) {
-                                        ctx.drawImage(rightCanvas, 0, 0, rightCanvas.width, rightCanvas.height, -dstW / 2, -dstH / 2, dstW, dstH);
-                                    } else if (sa._forcedBitmap) {
-                                        ctx.drawImage(sa._forcedBitmap, (box ? box.x : 0), (box ? box.y : 0), (box ? box.w : sa._forcedBitmap.width), (box ? box.h : sa._forcedBitmap.height), -dstW / 2, -dstH / 2, dstW, dstH);
-                                    } else if (img && frameSet.right) {
-                                        ctx.drawImage(img, frameSet.right.x, frameSet.right.y, frameSet.right.w, frameSet.right.h, -dstW / 2, -dstH / 2, dstW, dstH);
-                                    } else if (img && box) {
-                                        ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW / 2, -dstH / 2, dstW, dstH);
-                                    }
-                                } else {
-                                    const frontBox = frameSet.front || frameSet.down || box;
-                                    const rearBox = frameSet.rear || frameSet.up || box;
-                                    const useBox = (facing === 'down') ? frontBox : (facing === 'up' ? rearBox : box);
-                                    if (sa._forcedBitmap && useBox) {
-                                        ctx.drawImage(sa._forcedBitmap, useBox.x, useBox.y, useBox.w, useBox.h, -dstW / 2, -dstH / 2, dstW, dstH);
-                                    } else if (img && useBox) {
-                                        ctx.drawImage(img, useBox.x, useBox.y, useBox.w, useBox.h, -dstW / 2, -dstH / 2, dstW, dstH);
-                                    } else if (sa._forcedBitmap) {
-                                        ctx.drawImage(sa._forcedBitmap, 0, 0, sa._forcedBitmap.width, sa._forcedBitmap.height, -dstW / 2, -dstH / 2, dstW, dstH);
-                                    }
-                                }
-
-                                if (game._debugSpriteBounds) {
-                                    ctx.strokeStyle = 'rgba(180,200,255,0.55)';
-                                    ctx.strokeRect(-drawW / 2, -drawH / 2, drawW, drawH);
-                                }
-                                ctx.restore();
-                                return;
+                            if (facing === 'left') {
+                                ctx.scale(-1, 1);
                             }
+
+                            if (sa._forcedBitmap && box) {
+                                ctx.drawImage(sa._forcedBitmap, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (img && box) {
+                                ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (sa._forcedBitmap) {
+                                ctx.drawImage(sa._forcedBitmap, 0, 0, sa._forcedBitmap.width, sa._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
+                            }
+                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(180,200,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            ctx.restore();
+                            return;
                         }
                         // Punk sprite override
                         if (enemy.type === 'Punk' && game.enemySprites && game.enemySprites.punk && game.enemySprites.punk.loaded) {
