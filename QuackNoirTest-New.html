@@ -10743,21 +10743,25 @@ function offerPermanentAbilityChoice() {
                     // Early placeholder so other code can reference the structure immediately
                     game.enemySprites.wunderswan = { image: wsImg, loaded: false };
 
-                    // Strict single-path load: load exactly assets/wunderswan.png
+                    // Strict single-path load: load exactly assets/wunderswan-sheet-1-30.png
                     wsImg.onload = function(ev) {
                         // Use the actual Image instance that fired the event (this / ev.target)
                         const img = (ev && ev.target) ? ev.target : this;
                         try {
                             game.enemySprites.wunderswan.loaded = true;
-                            const w = img.naturalWidth || img.width || 64;
-                            const h = img.naturalHeight || img.height || 64;
-                            game.enemySprites.wunderswan.frames = { down: box(0,0, w, h) };
-                            const refH = game.enemySprites.wunderswan.frames.down.h || 256;
+                            const atlas = {"frames":{"0":{"x":0,"y":0,"w":256,"h":256,"duration":1},"1":{"x":256,"y":0,"w":256,"h":256,"duration":1},"2":{"x":512,"y":0,"w":256,"h":256,"duration":1},"3":{"x":768,"y":0,"w":256,"h":256,"duration":1},"4":{"x":1024,"y":0,"w":256,"h":256,"duration":1},"5":{"x":1280,"y":0,"w":256,"h":256,"duration":1},"6":{"x":1536,"y":0,"w":256,"h":256,"duration":1},"7":{"x":1792,"y":0,"w":256,"h":256,"duration":1},"8":{"x":0,"y":256,"w":256,"h":256,"duration":1},"9":{"x":256,"y":256,"w":256,"h":256,"duration":1},"10":{"x":512,"y":256,"w":256,"h":256,"duration":1},"11":{"x":768,"y":256,"w":256,"h":256,"duration":1},"12":{"x":1024,"y":256,"w":256,"h":256,"duration":1},"13":{"x":1280,"y":256,"w":256,"h":256,"duration":1},"14":{"x":1536,"y":256,"w":256,"h":256,"duration":1},"15":{"x":1792,"y":256,"w":256,"h":256,"duration":1},"16":{"x":0,"y":512,"w":256,"h":256,"duration":1},"17":{"x":256,"y":512,"w":256,"h":256,"duration":1},"18":{"x":512,"y":512,"w":256,"h":256,"duration":1},"19":{"x":768,"y":512,"w":256,"h":256,"duration":1},"20":{"x":1024,"y":512,"w":256,"h":256,"duration":1},"21":{"x":1280,"y":512,"w":256,"h":256,"duration":1},"22":{"x":1536,"y":512,"w":256,"h":256,"duration":1},"23":{"x":1792,"y":512,"w":256,"h":256,"duration":1},"24":{"x":0,"y":768,"w":256,"h":256,"duration":1},"25":{"x":256,"y":768,"w":256,"h":256,"duration":1},"26":{"x":512,"y":768,"w":256,"h":256,"duration":1},"27":{"x":768,"y":768,"w":256,"h":256,"duration":1},"28":{"x":1024,"y":768,"w":256,"h":256,"duration":1},"29":{"x":1280,"y":768,"w":256,"h":256,"duration":1},"30":{"x":1536,"y":768,"w":256,"h":256,"duration":1},"31":{"x":1792,"y":768,"w":256,"h":256,"duration":1}},"meta":{"size":{"w":2048,"h":1024},"frame_size":{"w":256,"h":256},"background_mode":"spriteclean"}};
+                            const seq = [];
+                            for(let i=1; i<=30; i++){
+                                const frame = atlas.frames[i.toString()];
+                                if(frame) seq.push({x:frame.x, y:frame.y, w:frame.w, h:frame.h});
+                            }
+                            game.enemySprites.wunderswan.frames = { seq };
+                            game.enemySprites.wunderswan.anim = { frameStep: 8 };
+                            const refH = 256;
                             game.enemySprites.wunderswan.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
                             game.enemySprites.wunderswan.computeHitbox = (enemy)=> {
                                 const size = enemy.size; const scale = game.enemySprites.wunderswan.baseScaleForSize(size);
-                                const f = game.enemySprites.wunderswan.frames.down;
-                                const ww = f.w * scale; const hh = f.h * scale;
+                                const ww = 256 * scale; const hh = 256 * scale;
                                 const hitW = ww * 0.72; const hitH = hh * 0.78;
                                 return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + hh*0.06 };
                             };
@@ -10809,12 +10813,12 @@ function offerPermanentAbilityChoice() {
                     wsImg.onerror = function(ev) {
                         const img = (ev && ev.target) ? ev.target : this;
                         try {
-                            console.warn('[WunderswanSprite] failed to load assets/wunderswan.png', ev, img && img.src);
+                            console.warn('[WunderswanSprite] failed to load assets/wunderswan-sheet-1-30.png', ev, img && img.src);
                             // Try a single cache-busting retry in case a bad cached response or server glitch prevented a proper load
                             if (!game._wunderswan_retry) {
                                 game._wunderswan_retry = true;
                                 try {
-                                    const cb = 'assets/wunderswan.png?v=' + Date.now();
+                                    const cb = 'assets/wunderswan-sheet-1-30.png?v=' + Date.now();
                                     console.info('[WunderswanSprite] retrying with cache-bust:', cb);
                                     // If this handler was attached to a fresh image, prefer assigning the cached-bust to the shared loader image
                                     try { if (game.enemySprites && game.enemySprites.wunderswan && game.enemySprites.wunderswan.image) game.enemySprites.wunderswan.image.src = cb; else img.src = cb; } catch(_) { img.src = cb; }
@@ -10828,7 +10832,7 @@ function offerPermanentAbilityChoice() {
                     try {
                         // Prefer constructing with the document base so resolution matches page context
                         let resolvedUrl;
-                        try { resolvedUrl = new URL('assets/wunderswan.png', document.baseURI).href; } catch(_) { resolvedUrl = 'assets/wunderswan.png'; }
+                        try { resolvedUrl = new URL('assets/wunderswan-sheet-1-30.png', document.baseURI).href; } catch(_) { resolvedUrl = 'assets/wunderswan-sheet-1-30.png'; }
                         console.info('[WunderswanSprite] requesting', resolvedUrl);
                         wsImg.src = resolvedUrl;
                         // Try to detect accidental reassignment of the shared image reference by installing a watcher
@@ -29226,7 +29230,7 @@ function offerPermanentAbilityChoice() {
             if (game.renderEnemyProjectilesTop) game.renderEnemyProjectilesTop(ctx);
 
             // Forced Wunderswan overlay (defensive): if the asset image is loaded, draw it here
-            // This ensures the Wunderswan sprite from `assets/wunderswan.png` renders above other
+            // This ensures the Wunderswan sprite from `assets/wunderswan-sheet-1-30.png` renders above other
             // scene elements even if the normal override branch did not execute for timing reasons.
             try {
                 const ws = game && game.enemySprites && game.enemySprites.wunderswan;
@@ -29234,8 +29238,19 @@ function offerPermanentAbilityChoice() {
                     const boss = Array.isArray(game.enemies) && game.enemies.find(e => e && e.type === 'Wunderswan' && e.health > 0);
                     if (boss) {
                         const img = ws.image;
-                        const frameSet = ws.frames || (img && ((img.naturalWidth || img.width) > 0) ? { down: { x:0, y:0, w: img.naturalWidth || img.width, h: img.naturalHeight || img.height } } : null);
-                        const f = (frameSet && (frameSet.down || frameSet.right || frameSet.up)) || null;
+                        const frameSet = ws.frames;
+                        const seq = frameSet && frameSet.seq;
+                        let f = null;
+                        if (seq && seq.length) {
+                            const frameStep = (ws.anim && ws.anim.frameStep) || 8;
+                            const nowFrame = (game && typeof game.frame === 'number') ? game.frame : Math.floor(Date.now() / 16);
+                            if (typeof boss._wunderswanAnimSeed !== 'number') boss._wunderswanAnimSeed = nowFrame;
+                            const animTicks = Math.max(0, nowFrame - boss._wunderswanAnimSeed);
+                            let frameIdx = Math.floor(animTicks / frameStep) % seq.length;
+                            f = seq[frameIdx];
+                        } else {
+                            f = (frameSet && (frameSet.down || frameSet.right || frameSet.up)) || (img && ((img.naturalWidth || img.width) > 0) ? { x:0, y:0, w: img.naturalWidth || img.width, h: img.naturalHeight || img.height } : null);
+                        }
                         if (f && img) {
                             const size = boss.size || 180;
                             const scale = (typeof ws.baseScaleForSize === 'function') ? ws.baseScaleForSize(size) : ((size*2)/(f.h || 256));
@@ -29253,7 +29268,7 @@ function offerPermanentAbilityChoice() {
                             try {
                                 // Decide facing for drawing based on player position relative to boss center.
                                 const drawFacing = (game && game.player && typeof game.player.x === 'number') ? (game.player.x > boss.x ? 'right' : 'left') : (boss.facing || 'left');
-                                if (drawFacing === 'right') {
+                                if (drawFacing === 'left') {
                                     ctx.save();
                                     // Translate to the right edge of destination rect, flip X, draw at (0,0)
                                     ctx.translate(dx + drawW, dy);
