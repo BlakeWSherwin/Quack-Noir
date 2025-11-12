@@ -8566,6 +8566,7 @@ function offerPermanentAbilityChoice() {
     ENEMY_TYPES['2Honk Shakur'] = { health: 110, speed: 0.98, damage: 18, color: '#E2D8FF', size: 34, xp: 48, ranged: true, rangedCooldown: 2000, armor: 1, act: 'II' };
 
     // Act III ranged enemy: Cardi Beak (exclusive to Act III)
+    // Uses assets/swans/spritesheets/cardibeak-sheet.png. Spritesheet with 8 columns, 4 rows, 32 frames, using all frames. Default side faces right; left is mirrored.
     // Stats chosen as a mid-tier Act III ranged grunt. Assumptions: health/speed/size tuned relative to other ranged grunts.
     ENEMY_TYPES['Cardi Beak'] = { health: 180, speed: 0.78, damage: 22, color: '#FF77AA', size: 42, xp: 220, ranged: true, rangedCooldown: 1400, armor: 2, act: 'III' };
 
@@ -10890,74 +10891,63 @@ function offerPermanentAbilityChoice() {
                 if (!game.enemySprites.cardiBeak) {
                     const cbImg = new Image();
                     // Use provided asset path
-                    cbImg.src = 'assets/swans/cardibeak.png';
+                    cbImg.src = 'assets/swans/spritesheets/cardibeak-sheet.png';
                     game.enemySprites.cardiBeak = { image: cbImg, loaded: false };
+                    const atlasFrames = [
+                        {"x":0,"y":0,"w":256,"h":256,"duration":1},
+                        {"x":256,"y":0,"w":256,"h":256,"duration":1},
+                        {"x":512,"y":0,"w":256,"h":256,"duration":1},
+                        {"x":768,"y":0,"w":256,"h":256,"duration":1},
+                        {"x":1024,"y":0,"w":256,"h":256,"duration":1},
+                        {"x":1280,"y":0,"w":256,"h":256,"duration":1},
+                        {"x":1536,"y":0,"w":256,"h":256,"duration":1},
+                        {"x":1792,"y":0,"w":256,"h":256,"duration":1},
+                        {"x":0,"y":256,"w":256,"h":256,"duration":1},
+                        {"x":256,"y":256,"w":256,"h":256,"duration":1},
+                        {"x":512,"y":256,"w":256,"h":256,"duration":1},
+                        {"x":768,"y":256,"w":256,"h":256,"duration":1},
+                        {"x":1024,"y":256,"w":256,"h":256,"duration":1},
+                        {"x":1280,"y":256,"w":256,"h":256,"duration":1},
+                        {"x":1536,"y":256,"w":256,"h":256,"duration":1},
+                        {"x":1792,"y":256,"w":256,"h":256,"duration":1},
+                        {"x":0,"y":512,"w":256,"h":256,"duration":1},
+                        {"x":256,"y":512,"w":256,"h":256,"duration":1},
+                        {"x":512,"y":512,"w":256,"h":256,"duration":1},
+                        {"x":768,"y":512,"w":256,"h":256,"duration":1},
+                        {"x":1024,"y":512,"w":256,"h":256,"duration":1},
+                        {"x":1280,"y":512,"w":256,"h":256,"duration":1},
+                        {"x":1536,"y":512,"w":256,"h":256,"duration":1},
+                        {"x":1792,"y":512,"w":256,"h":256,"duration":1},
+                        {"x":0,"y":768,"w":256,"h":256,"duration":1},
+                        {"x":256,"y":768,"w":256,"h":256,"duration":1},
+                        {"x":512,"y":768,"w":256,"h":256,"duration":1},
+                        {"x":768,"y":768,"w":256,"h":256,"duration":1},
+                        {"x":1024,"y":768,"w":256,"h":256,"duration":1},
+                        {"x":1280,"y":768,"w":256,"h":256,"duration":1},
+                        {"x":1536,"y":768,"w":256,"h":256,"duration":1},
+                        {"x":1792,"y":768,"w":256,"h":256,"duration":1}
+                    ];
                     function box(x1,y1,x2,y2){ return { x:x1, y:y1, w:(x2 - x1), h:(y2 - y1) }; }
                     cbImg.onload = function(ev) {
                         const img = (ev && ev.target) ? ev.target : this;
                         try {
                             game.enemySprites.cardiBeak.loaded = true;
-                            // Provided bounding: Front: 10,12 -> 438,498 ; Rear: 483,9 -> 940,488 ; Side: 942,2 -> 1428,489
-                            game.enemySprites.cardiBeak.frames = {
-                                down: box(10,12,438,498),
-                                up:   box(483,9,940,488),
-                                right:box(942,2,1428,489)
-                            };
-                            // Provide alternate naming used by designers: front/rear/side
-                            try {
-                                const fs = game.enemySprites.cardiBeak.frames;
-                                fs.front = fs.down;
-                                fs.rear = fs.up;
-                                fs.side = fs.right;
-                            } catch(_) {}
-                            // Default side sprite faces right. Create preflipped left/right canvases to ensure renderer can draw directly.
-                            try {
-                                const rf = game.enemySprites.cardiBeak.frames.right;
-                                if (rf && img && img.naturalWidth && img.naturalHeight && typeof document !== 'undefined') {
-                                    // Create RIGHT canvas as the original unflipped side crop, then derive LEFT as a mirrored copy
-                                    try {
-                                        const rightC = document.createElement('canvas'); rightC.width = rf.w; rightC.height = rf.h;
-                                        const rc = rightC.getContext('2d'); rc.imageSmoothingEnabled = true;
-                                        rc.drawImage(img, rf.x, rf.y, rf.w, rf.h, 0, 0, rf.w, rf.h);
-
-                                        const leftC = document.createElement('canvas'); leftC.width = rf.w; leftC.height = rf.h;
-                                        const lc = leftC.getContext('2d'); lc.imageSmoothingEnabled = true;
-                                        // Mirror the already-drawn RIGHT canvas into LEFT to avoid drawing source twice/flipped order issues
-                                        lc.translate(leftC.width, 0); lc.scale(-1, 1);
-                                        lc.drawImage(rightC, 0, 0);
-
-                                        try { game.enemySprites.cardiBeak._rightCanvas = rightC; } catch(_){ }
-                                        try { game.enemySprites.cardiBeak._leftCanvas = leftC; } catch(_){ }
-                                        try { game.enemySprites.cardiBeak.frames.right = { x:0,y:0,w:rightC.width,h:rightC.height }; } catch(_){ }
-                                        try { game.enemySprites.cardiBeak.frames.left = { x:0,y:0,w:leftC.width,h:leftC.height }; } catch(_){ }
-                                    } catch(e) { console.warn('[CardiBeakSprite][preflip] failed', e); }
-                                    // Keep front/rear/side aliases in sync with any canvas-based frame replacements
-                                    try {
-                                        const fs = game.enemySprites.cardiBeak.frames;
-                                        fs.front = fs.front || fs.down;
-                                        fs.rear = fs.rear || fs.up;
-                                        fs.side = fs.side || fs.right;
-                                    } catch(_) {}
-                                }
-                            } catch(_){}
-
-                            const refH = game.enemySprites.cardiBeak.frames.down.h || 256;
+                            game.enemySprites.cardiBeak.frames = { seq: atlasFrames };
+                            game.enemySprites.cardiBeak.anim = { frameStep: 8 };
+                            const refH = 256;
                             game.enemySprites.cardiBeak.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
                             game.enemySprites.cardiBeak.computeHitbox = (enemy)=> {
                                 const size = enemy.size; const scale = game.enemySprites.cardiBeak.baseScaleForSize(size);
-                                // Prefer explicit 'front' frame if present (designer naming), fall back to down
-                                const f = (game.enemySprites.cardiBeak.frames.front || game.enemySprites.cardiBeak.frames.down);
-                                const w = f.w * scale; const h = f.h * scale;
-                                // Tight hitbox to core body area
+                                const w = 256 * scale; const h = 256 * scale;
                                 const hitW = w * 0.64;
                                 const hitH = h * 0.68;
                                 return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
                             };
-                            console.info('[CardiBeakSprite] Loaded cardibeak.png', game.enemySprites.cardiBeak.frames);
+                            console.info('[CardiBeakSprite] Loaded cardibeak spritesheet', game.enemySprites.cardiBeak.frames);
                         } catch(e) { console.warn('[CardiBeakSprite] onload error', e); }
                     };
                     cbImg.onerror = function(ev){ try { console.warn('[CardiBeakSprite] failed to load', ev, cbImg && cbImg.src); } catch(_){} };
-                    try { const resolved = (new URL('assets/swans/cardibeak.png', document.baseURI)).href; cbImg.src = resolved;
+                    try { const resolved = (new URL('assets/swans/spritesheets/cardibeak-sheet.png', document.baseURI)).href; cbImg.src = resolved;
                         // Defensive fetch->ImageBitmap fallback: some contexts (file://, odd CORS, or decoding glitches)
                         // can leave Image incomplete. Try a fetch->blob->createImageBitmap path after a short delay
                         setTimeout(function(){
@@ -10973,23 +10963,18 @@ function offerPermanentAbilityChoice() {
                                                     if (game && game.enemySprites && game.enemySprites.cardiBeak) {
                                                         const cb = game.enemySprites.cardiBeak;
                                                         cb._forcedBitmap = bitmap;
-                                                        // Ensure frames exist even if original Image onload never fired
-                                                        function box(x1,y1,x2,y2){ return { x:x1, y:y1, w:(x2 - x1), h:(y2 - y1) }; }
-                                                        cb.frames = cb.frames || {};
-                                                        cb.frames.down = cb.frames.down || box(10,12,438,498);
-                                                        cb.frames.up = cb.frames.up || box(483,9,940,488);
-                                                        cb.frames.right = cb.frames.right || box(942,2,1428,489);
+                                                        cb.frames = { seq: atlasFrames };
+                                                        cb.anim = { frameStep: 8 };
                                                         // Maintain front/rear/side aliases for consistency with primary loader
                                                         try { cb.frames.front = cb.frames.front || cb.frames.down; } catch(_){}
                                                         try { cb.frames.rear = cb.frames.rear || cb.frames.up; } catch(_){}
                                                         try { cb.frames.side = cb.frames.side || cb.frames.right; } catch(_){}
                                                         // Provide baseScale and computeHitbox so renderer can size and align
-                                                        const refH = cb.frames.down.h || 256;
+                                                        const refH = 256;
                                                         cb.baseScaleForSize = cb.baseScaleForSize || ((enemySize)=> ((enemySize*2)/refH));
                                                         cb.computeHitbox = cb.computeHitbox || (enemy=>{
                                                             const size = enemy.size; const scale = cb.baseScaleForSize(size);
-                                                            const f = cb.frames.down;
-                                                            const w = f.w * scale; const h = f.h * scale;
+                                                            const w = 256 * scale; const h = 256 * scale;
                                                             const hitW = w * 0.64;
                                                             const hitH = h * 0.68;
                                                             return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
@@ -26275,66 +26260,38 @@ function offerPermanentAbilityChoice() {
                             }
                         }
                         // Cardi Beak sprite override (Act III ranged)
-                        if (enemy.type === 'Cardi Beak' && game.enemySprites && game.enemySprites.cardiBeak && (game.enemySprites.cardiBeak.loaded || game.enemySprites.cardiBeak._forcedBitmap || game.enemySprites.cardiBeak._leftCanvas)) {
+                        if (enemy.type === 'Cardi Beak' && game.enemySprites && game.enemySprites.cardiBeak && (game.enemySprites.cardiBeak.loaded || game.enemySprites.cardiBeak._forcedBitmap)) {
                             const cb = game.enemySprites.cardiBeak;
-                            const frameSet = cb.frames || {};
-                            let facing = enemy.facing || 'down';
-                            let box = frameSet[facing];
+                            const { seq } = cb.frames || {};
+                            const { frameStep } = cb.anim || {};
+                            const playerX = game.player ? game.player.x : 0;
+                            const facing = (playerX < enemy.x) ? 'left' : 'right';
+                            const animTicks = Math.floor(game.frame / (frameStep || 8));
+                            const box = seq ? seq[animTicks % seq.length] : null;
                             const img = cb.image;
-                            const leftCanvas = cb._leftCanvas;
-                            const rightCanvas = cb._rightCanvas;
                             const size = enemy.size;
-                            const scale = cb.baseScaleForSize ? cb.baseScaleForSize(size) : ((size*2)/(box?box.h:1));
-                            if (!box) {
-                                if (facing === 'left' && frameSet.right) box = frameSet.right; else box = frameSet.down || frameSet.right || frameSet.up;
-                            }
-                            // Compute draw dims using either frame box or bitmap/natural size
-                            const srcW = (box && box.w) ? box.w : (cb._forcedBitmap ? cb._forcedBitmap.width : (img && (img.naturalWidth || img.width)) || enemy.size*2);
-                            const srcH = (box && box.h) ? box.h : (cb._forcedBitmap ? cb._forcedBitmap.height : (img && (img.naturalHeight || img.height)) || enemy.size*2);
+                            const scale = cb.baseScaleForSize ? cb.baseScaleForSize(size) : ((size*2)/256);
+                            const srcW = (box && box.w) ? box.w : (cb._forcedBitmap ? cb._forcedBitmap.width : (img && (img.naturalWidth || img.width)) || size*2);
+                            const srcH = (box && box.h) ? box.h : (cb._forcedBitmap ? cb._forcedBitmap.height : (img && (img.naturalHeight || img.height)) || size*2);
                             const drawW = srcW * scale;
                             const drawH = srcH * scale;
 
                             ctx.save(); ctx.translate(enemy.x, enemy.y);
-                            // Prefer integer destination sizes/positions to avoid subpixel jitter/artifacts
                             if (typeof ctx.imageSmoothingEnabled !== 'undefined') try{ ctx.imageSmoothingEnabled = true; } catch(_){ }
-                            // Prevent procedural fallback from drawing underneath while sprite exists
                             try { if (enemy) enemy._noFallback = true; } catch(_){ }
-                            // Draw according to the precise facing: left/right use side canvases; up/down use respective frames
                             const dstW = Math.max(1, Math.round(drawW));
                             const dstH = Math.max(1, Math.round(drawH));
+
                             if (facing === 'left') {
-                                if (leftCanvas) {
-                                    ctx.drawImage(leftCanvas, 0, 0, leftCanvas.width, leftCanvas.height, -dstW/2, -dstH/2, dstW, dstH);
-                                } else if (cb._forcedBitmap) {
-                                    // mirror bitmap when drawing left
-                                    try { ctx.scale(-1,1); ctx.drawImage(cb._forcedBitmap, (box?box.x:0), (box?box.y:0), (box?box.w:cb._forcedBitmap.width), (box?box.h:cb._forcedBitmap.height), -Math.round(dstW/2), -Math.round(dstH/2), dstW, dstH); } catch(_){ }
-                                } else if (frameSet.right && img) {
-                                    // source right frame is the side image; mirror it for left facing
-                                    ctx.scale(-1,1);
-                                    ctx.drawImage(img, (frameSet.right.x), (frameSet.right.y), frameSet.right.w, frameSet.right.h, -dstW/2, -dstH/2, dstW, dstH);
-                                } else if (img && box) {
-                                    ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
-                                }
-                            } else if (facing === 'right') {
-                                if (rightCanvas) {
-                                    ctx.drawImage(rightCanvas, 0, 0, rightCanvas.width, rightCanvas.height, -dstW/2, -dstH/2, dstW, dstH);
-                                } else if (cb._forcedBitmap) {
-                                    try { ctx.drawImage(cb._forcedBitmap, (box?box.x:0), (box?box.y:0), (box?box.w:cb._forcedBitmap.width), (box?box.h:cb._forcedBitmap.height), -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                } else if (img && frameSet.right) {
-                                    ctx.drawImage(img, frameSet.right.x, frameSet.right.y, frameSet.right.w, frameSet.right.h, -dstW/2, -dstH/2, dstW, dstH);
-                                } else if (img && box) {
-                                    ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
-                                }
-                            } else {
-                                // up/down (front/rear) should use the explicit frame box (down/up) and not the side canvas
-                                if (cb._forcedBitmap && box) {
-                                    try { ctx.drawImage(cb._forcedBitmap, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                } else if (img && box) {
-                                    ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
-                                } else if (cb._forcedBitmap) {
-                                    // fallback to drawing full bitmap if no box available
-                                    try { ctx.drawImage(cb._forcedBitmap, 0, 0, cb._forcedBitmap.width, cb._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
-                                }
+                                ctx.scale(-1, 1);
+                            }
+
+                            if (cb._forcedBitmap && box) {
+                                ctx.drawImage(cb._forcedBitmap, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (img && box) {
+                                ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (cb._forcedBitmap) {
+                                ctx.drawImage(cb._forcedBitmap, 0, 0, cb._forcedBitmap.width, cb._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
                             }
                             if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(200,180,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                             ctx.restore();
