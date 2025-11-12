@@ -10078,9 +10078,14 @@ function offerPermanentAbilityChoice() {
                             const scale = container.baseScaleForSize(size);
                             const visibleW = container.maxVisibleWidth || container.referenceWidth || container.preparedWidth || 1;
                             const visibleH = container.maxVisibleHeight || container.referenceHeight || container.preparedHeight || 1;
+                            const scaledH = visibleH * scale;
+                            const baselineRatio = (typeof container.baselineRatio === 'number') ? container.baselineRatio : 1;
                             const hitW = (visibleW * scale) * 0.56;
                             const hitH = (visibleH * scale) * 0.62;
-                            return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + (visibleH * scale) * 0.08 };
+                            // Position hitbox using same baseline offset as sprite rendering
+                            const baselineOffset = -scaledH * baselineRatio;
+                            const hitboxCenterY = baselineOffset + scaledH * 0.5;
+                            return { w: hitW, h: hitH, ox: -hitW/2, oy: hitboxCenterY - hitH/2 };
                         };
                         container.image = gangsterImg;
                         console.info('[GangsterSprite] Loaded gunduck1-sheet.png', { frames: frames.length, preparedWidth, preparedHeight, refVisibleH, refVisibleW });
@@ -10196,28 +10201,45 @@ function offerPermanentAbilityChoice() {
             // === Boss Thug enemy sprite sheet ===
             if (!game.enemySprites.bossThug) {
                 const bossImg = new Image();
-                bossImg.src = 'assets/KnifeBoss.png';
+                bossImg.src = 'assets/knifeboss-sheet.png';
                 game.enemySprites.bossThug = { image: bossImg, loaded: false };
                 bossImg.onload = () => {
                     game.enemySprites.bossThug.loaded = true;
-                    function box(x1,y1,x2,y2){ return { x:x1, y:y1, w:(x2 - x1), h:(y2 - y1) }; }
-                    game.enemySprites.bossThug.frames = {
-                        down: box(0,146,520,880),
-                        up: box(523,152,963,872),
-                        right: box(965,150,1533,873)
-                    };
-                    const refH = game.enemySprites.bossThug.frames.down.h;
-                    game.enemySprites.bossThug.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
-                    game.enemySprites.bossThug.computeHitbox = (enemy)=> {
-                        const size = enemy.size; const scale = game.enemySprites.bossThug.baseScaleForSize(size);
-                        const f = game.enemySprites.bossThug.frames.down;
-                        const w = f.w * scale; const h = f.h * scale;
-                        const hitW = w * 0.72; // bigger boss core
-                        const hitH = h * 0.76; // taller torso hit area
+                    const atlas = {"frames":{"0":{"x":0,"y":0,"w":256,"h":256,"duration":1},"1":{"x":256,"y":0,"w":256,"h":256,"duration":1},"2":{"x":512,"y":0,"w":256,"h":256,"duration":1},"3":{"x":768,"y":0,"w":256,"h":256,"duration":1},"4":{"x":1024,"y":0,"w":256,"h":256,"duration":1},"5":{"x":1280,"y":0,"w":256,"h":256,"duration":1},"6":{"x":1536,"y":0,"w":256,"h":256,"duration":1},"7":{"x":1792,"y":0,"w":256,"h":256,"duration":1},"8":{"x":0,"y":256,"w":256,"h":256,"duration":1},"9":{"x":256,"y":256,"w":256,"h":256,"duration":1},"10":{"x":512,"y":256,"w":256,"h":256,"duration":1},"11":{"x":768,"y":256,"w":256,"h":256,"duration":1},"12":{"x":1024,"y":256,"w":256,"h":256,"duration":1},"13":{"x":1280,"y":256,"w":256,"h":256,"duration":1},"14":{"x":1536,"y":256,"w":256,"h":256,"duration":1},"15":{"x":1792,"y":256,"w":256,"h":256,"duration":1},"16":{"x":0,"y":512,"w":256,"h":256,"duration":1},"17":{"x":256,"y":512,"w":256,"h":256,"duration":1},"18":{"x":512,"y":512,"w":256,"h":256,"duration":1},"19":{"x":768,"y":512,"w":256,"h":256,"duration":1},"20":{"x":1024,"y":512,"w":256,"h":256,"duration":1},"21":{"x":1280,"y":512,"w":256,"h":256,"duration":1},"22":{"x":1536,"y":512,"w":256,"h":256,"duration":1},"23":{"x":1792,"y":512,"w":256,"h":256,"duration":1},"24":{"x":0,"y":768,"w":256,"h":256,"duration":1},"25":{"x":256,"y":768,"w":256,"h":256,"duration":1},"26":{"x":512,"y":768,"w":256,"h":256,"duration":1},"27":{"x":768,"y":768,"w":256,"h":256,"duration":1},"28":{"x":1024,"y":768,"w":256,"h":256,"duration":1},"29":{"x":1280,"y":768,"w":256,"h":256,"duration":1},"30":{"x":1536,"y":768,"w":256,"h":256,"duration":1},"31":{"x":1792,"y":768,"w":256,"h":256,"duration":1}},"meta":{"size":{"w":2048,"h":1024},"frame_size":{"w":256,"h":256},"background_mode":"spriteclean"}};
+                    const frames = [];
+                    for (let i = 0; i <= 31; i++) {
+                        frames.push(atlas.frames[i.toString()]);
+                    }
+                    const container = game.enemySprites.bossThug;
+                    container.frames = frames;
+                    const makeSequence = (id, seqFrames, options)=> ({
+                        frames: seqFrames,
+                        frameStep: options.frameStep || 5,
+                        mirrorX: options.mirrorX || false,
+                        source: options.source || null,
+                        id: id
+                    });
+                    const rightSequence = makeSequence('right', frames, { frameStep: 5 });
+                    const leftSequence = makeSequence('left', frames, { frameStep: 5, mirrorX: true, source: 'right' });
+                    container.animations = { right: rightSequence, left: leftSequence };
+                    container.defaultAnimation = rightSequence;
+                    container.anim = { sequence: frames, frameStep: 5 };
+                    container.animFrameStep = 5;
+                    const refH = 256;
+                    container.referenceHeight = refH;
+                    container.referenceWidth = 256;
+                    container.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
+                    container.computeHitbox = (enemy)=> {
+                        const size = enemy.size; const scale = container.baseScaleForSize(size);
+                        const w = 256 * scale; const h = 256 * scale;
+                        const hitW = w * 0.72;
+                        const hitH = h * 0.76;
                         return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.05 };
                     };
-                    console.info('[BossThugSprite] Loaded KnifeBoss.png', game.enemySprites.bossThug.frames);
+                    container.image = bossImg;
+                    console.info('[BossThugSprite] Loaded knifeboss-sheet.png', { frames: frames.length });
                 };
+                bossImg.onerror = (ev)=> { try { console.warn('[BossThugSprite] failed to load assets/knifeboss-sheet.png', ev); } catch(_){} };
             }
 
                 // === Big Bill (Act II boss) sprite sheet ===
@@ -17136,9 +17158,26 @@ function offerPermanentAbilityChoice() {
                     };
                     shots.forEach(s => {
                         // Pass through beam/weakHoming flags to spawnProjectile so the SoA object contains them
+                        let projX = enemy.x;
+                        let projY = enemy.y;
+                        
+                        // For Gangster and Boss Gangster, offset bullet spawn to gun position
+                        if (enemy.type === 'Gangster' || enemy.type === 'Boss Gangster') {
+                            const gunOffsetX = 20; // pixels to the right (accounting for mirroring)
+                            const gunOffsetY = -8; // slightly above feet (gun is roughly at center-chest)
+                            
+                            // Determine if facing left for mirroring
+                            const playerX = (game && game.player && typeof game.player.x === 'number') ? game.player.x : null;
+                            const facingLeft = playerX !== null && playerX < enemy.x;
+                            
+                            // Apply offset based on facing direction
+                            projX = enemy.x + (facingLeft ? -gunOffsetX : gunOffsetX);
+                            projY = enemy.y + gunOffsetY;
+                        }
+                        
                         const projArgs = {
-                            x: enemy.x,
-                            y: enemy.y,
+                            x: projX,
+                            y: projY,
                             vx: s.vx,
                             vy: s.vy,
                             life: 140,
@@ -25921,8 +25960,16 @@ function offerPermanentAbilityChoice() {
                             const vy = (typeof enemy.vy === 'number') ? enemy.vy : ((typeof enemy.velY === 'number') ? enemy.velY : (typeof enemy.velocityY === 'number' ? enemy.velocityY : 0));
                             const rawFacing = (enemy.facing && typeof enemy.facing === 'string') ? enemy.facing.toLowerCase() : '';
                             let facing = rawFacing;
+                            // Determine facing based on player position (for horizontal) and velocity (for vertical)
+                            let playerX = (game && game.player && typeof game.player.x === 'number') ? game.player.x : null;
+                            let horizontalFacing = null;
+                            if (playerX !== null) {
+                                horizontalFacing = playerX < enemy.x ? 'left' : 'right';
+                            }
                             if (!facing || facing === 'idle') {
-                                if (Math.abs(vx) >= Math.abs(vy) && Math.abs(vx) > 0.05) {
+                                if (horizontalFacing) {
+                                    facing = horizontalFacing;
+                                } else if (Math.abs(vx) >= Math.abs(vy) && Math.abs(vx) > 0.05) {
                                     facing = vx < 0 ? 'left' : 'right';
                                 } else if (vy < -0.05) {
                                     facing = 'up';
@@ -25931,14 +25978,18 @@ function offerPermanentAbilityChoice() {
                                 }
                             }
                             if (facing === 'down' || facing === 'up') {
-                                if (Math.abs(vx) > 0.05) {
+                                if (horizontalFacing) {
+                                    facing = horizontalFacing;
+                                } else if (Math.abs(vx) > 0.05) {
                                     facing = vx < 0 ? 'left' : 'right';
                                 } else if (typeof enemy._gangsterLastHorizontalFacing === 'string') {
                                     facing = enemy._gangsterLastHorizontalFacing;
                                 }
                             }
                             if (facing !== 'left' && facing !== 'right') {
-                                if (Math.abs(vx) > 0.05) {
+                                if (horizontalFacing) {
+                                    facing = horizontalFacing;
+                                } else if (Math.abs(vx) > 0.05) {
                                     facing = vx < 0 ? 'left' : 'right';
                                 } else {
                                     facing = (typeof enemy._gangsterLastHorizontalFacing === 'string') ? enemy._gangsterLastHorizontalFacing : 'right';
@@ -26013,25 +26064,22 @@ function offerPermanentAbilityChoice() {
                                 const drawW = preparedWidth * baseScale;
                                 const drawH = preparedHeight * baseScale;
                                 const anchorBaseX = (typeof frame.anchorRatioX === 'number') ? frame.anchorRatioX : (typeof gs.anchorRatioX === 'number' ? gs.anchorRatioX : 0.5);
-                                const anchorRefX = (!applyFlip && mirrorSequence)
-                                    ? (typeof frame.mirrorAnchorRatioX === 'number' ? frame.mirrorAnchorRatioX : (1 - anchorBaseX))
-                                    : anchorBaseX;
                                 const baselineRefY = (typeof frame.baselineRatio === 'number') ? frame.baselineRatio : (typeof gs.baselineRatio === 'number' ? gs.baselineRatio : 1);
-                                const destX = -drawW * anchorRefX;
+                                let destX = -drawW * anchorBaseX;
                                 const destY = -drawH * baselineRefY;
                                 ctx.save();
                                 ctx.translate(enemy.x, enemy.y);
                                 if (applyFlip) {
                                     ctx.scale(-1, 1);
+                                    destX = drawW * anchorBaseX;
                                 }
-                                const drawX = applyFlip ? (-(destX + drawW)) : destX;
                                 const sourceImage = preparedSource || gs.image;
                                 const srcX = preparedSource ? 0 : frame.sourceX;
                                 const srcY = preparedSource ? 0 : frame.sourceY;
                                 const srcW = preparedSource ? preparedWidth : frame.w;
                                 const srcH = preparedSource ? preparedHeight : frame.h;
-                                ctx.drawImage(sourceImage, srcX, srcY, srcW, srcH, drawX, destY, drawW, drawH);
-                                if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(0,255,255,0.55)'; ctx.strokeRect(drawX, destY, drawW, drawH); }
+                                ctx.drawImage(sourceImage, srcX, srcY, srcW, srcH, destX, destY, drawW, drawH);
+                                if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(0,255,255,0.55)'; ctx.strokeRect(destX, destY, drawW, drawH); }
                                 ctx.restore();
                                 try { enemy._noFallback = true; } catch(_) {}
                                 return;
@@ -26861,29 +26909,44 @@ function offerPermanentAbilityChoice() {
                         }
                         // Boss Thug sprite override
                         if (enemy.type === 'Boss Thug' && game.enemySprites && game.enemySprites.bossThug && game.enemySprites.bossThug.loaded) {
-                            const bs = game.enemySprites.bossThug;
-                            const frameSet = bs.frames;
-                            let facing = enemy.facing || 'down';
-                            let box = frameSet[facing];
-                            const img = bs.image;
+                            const ts = game.enemySprites.bossThug;
+                            const animations = ts.animations;
+                            // Determine facing based on player's position relative to enemy's center
+                            const playerX = (game && game.player) ? game.player.x : 0;
+                            let facing = playerX < enemy.x ? 'left' : 'right';
+                            const img = ts.image;
                             const size = enemy.size;
-                            const scale = bs.baseScaleForSize ? bs.baseScaleForSize(size) : ((size*2)/(box?box.h:1));
-                            if (!box) {
-                                if (facing === 'left' && frameSet.right) box = frameSet.right; else box = frameSet.down || frameSet.right || frameSet.up;
+                            const scale = ts.baseScaleForSize ? ts.baseScaleForSize(size) : ((size*2)/256);
+                            // Get sequence
+                            let sequenceEntry = null;
+                            if (animations && animations[facing]) {
+                                sequenceEntry = animations[facing];
+                            } else if (facing === 'left' && animations && animations.right) {
+                                sequenceEntry = animations.right;
+                            } else {
+                                sequenceEntry = ts.defaultAnimation || (ts.anim && ts.anim.sequence ? { frames: ts.anim.sequence, frameStep: ts.anim.frameStep || 5 } : null);
                             }
-                            if (box && img) {
-                                const drawW = box.w * scale;
-                                const drawH = box.h * scale;
-                                ctx.save(); ctx.translate(enemy.x, enemy.y);
-                                if (facing === 'left') {
-                                    if (frameSet.right) { ctx.scale(-1,1); ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH); }
-                                    else { ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH); }
-                                } else {
+                            if (sequenceEntry && sequenceEntry.frames && sequenceEntry.frames.length) {
+                                const framesForSequence = sequenceEntry.frames;
+                                const mirrorSequence = sequenceEntry.mirrorX === true;
+                                const nowFrame = (game && typeof game.frame === 'number') ? game.frame : Math.floor(Date.now() / 16);
+                                const frameStep = Math.max(1, sequenceEntry.frameStep || ts.animFrameStep || 5);
+                                const sequenceLength = framesForSequence.length;
+                                const frameIndex = Math.floor(nowFrame / frameStep) % sequenceLength;
+                                const box = framesForSequence[frameIndex];
+                                if (box && img) {
+                                    const drawW = box.w * scale;
+                                    const drawH = box.h * scale;
+                                    ctx.save();
+                                    ctx.translate(enemy.x, enemy.y);
+                                    if (mirrorSequence && facing === 'left') {
+                                        ctx.scale(-1, 1);
+                                    }
                                     ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
+                                    if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(170,90,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                                    ctx.restore();
+                                    return;
                                 }
-                                if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(170,90,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
-                                ctx.restore();
-                                return;
                             }
                         }
 
@@ -27839,7 +27902,16 @@ function offerPermanentAbilityChoice() {
                 if (enemy.health < enemy.maxHealth && enemy.maxHealth > 0) {
                     const barWidth = enemy.size + 10;
                     const barHeight = 4;
-                    const barY = enemy.y - enemy.size/2 - 8;
+                    // Gangster sprites need special positioning due to their visual bounds
+                    let barY = enemy.y - enemy.size/2 - 8;
+                    if (enemy.type === 'Gangster' && game.enemySprites && game.enemySprites.gangster) {
+                        const gs = game.enemySprites.gangster;
+                        const scale = gs.baseScaleForSize ? gs.baseScaleForSize(enemy.size) : 1;
+                        const visibleH = (gs.maxVisibleHeight || gs.referenceHeight || gs.preparedHeight || 1);
+                        const scaledH = visibleH * scale;
+                        // Position bar well above the sprite's visual top (head level)
+                        barY = enemy.y - scaledH/2 - 24;
+                    }
                     // Clamp ratio to [0,1] to avoid flash expansion when health dips below 0 or state mutates on death
                     let ratio = enemy.health / enemy.maxHealth;
                     if (!isFinite(ratio)) ratio = 0; // safeguard
