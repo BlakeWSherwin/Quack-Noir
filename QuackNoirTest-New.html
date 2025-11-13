@@ -9027,200 +9027,41 @@ function offerPermanentAbilityChoice() {
                 enfImg.src = 'assets/enforcer-sheet.png';
                 game.enemySprites.enforcer = { image: enfImg, loaded: false };
                 enfImg.onload = () => {
-                    const container = game.enemySprites.enforcer;
-                    container.loaded = true;
-                    try {
-                        const sheetW = enfImg.naturalWidth || enfImg.width || 0;
-                        const sheetH = enfImg.naturalHeight || enfImg.height || 0;
-                        if (!sheetW || !sheetH) {
-                            console.warn('[EnforcerSprite] enforcer-sheet.png has zero size');
-                            return;
-                        }
-                        const cols = 8;
-                        const rows = 4;
-                        const cellW = Math.floor(sheetW / cols);
-                        const cellH = Math.floor(sheetH / rows);
-                        const totalFrames = cols * rows;
-                        const clamp01 = (value) => Math.max(0, Math.min(1, value));
-                        const trimPadding = 2;
-                        const rawFrames = Array.from({ length: totalFrames }, (_, index) => {
-                            const col = index % cols;
-                            const row = Math.floor(index / cols);
-                            return {
-                                index,
-                                row,
-                                col,
-                                x: col * cellW,
-                                y: row * cellH,
-                                w: cellW,
-                                h: cellH
-                            };
-                        });
-                        const tempCanvas = document.createElement('canvas');
-                        tempCanvas.width = cellW;
-                        tempCanvas.height = cellH;
-                        const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
-                        if (!tempCtx) {
-                            console.warn('[EnforcerSprite] temp canvas failed to create 2d context');
-                            return;
-                        }
-                        tempCtx.imageSmoothingEnabled = false;
-                        const processed = rawFrames.map(frame => {
-                            tempCtx.clearRect(0, 0, cellW, cellH);
-                            tempCtx.drawImage(enfImg, frame.x, frame.y, frame.w, frame.h, 0, 0, cellW, cellH);
-                            let minX = cellW;
-                            let minY = cellH;
-                            let maxX = -1;
-                            let maxY = -1;
-                            try {
-                                const imageData = tempCtx.getImageData(0, 0, cellW, cellH);
-                                const data = imageData.data;
-                                for (let y = 0; y < cellH; y++) {
-                                    for (let x = 0; x < cellW; x++) {
-                                        const alpha = data[(y * cellW + x) * 4 + 3];
-                                        if (alpha > 10) {
-                                            if (x < minX) minX = x;
-                                            if (x > maxX) maxX = x;
-                                            if (y < minY) minY = y;
-                                            if (y > maxY) maxY = y;
-                                        }
-                                    }
-                                }
-                            } catch (sampleErr) {
-                                console.warn('[EnforcerSprite] getImageData failed', sampleErr);
-                            }
-                            if (maxX < minX || maxY < minY) {
-                                minX = 0;
-                                minY = 0;
-                                maxX = cellW - 1;
-                                maxY = cellH - 1;
-                            } else {
-                                minX = Math.max(0, minX - trimPadding);
-                                minY = Math.max(0, minY - trimPadding);
-                                maxX = Math.min(cellW - 1, maxX + trimPadding);
-                                maxY = Math.min(cellH - 1, maxY + trimPadding);
-                            }
-                            const trimmedWidth = (maxX - minX) + 1;
-                            const trimmedHeight = (maxY - minY) + 1;
-                            return Object.assign({}, frame, {
-                                offsetX: minX,
-                                offsetY: minY,
-                                w: trimmedWidth,
-                                h: trimmedHeight,
-                                sourceX: frame.x + minX,
-                                sourceY: frame.y + minY
-                            });
-                        });
-                        const minOffsetX = processed.reduce((min, f) => Math.min(min, f.offsetX), Infinity);
-                        const minOffsetY = processed.reduce((min, f) => Math.min(min, f.offsetY), Infinity);
-                        const maxRight = processed.reduce((max, f) => Math.max(max, f.offsetX + f.w), 0);
-                        const maxBottom = processed.reduce((max, f) => Math.max(max, f.offsetY + f.h), 0);
-                        const leftPad = Math.max(0, -minOffsetX);
-                        const topPad = Math.max(0, -minOffsetY);
-                        const baselineRef = maxBottom;
-                        const preparedWidth = Math.max(1, Math.ceil(Math.max(maxRight + leftPad, cellW + leftPad)));
-                        const preparedHeight = Math.max(1, Math.ceil(Math.max(baselineRef + topPad, cellH + topPad)));
-                        const refVisibleH = processed.reduce((max, f) => Math.max(max, f.h), 1);
-                        const refVisibleW = processed.reduce((max, f) => Math.max(max, f.w), 1);
-                        const frames = processed.map(frame => {
-                            const baselineGap = Math.max(0, baselineRef - (frame.offsetY + frame.h));
-                            const drawX = frame.offsetX + leftPad;
-                            const drawY = frame.offsetY + baselineGap + topPad;
-                            const baselinePx = drawY + frame.h;
-                            const centerPx = drawY + (frame.h * 0.5);
-                            const anchorX = clamp01((drawX + frame.w * 0.5) / preparedWidth);
-                            const anchorY = clamp01(centerPx / preparedHeight);
-                            const baselineRatio = clamp01(baselinePx / preparedHeight);
-                            const canvas = document.createElement('canvas');
-                            canvas.width = preparedWidth;
-                            canvas.height = preparedHeight;
-                            const ctx = canvas.getContext('2d', { alpha: true });
-                            if (ctx) {
-                                ctx.clearRect(0, 0, preparedWidth, preparedHeight);
-                                ctx.drawImage(enfImg, frame.sourceX, frame.sourceY, frame.w, frame.h, drawX, drawY, frame.w, frame.h);
-                            }
-                            let mirroredCanvas = null;
-                            if (canvas) {
-                                mirroredCanvas = document.createElement('canvas');
-                                mirroredCanvas.width = preparedWidth;
-                                mirroredCanvas.height = preparedHeight;
-                                const mctx = mirroredCanvas.getContext('2d', { alpha: true });
-                                if (mctx) {
-                                    mctx.clearRect(0, 0, preparedWidth, preparedHeight);
-                                    mctx.translate(preparedWidth, 0);
-                                    mctx.scale(-1, 1);
-                                    mctx.drawImage(canvas, 0, 0, preparedWidth, preparedHeight);
-                                } else {
-                                    mirroredCanvas = null;
-                                }
-                            }
-                            return Object.assign({}, frame, {
-                                canvas,
-                                mirroredCanvas,
-                                preparedWidth,
-                                preparedHeight,
-                                anchorRatioX: anchorX,
-                                mirrorAnchorRatioX: clamp01(1 - anchorX),
-                                anchorRatioY: anchorY,
-                                baselineRatio,
-                                baselinePx,
-                                centerPx,
-                                atlasOffsetX: drawX,
-                                atlasOffsetY: drawY,
-                                visibleWidth: frame.w,
-                                visibleHeight: frame.h
-                            });
-                        });
-                        const makeSequence = (id, seqFrames, options)=> ({
-                            id,
-                            frames: Array.isArray(seqFrames) ? seqFrames : [],
-                            frameStep: (options && options.frameStep) ? options.frameStep : 5,
-                            mirrorX: !!(options && options.mirrorX),
-                            source: options && options.source ? options.source : null
-                        });
-                        const sequences = {};
-                        const baseSequence = makeSequence('run', frames, { frameStep: 5 });
-                        sequences.right = makeSequence('right', frames, { frameStep: 5 });
-                        sequences.left = makeSequence('left', frames, { frameStep: 5, mirrorX: true, source: 'right' });
-                        sequences.down = makeSequence('down', frames, { frameStep: 5 });
-                        sequences.up = makeSequence('up', frames, { frameStep: 5 });
-                        container.animations = sequences;
-                        container.frames = {
-                            down: frames[0] || null,
-                            up: frames[0] || null,
-                            right: frames[0] || null,
-                            left: frames[0] || null
-                        };
-                        container.defaultAnimation = baseSequence;
-                        container.anim = {
-                            sequence: frames,
-                            frameStep: 5
-                        };
-                        container.animFrameStep = 5;
-                        container.preparedWidth = preparedWidth;
-                        container.preparedHeight = preparedHeight;
-                        container.referenceHeight = refVisibleH;
-                        container.referenceWidth = refVisibleW;
-                        container.maxVisibleWidth = refVisibleW;
-                        container.maxVisibleHeight = refVisibleH;
-                        container.anchorRatioX = frames[0] ? frames[0].anchorRatioX : 0.5;
-                        container.anchorRatioY = frames[0] ? frames[0].anchorRatioY : 0.5;
-                        container.baselineRatio = frames[0] ? frames[0].baselineRatio : 1;
-                        container.baseScaleForSize = (enemySize)=> ((enemySize*2)/(refVisibleH || 1));
-                        container.computeHitbox = (enemy)=> {
-                            const size = enemy.size;
-                            const scale = container.baseScaleForSize(size);
-                            const visibleW = container.maxVisibleWidth || container.referenceWidth || container.preparedWidth || 1;
-                            const visibleH = container.maxVisibleHeight || container.referenceHeight || container.preparedHeight || 1;
-                            const hitW = (visibleW * scale) * 0.72;
-                            const hitH = (visibleH * scale) * 0.74;
-                            return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + (visibleH * scale) * 0.06 };
-                        };
-                        container.image = enfImg;
-                        console.info('[EnforcerSprite] Loaded enforcer-sheet.png', { frames: frames.length, preparedWidth, preparedHeight, refVisibleH, refVisibleW });
-                    } catch(err) {
-                        console.warn('[EnforcerSprite] processing error', err);
+                    game.enemySprites.enforcer.loaded = true;
+                    const atlas = {"frames":{"0":{"x":0,"y":0,"w":256,"h":256,"duration":1},"1":{"x":256,"y":0,"w":256,"h":256,"duration":1},"2":{"x":512,"y":0,"w":256,"h":256,"duration":1},"3":{"x":768,"y":0,"w":256,"h":256,"duration":1},"4":{"x":1024,"y":0,"w":256,"h":256,"duration":1},"5":{"x":1280,"y":0,"w":256,"h":256,"duration":1},"6":{"x":1536,"y":0,"w":256,"h":256,"duration":1},"7":{"x":1792,"y":0,"w":256,"h":256,"duration":1},"8":{"x":0,"y":256,"w":256,"h":256,"duration":1},"9":{"x":256,"y":256,"w":256,"h":256,"duration":1},"10":{"x":512,"y":256,"w":256,"h":256,"duration":1},"11":{"x":768,"y":256,"w":256,"h":256,"duration":1},"12":{"x":1024,"y":256,"w":256,"h":256,"duration":1},"13":{"x":1280,"y":256,"w":256,"h":256,"duration":1},"14":{"x":1536,"y":256,"w":256,"h":256,"duration":1},"15":{"x":1792,"y":256,"w":256,"h":256,"duration":1},"16":{"x":0,"y":512,"w":256,"h":256,"duration":1},"17":{"x":256,"y":512,"w":256,"h":256,"duration":1},"18":{"x":512,"y":512,"w":256,"h":256,"duration":1},"19":{"x":768,"y":512,"w":256,"h":256,"duration":1},"20":{"x":1024,"y":512,"w":256,"h":256,"duration":1},"21":{"x":1280,"y":512,"w":256,"h":256,"duration":1},"22":{"x":1536,"y":512,"w":256,"h":256,"duration":1},"23":{"x":1792,"y":512,"w":256,"h":256,"duration":1},"24":{"x":0,"y":768,"w":256,"h":256,"duration":1},"25":{"x":256,"y":768,"w":256,"h":256,"duration":1},"26":{"x":512,"y":768,"w":256,"h":256,"duration":1},"27":{"x":768,"y":768,"w":256,"h":256,"duration":1},"28":{"x":1024,"y":768,"w":256,"h":256,"duration":1},"29":{"x":1280,"y":768,"w":256,"h":256,"duration":1},"30":{"x":1536,"y":768,"w":256,"h":256,"duration":1},"31":{"x":1792,"y":768,"w":256,"h":256,"duration":1}},"meta":{"size":{"w":2048,"h":1024},"frame_size":{"w":256,"h":256},"background_mode":"spriteclean"}};
+                    const frames = [];
+                    // Use all frames 0-31
+                    for (let i = 0; i <= 31; i++) {
+                        frames.push(atlas.frames[i.toString()]);
                     }
+                    const container = game.enemySprites.enforcer;
+                    container.frames = frames;
+                    const makeSequence = (id, seqFrames, options)=> ({
+                        frames: seqFrames,
+                        frameStep: options.frameStep || 5,
+                        mirrorX: options.mirrorX || false,
+                        source: options.source || null,
+                        id: id
+                    });
+                    const rightSequence = makeSequence('right', frames, { frameStep: 5 });
+                    const leftSequence = makeSequence('left', frames, { frameStep: 5, mirrorX: true, source: 'right' });
+                    container.animations = { right: rightSequence, left: leftSequence };
+                    container.defaultAnimation = rightSequence;
+                    container.anim = { sequence: frames, frameStep: 5 };
+                    container.animFrameStep = 5;
+                    const refH = 256;
+                    container.referenceHeight = refH;
+                    container.referenceWidth = 256;
+                    container.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
+                    container.computeHitbox = (enemy)=> {
+                        const size = enemy.size; const scale = container.baseScaleForSize(size);
+                        const w = 256 * scale; const h = 256 * scale;
+                        const hitW = w * 0.70;
+                        const hitH = h * 0.74;
+                        return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.05 };
+                    };
+                    container.image = enfImg;
+                    console.info('[EnforcerSprite] Loaded enforcer-sheet.png', { frames: frames.length });
                 };
                 enfImg.onerror = (ev)=> { try { console.warn('[EnforcerSprite] failed to load assets/enforcer-sheet.png', ev); } catch(_){} };
                 try { const resolved = (new URL('assets/enforcer-sheet.png', document.baseURI)).href; enfImg.src = resolved; } catch(_) { /* keep assigned src */ }
@@ -26651,156 +26492,47 @@ function offerPermanentAbilityChoice() {
                         // Enforcer sprite override
                         if (enemy.type === 'Enforcer' && game.enemySprites && game.enemySprites.enforcer && game.enemySprites.enforcer.loaded) {
                             const es = game.enemySprites.enforcer;
-                            const size = enemy.size;
-                            let facing = enemy.facing || 'down';
-                            let sequenceRequestsMirror = false;
-                            let frame = null;
                             const animations = es.animations;
+                            // Determine facing based on player's position relative to enemy's center
+                            const playerX = (game && game.player) ? game.player.x : 0;
+                            let facing = playerX < enemy.x ? 'left' : 'right';
+                            const img = es.image;
+                            const size = enemy.size;
+                            const scale = es.baseScaleForSize ? es.baseScaleForSize(size) : ((size*2)/256);
+                            // Get sequence
                             let sequenceEntry = null;
-                            const resolveSequence = (key)=> {
-                                if (!animations || typeof animations !== 'object') return null;
-                                const candidate = animations[key];
-                                if (!candidate) return null;
-                                const seqFrames = candidate.frames;
-                                if (!Array.isArray(seqFrames) || !seqFrames.length) return null;
-                                return candidate;
-                            };
-                            if (animations && typeof animations === 'object') {
-                                sequenceEntry = resolveSequence(facing);
-                                if (!sequenceEntry && facing === 'left') {
-                                    sequenceEntry = resolveSequence('left') || resolveSequence('right');
-                                }
-                                if (!sequenceEntry) {
-                                    sequenceEntry = resolveSequence('down') || resolveSequence('right') || resolveSequence('up') || resolveSequence('extra');
-                                }
+                            if (animations && animations[facing]) {
+                                sequenceEntry = animations[facing];
+                            } else if (facing === 'left' && animations && animations.right) {
+                                sequenceEntry = animations.right;
+                            } else {
+                                sequenceEntry = es.defaultAnimation || (es.anim && es.anim.sequence ? { frames: es.anim.sequence, frameStep: es.anim.frameStep || 5 } : null);
                             }
-                            if (!sequenceEntry) {
-                                const genericSeq = es.defaultAnimation || (es.anim && Array.isArray(es.anim.sequence) ? { frames: es.anim.sequence, frameStep: es.anim.frameStep || 5, id: 'generic', mirrorX: false } : null);
-                                if (genericSeq && Array.isArray(genericSeq.frames) && genericSeq.frames.length) {
-                                    sequenceEntry = genericSeq;
-                                }
-                            }
-                            if (sequenceEntry && Array.isArray(sequenceEntry.frames) && sequenceEntry.frames.length) {
+                            if (sequenceEntry && sequenceEntry.frames && sequenceEntry.frames.length) {
                                 const framesForSequence = sequenceEntry.frames;
                                 const mirrorSequence = sequenceEntry.mirrorX === true;
                                 const nowFrame = (game && typeof game.frame === 'number') ? game.frame : Math.floor(Date.now() / 16);
-                                const frameStep = Math.max(1, sequenceEntry.frameStep || es.animFrameStep || (es.anim && es.anim.frameStep) || 5);
-                                const sequenceId = (sequenceEntry.id || sequenceEntry.source || facing || 'enforcer') + (mirrorSequence ? '_M' : '_N');
-                                if (enemy._enforcerAnimFacing !== sequenceId) {
-                                    enemy._enforcerAnimFacing = sequenceId;
-                                    enemy._enforcerAnimStart = nowFrame;
-                                }
-                                if (typeof enemy._enforcerAnimStart !== 'number') {
-                                    enemy._enforcerAnimStart = nowFrame;
-                                }
-                                const elapsed = Math.max(0, nowFrame - enemy._enforcerAnimStart);
-                                const idx = Math.floor(elapsed / frameStep) % framesForSequence.length;
-                                frame = framesForSequence[idx] || framesForSequence[0] || null;
-                                enemy._enforcerAnimFrame = idx;
-                                sequenceRequestsMirror = mirrorSequence;
-                            }
-                            if (frame) {
-                                const spriteCenterX = (typeof enemy.x === 'number') ? enemy.x : null;
-                                let shouldMirrorNow = sequenceRequestsMirror;
-                                if (spriteCenterX !== null) {
-                                    const playerX = (game && game.player && typeof game.player.x === 'number') ? game.player.x : null;
-                                    if (playerX !== null) {
-                                        const offsetToPlayer = playerX - spriteCenterX;
-                                        // Keep a tiny hysteresis so the sprite flips right as the player crosses without jitter.
-                                        const tolerance = enemy._enforcerMirrorTolerance || Math.max(1, Math.round((enemy.size || 48) * 0.04));
-                                        if (typeof enemy._enforcerMirrorState !== 'boolean') {
-                                            enemy._enforcerMirrorState = (offsetToPlayer < 0);
-                                        } else if (enemy._enforcerMirrorState) {
-                                            if (offsetToPlayer > tolerance) {
-                                                enemy._enforcerMirrorState = false;
-                                            }
-                                        } else if (offsetToPlayer < -tolerance) {
-                                            enemy._enforcerMirrorState = true;
-                                        }
-                                        shouldMirrorNow = enemy._enforcerMirrorState;
-                                    }
-                                }
-                                let applyFlip = false;
-                                let preparedSource = null;
-                                if (shouldMirrorNow) {
-                                    if (frame.mirroredCanvas) {
-                                        preparedSource = frame.mirroredCanvas;
-                                    } else if (frame.canvas) {
-                                        preparedSource = frame.canvas;
-                                        applyFlip = true;
-                                    } else if (frame.bitmap) {
-                                        preparedSource = frame.bitmap;
-                                        applyFlip = true;
-                                    }
-                                }
-                                if (!preparedSource) {
-                                    preparedSource = frame.canvas || frame.bitmap || null;
-                                }
-                                const preparedWidth = preparedSource ? (preparedSource.width || frame.preparedWidth || frame.w || 1) : (es.preparedWidth || frame.w || 1);
-                                const preparedHeight = preparedSource ? (preparedSource.height || frame.preparedHeight || frame.h || 1) : (es.preparedHeight || frame.h || 1);
-                                const referenceHeight = es.referenceHeight || frame.visibleHeight || frame.h || preparedHeight || 1;
-                                const baseScale = es.baseScaleForSize ? es.baseScaleForSize(size) : ((size*2)/Math.max(1, referenceHeight));
-                                const drawW = preparedWidth * baseScale;
-                                const drawH = preparedHeight * baseScale;
-                                const anchorBaseX = (typeof frame.anchorRatioX === 'number') ? frame.anchorRatioX : (typeof es.anchorRatioX === 'number' ? es.anchorRatioX : 0.5);
-                                const anchorRefX = (!applyFlip && shouldMirrorNow)
-                                    ? (typeof frame.mirrorAnchorRatioX === 'number' ? frame.mirrorAnchorRatioX : (1 - anchorBaseX))
-                                    : anchorBaseX;
-                                const baselineRefY = (typeof frame.baselineRatio === 'number') ? frame.baselineRatio : (typeof es.baselineRatio === 'number' ? es.baselineRatio : 1);
-                                const destX = -drawW * anchorRefX;
-                                const destY = -drawH * baselineRefY;
-                                ctx.save();
-                                ctx.translate(enemy.x, enemy.y);
-                                if (applyFlip) {
-                                    ctx.scale(-1, 1);
-                                }
-                                const drawX = applyFlip ? (-(destX + drawW)) : destX;
-                                const sourceImage = preparedSource || es.image;
-                                const srcX = preparedSource ? 0 : frame.sourceX;
-                                const srcY = preparedSource ? 0 : frame.sourceY;
-                                const srcW = preparedSource ? preparedWidth : frame.w;
-                                const srcH = preparedSource ? preparedHeight : frame.h;
-                                ctx.drawImage(sourceImage, srcX, srcY, srcW, srcH, drawX, destY, drawW, drawH);
-                                if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(255,128,0,0.55)'; ctx.strokeRect(drawX, destY, drawW, drawH); }
-                                ctx.restore();
-                                try { enemy._noFallback = true; } catch(_) {}
-                                return;
-                            }
-                            // Fallback to legacy static frames if animation data unavailable
-                            const frameSet = es.frames || {};
-                            let box = frameSet[facing];
-                            let flipForFallback = false;
-                            if (!box) {
-                                if (facing === 'left' && frameSet.right) {
-                                    box = frameSet.right;
-                                    flipForFallback = true;
-                                } else {
-                                    box = frameSet.down || frameSet.right || frameSet.up || null;
-                                }
-                            }
-                            const img = es.image;
-                            if (box && img) {
-                                const scale = es.baseScaleForSize ? es.baseScaleForSize(size) : ((size*2)/(box ? box.h : 1));
-                                const drawW = box.w * scale;
-                                const drawH = box.h * scale;
-                                ctx.save();
-                                ctx.translate(enemy.x, enemy.y);
-                                if (facing === 'left' || flipForFallback) {
-                                    if (frameSet.right) {
+                                const frameStep = Math.max(1, sequenceEntry.frameStep || es.animFrameStep || 5);
+                                const sequenceLength = framesForSequence.length;
+                                const frameIndex = Math.floor(nowFrame / frameStep) % sequenceLength;
+                                const box = framesForSequence[frameIndex];
+                                if (box && img) {
+                                    const drawW = box.w * scale;
+                                    const drawH = box.h * scale;
+                                    ctx.save();
+                                    ctx.translate(enemy.x, enemy.y);
+                                    if (mirrorSequence && facing === 'left') {
                                         ctx.scale(-1, 1);
-                                        ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
-                                    } else {
-                                        ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
                                     }
-                                } else {
                                     ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
+                                    if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(255,165,0,0.6)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                                    ctx.restore();
+                                    return;
                                 }
-                                if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(255,128,0,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
-                                ctx.restore();
-                                try { enemy._noFallback = true; } catch(_) {}
-                                return;
                             }
                         }
+                        // Enforcer sprite fallback (unused - now using atlas-based rendering above)
+
                         // Boss Thug sprite override
                         if (enemy.type === 'Boss Thug' && game.enemySprites && game.enemySprites.bossThug && game.enemySprites.bossThug.loaded) {
                             const ts = game.enemySprites.bossThug;
