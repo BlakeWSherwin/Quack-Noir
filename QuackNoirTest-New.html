@@ -11618,6 +11618,7 @@ function offerPermanentAbilityChoice() {
         }
 
         function generateRoom() {
+            console.info('[generateRoom] START', { dungeon: game.dungeon, room: game.room });
             game.walls = [];
             game.enemies = [];
             game.chests = [];
@@ -23015,20 +23016,31 @@ function offerPermanentAbilityChoice() {
             };
             requestAnimationFrame(pollGpRestart);
             function finishRestart(){
+                console.error('!!!! FINISHRESTART CALLED !!!!');
                 try { window.removeEventListener('keydown', onKeyDown); } catch(_) {}
                 try { window.removeEventListener('keyup', onKeyUp); } catch(_) {}
+                console.info('[finishRestart] START', { dungeon: game.dungeon, room: game.room });
                 // Prevent any residual room-cleared flow from advancing
                 game.roomCleared = false;
                 game.gameOver = false;
                 // Defensive: clear any residual duck dynasty flock visuals before reset (prevents one-frame ghost row)
                 if (Array.isArray(game.duckFlocks)) game.duckFlocks.length = 0;
                 game.nextDuckFlockFrame = 0;
-                // Reset progression to the same street (do NOT advance) – keep current dungeon & room unless they were out of range
-                if (game.room < 1 || game.room > 5) game.room = 1;
-                if (game.dungeon < 1 || game.dungeon > 10) game.dungeon = 1;
                 // Clear any transient flags that could trigger nextRoom()
                 game._pendingAdvance = false;
+                // Force dungeon/room to 1 BEFORE calling resetGame so it uses the correct values
+                game.room = 1;
+                game.dungeon = 1;
+                game.score = 0;
+                game.shotCounter = 0;
+                game.chestsThisCycle = 0;
+                game.totalKills = 0;
+                game.roomsCleared = 0;
+                game.chestsOpened = 0;
+                console.info('[finishRestart] after manual reset', { dungeon: game.dungeon, room: game.room });
                 resetGame();
+                console.info('[finishRestart] after resetGame', { dungeon: game.dungeon, room: game.room, enemies: game.enemies.length });
+                updateUI();
                 if (typeof rebuildPlayerSprite === 'function') rebuildPlayerSprite();
             }
         }
@@ -23225,6 +23237,7 @@ function offerPermanentAbilityChoice() {
             const options = opts || {};
             const suppressMusic = !!options.suppressMusic;
             const skipRoomInit = !!options.skipRoomInit;
+            console.info('[resetGame] called', { dungeon: game.dungeon, room: game.room, skipRoomInit });
                     // Preserve existing sprite sheet/meta before wiping player object so we don't lose load state
                     const prevSheet = game.player && game.player.spriteSheet;
                     const prevMeta = game.player && game.player.spriteMeta;
@@ -23308,8 +23321,8 @@ function offerPermanentAbilityChoice() {
             if (!game.player.walkSheet) {
                 game.player.walkSheet = new Image();
                 game.player.walkSheet.onload = () => {
-                    applyWalkFrames(game.player.walkSheet);
-                    rebuildPlayerSprite();
+                    try { applyWalkFrames(game.player.walkSheet); } catch(_) {}
+                    try { rebuildPlayerSprite(); } catch(_) {}
                 };
                 game.player.walkSheet.onerror = (err) => { console.warn('[Reset] player walk sheet load failed', err); };
                 game.player.walkSheet.src = 'assets/playerwalk-sheet.png';
@@ -23317,8 +23330,8 @@ function offerPermanentAbilityChoice() {
             if (!game.player.idleImage) {
                 game.player.idleImage = new Image();
                 game.player.idleImage.onload = () => {
-                    applyIdleFrame(game.player.idleImage);
-                    rebuildPlayerSprite();
+                    try { applyIdleFrame(game.player.idleImage); } catch(_) {}
+                    try { rebuildPlayerSprite(); } catch(_) {}
                 };
                 game.player.idleImage.onerror = (err) => { console.warn('[Reset] player idle sprite load failed', err); };
                 game.player.idleImage.src = 'assets/player-side.png';
@@ -23327,10 +23340,10 @@ function offerPermanentAbilityChoice() {
                 game.player.spriteSheet = game.player.walkSheet;
             }
             if (game.player.walkSheet && game.player.walkSheet.complete) {
-                applyWalkFrames(game.player.walkSheet);
+                try { applyWalkFrames(game.player.walkSheet); } catch(_) {}
             }
             if (game.player.idleImage && game.player.idleImage.complete) {
-                applyIdleFrame(game.player.idleImage);
+                try { applyIdleFrame(game.player.idleImage); } catch(_) {}
             }
 
             // --- Permanent Ability Integration ---
