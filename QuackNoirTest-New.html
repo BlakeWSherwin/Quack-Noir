@@ -2347,6 +2347,14 @@
                                     life[i]=0; recycle(i); continue;
                                 }
                             } else {
+                                // Explosive Shot: explode on wall impact if flagged
+                                try {
+                                    const mWall = (game._projMeta && game._projMeta.get) ? game._projMeta.get(i) : null;
+                                    if (mWall && mWall.explosive) {
+                                        const baseDmg = (mWall.baseDamage || damage[i] || (typeof calculateDamage === 'function' ? calculateDamage() : 8));
+                                        try { explodeProjectile({ x: x[i], y: y[i], size: Math.max(6, radius[i]||6) }, Math.floor(baseDmg * 0.7)); } catch(_) {}
+                                    }
+                                } catch(_) {}
                                 life[i]=0; recycle(i); continue;
                             }
                         }
@@ -17421,7 +17429,9 @@ function offerPermanentAbilityChoice() {
                         }
                         try { if (window._bulletImages && typeof window._bulletImages.loadQuackenTentacle === 'function') window._bulletImages.loadQuackenTentacle(); } catch(_){ }
                         try { if (typeof unlock === 'function') unlock('releaseTheQuacken'); } catch(_){ }
-                        const toastNeeded = firstDefeat || !game._quackenToastShownRun;
+                        // Only show the toast when this is the first recorded defeat (persisted);
+                        // do not show on subsequent defeats in future runs.
+                        const toastNeeded = firstDefeat;
                         try { console.info('[Quacken] defeat', { firstDefeat, toastNeeded, runShown: game && game._quackenToastShownRun }); } catch(_){ }
                         if (toastNeeded) {
                             try {
@@ -21189,6 +21199,17 @@ function offerPermanentAbilityChoice() {
                         const baseDmg = proj.baseDamage || proj.damage || damage || 8;
                         explodeProjectile({ x: px, y: py, size: size, enemy: false, damageType: 'solar', goldDust: true, goldDustRadius: poolRadius, goldDustDuration: poolDur, baseDamage: baseDmg }, baseDmg);
                         proj._goldExploded = true;
+                    } catch(_) {}
+                }
+            } catch(_) {}
+            // Explosive Shot: explode on enemy impact if projectile carries explosive flag
+            try {
+                if (proj && proj.explosive) {
+                    try {
+                        const base = proj.baseDamage || proj.damage || (typeof damage !== 'undefined' ? damage : (typeof calculateDamage === 'function' ? calculateDamage() : 8));
+                        const px = (proj.x != null) ? proj.x : (enemy && enemy.x) || 0;
+                        const py = (proj.y != null) ? proj.y : (enemy && enemy.y) || 0;
+                        explodeProjectile({ x: px, y: py, size: Math.max(6, (proj.size || proj.r || 6)) }, Math.floor(base * 0.7));
                     } catch(_) {}
                 }
             } catch(_) {}
