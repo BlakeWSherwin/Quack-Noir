@@ -10358,26 +10358,31 @@ function offerPermanentAbilityChoice() {
             // === The Big Quack final boss sprite sheet ===
             if (!game.enemySprites.bigQuack) {
                 const bqImg = new Image();
-                bqImg.src = 'assets/bigquack-sheet.png';
+                bqImg.src = 'assets/bigquack-sheet-12-23.png';
                 game.enemySprites.bigQuack = { image: bqImg, loaded: false };
                 bqImg.onload = () => {
                     const container = game.enemySprites.bigQuack;
                     container.loaded = true;
-                    function box(x1,y1,w,h){ return { x:x1, y:y1, w, h }; }
-                    // Bounds generated via tools/compute_bigquack_bounds.ps1 (frame indices 0-7)
-                    const rawFrames = [
-                        box(35,7,186,248),
-                        box(289,5,187,250),
-                        box(533,4,210,251),
-                        box(788,10,213,244),
-                        box(1057,1,187,254),
-                        box(1311,8,191,247),
-                        box(1569,1,188,254),
-                        box(1827,7,186,248)
-                    ];
-                    const refH = rawFrames.reduce((max,f)=> Math.max(max, f.h), rawFrames[0] ? rawFrames[0].h : 1);
-                    const refW = rawFrames.reduce((max,f)=> Math.max(max, f.w), rawFrames[0] ? rawFrames[0].w : 1);
-                    const frames = rawFrames.map((f)=> Object.assign({ renderScale: refH / (f.h || refH), visibleHeight: f.h }, f));
+                    
+                    // Atlas-based loader for frames 12-23 from 8x4 grid spritesheet (256x256 each)
+                    const atlasFrames = {
+                        "12":{"x":1024,"y":256,"w":256,"h":256,"duration":1},"13":{"x":1280,"y":256,"w":256,"h":256,"duration":1},
+                        "14":{"x":1536,"y":256,"w":256,"h":256,"duration":1},"15":{"x":1792,"y":256,"w":256,"h":256,"duration":1},
+                        "16":{"x":0,"y":512,"w":256,"h":256,"duration":1},"17":{"x":256,"y":512,"w":256,"h":256,"duration":1},
+                        "18":{"x":512,"y":512,"w":256,"h":256,"duration":1},"19":{"x":768,"y":512,"w":256,"h":256,"duration":1},
+                        "20":{"x":1024,"y":512,"w":256,"h":256,"duration":1},"21":{"x":1280,"y":512,"w":256,"h":256,"duration":1},
+                        "22":{"x":1536,"y":512,"w":256,"h":256,"duration":1},"23":{"x":1792,"y":512,"w":256,"h":256,"duration":1}
+                    };
+                    
+                    // Build animation frames array from atlas (frames 12-23)
+                    const frames = [];
+                    for (let i = 12; i <= 23; i++) {
+                        frames.push(atlasFrames[i.toString()]);
+                    }
+                    
+                    const refH = 256;
+                    const refW = 256;
+                    
                     container.frames = {
                         down: frames[0],
                         up: frames[0],
@@ -10393,17 +10398,17 @@ function offerPermanentAbilityChoice() {
                     container.computeHitbox = (enemy)=> {
                         const size = enemy.size;
                         const scale = container.baseScaleForSize(size);
-                        const hitW = (refW * scale) * 0.76;
-                        const hitH = (refH * scale) * 0.80;
-                        return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + (refH * scale) * 0.04 };
+                        const hitW = (refW * scale) * 0.70;
+                        const hitH = (refH * scale) * 0.74;
+                        return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + (refH * scale) * 0.05 };
                     };
                     try { container.image = bqImg; } catch(_) {}
-                    console.info('[BigQuackSprite] Loaded bigquack-sheet.png', { frames: container.anim.frames, refH, refW });
+                    console.info('[BigQuackSprite] Loaded bigquack-sheet-12-23.png', { frames: frames.length, refH, refW });
                 };
                 bqImg.onerror = (ev)=> {
-                    try { console.warn('[BigQuackSprite] failed to load assets/bigquack-sheet.png', ev); } catch(_) {}
+                    try { console.warn('[BigQuackSprite] failed to load assets/bigquack-sheet-12-23.png', ev); } catch(_) {}
                 };
-                try { const resolved = (new URL('assets/bigquack-sheet.png', document.baseURI)).href; bqImg.src = resolved; } catch(_) { /* keep assigned src */ }
+                try { const resolved = (new URL('assets/bigquack-sheet-12-23.png', document.baseURI)).href; bqImg.src = resolved; } catch(_) { /* keep assigned src */ }
             }
 
                 // === Wunderswan secret boss sprite & audio preloads ===
@@ -26599,7 +26604,13 @@ function offerPermanentAbilityChoice() {
                             const bq = game.enemySprites.bigQuack;
                             const frameSet = bq.frames || {};
                             const anim = bq.anim;
-                            let facing = enemy.facing || 'down';
+                            
+                            // Determine facing based on player position relative to sprite center
+                            let facing = 'right';
+                            if (game.player && typeof game.player.x === 'number') {
+                                facing = game.player.x < enemy.x ? 'left' : 'right';
+                            }
+                            
                             let box = frameSet[facing];
                             if (anim && anim.frames && anim.frames.length) {
                                 const frames = anim.frames;
@@ -26620,21 +26631,19 @@ function offerPermanentAbilityChoice() {
                             const img = bq.image;
                             const size = enemy.size;
                             if (!box) {
-                                if (facing === 'left' && frameSet.right) box = frameSet.right; else box = frameSet.down || frameSet.right || frameSet.up;
+                                box = frameSet.right || frameSet.down || frameSet.up;
                             }
                             if (box && img) {
                                 const referenceHeight = bq.referenceHeight || box.h || 1;
                                 const baseScale = bq.baseScaleForSize ? bq.baseScaleForSize(size) : ((size*2)/Math.max(1, referenceHeight));
-                                const effectiveScale = baseScale * (box.renderScale || 1);
+                                const effectiveScale = baseScale;
                                 const drawW = box.w * effectiveScale;
                                 const drawH = box.h * effectiveScale;
                                 ctx.save(); ctx.translate(enemy.x, enemy.y);
                                 if (facing === 'left') {
-                                    if (frameSet.right) { ctx.scale(-1,1); ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH); }
-                                    else { ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH); }
-                                } else {
-                                    ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
+                                    ctx.scale(-1, 1);
                                 }
+                                ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
                                 if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(255,80,80,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                                 ctx.restore();
                                 return;
