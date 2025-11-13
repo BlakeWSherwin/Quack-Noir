@@ -8836,10 +8836,10 @@ function offerPermanentAbilityChoice() {
                 game.player.spriteSheet = image;
                 const uniformWidth = PLAYER_WALK_BOUNDS.reduce((m, b) => Math.max(m, b.w), 0);
                 const uniformHeight = PLAYER_WALK_BOUNDS.reduce((m, b) => Math.max(m, b.h), 0);
+                const minY = PLAYER_WALK_BOUNDS.reduce((m, b) => Math.min(m, b.y), Infinity);
                 game.player.walkFrames = PLAYER_WALK_BOUNDS.map(raw => {
-                    const bottom = raw.y + raw.h;
-                    let cropY = Math.round(bottom - uniformHeight);
-                    if (cropY < 0) cropY = 0;
+                    // Align all frames to the same top-left corner position (minY)
+                    let cropY = minY;
                     if (cropY + uniformHeight > image.height) cropY = Math.max(0, image.height - uniformHeight);
                     const centerX = raw.x + raw.w / 2;
                     let cropX = Math.round(centerX - uniformWidth / 2);
@@ -8851,8 +8851,8 @@ function offerPermanentAbilityChoice() {
                         y: cropY,
                         w: uniformWidth,
                         h: uniformHeight,
-                        visibleHeight: raw.h,
-                        visibleWidth: raw.w
+                        visibleHeight: uniformHeight,
+                        visibleWidth: uniformWidth
                     };
                 });
                 if (game.player.spriteMeta) {
