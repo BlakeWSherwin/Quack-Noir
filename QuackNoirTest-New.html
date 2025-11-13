@@ -398,6 +398,17 @@
             swanLaserImg.onerror = ()=>{ console.warn('[BulletImage] Failed to load assets/bullets/swanlaser.png'); swanLaserImg._broken = true; };
             swanLaserImg.src = 'assets/bullets/swanlaser.png';
             window._bulletImages.swanlaser = swanLaserImg;
+            // Duck Dynasty bullet sprites (randomized per-projectile). Vertically flipped when used.
+            for (let __d = 1; __d <= 5; __d++) {
+                try {
+                    const key = 'duck' + __d;
+                    const img = new Image();
+                    img.onload = () => { img._ok = true; };
+                    img.onerror = () => { console.warn('[BulletImage] Failed to load assets/bullets/' + key + '.png'); img._broken = true; };
+                    img.src = 'assets/bullets/' + key + '.png';
+                    window._bulletImages[key] = img;
+                } catch(_) {}
+            }
             // Golden tooth sprite (unlocked by defeating Golden Goose)
             // Defer actual network load until the ability is granted to avoid startup IO overhead.
             const goldToothImg = new Image();
@@ -5091,6 +5102,10 @@
                             ctx.imageSmoothingEnabled = true;
                             // Slight forward offset for laser sprite to feel directional
                             const forwardOffset = (meta && meta.laser) ? -w * 0.24 : -w * 0.1;
+                            // Vertical flip support: some abilities (Duck Dynasty) want sprites flipped vertically
+                            if (meta && meta._flipV) {
+                                try { ctx.scale(1, -1); } catch(_) {}
+                            }
                             try {
                                 if (meta && meta.laser) {
                                     // Mirror sprite horizontally so it visually points forward correctly
@@ -5242,6 +5257,10 @@
                             ctx.imageSmoothingEnabled = true;
                             const forwardOffset = (meta && meta.laser) ? -w * 0.24 : -w * 0.1;
                             try {
+                                // Vertical flip support for abilities like Duck Dynasty
+                                if (meta && meta._flipV) {
+                                    try { ctx.scale(1, -1); } catch(_) {}
+                                }
                                 if (meta && meta.laser) {
                                     ctx.scale(-1, 1);
                                     const foff = -forwardOffset;
@@ -14221,6 +14240,9 @@ function offerPermanentAbilityChoice() {
                         const laneFrac = (i / Math.max(1, flockSize-1));
                         const startX = bandLeft + (bandRight - bandLeft) * laneFrac + (Math.random()-0.5)*30;
                         const sway = (Math.random()*0.4 + 0.6); // amplitude multiplier
+                        // Choose a random duck sprite for this flock member (preloaded in window._bulletImages)
+                        const __duckN = 1 + Math.floor(Math.random()*5);
+                        const __duckKey = 'duck' + __duckN;
                         game.duckFlocks.push({
                             mode:'swoop',
                             t:0, tMax: duration,
@@ -14236,7 +14258,10 @@ function offerPermanentAbilityChoice() {
                             hitIds: new Set(),
                             color: (Math.random()<0.5?'#FFD74A':'#FFECA0'),
                             wingPhase: Math.random()*Math.PI*2,
-                            swayAmp: sway * (20 + Math.random()*14)
+                            swayAmp: sway * (20 + Math.random()*14),
+                            // Visual: optional sprite key and vertical flip flag so renderer can draw an image
+                            spriteKey: __duckKey,
+                            _flipV: true
                         });
                     }
                     // Telegraph: falling feathers / sparks near top (perf-aware)
@@ -15411,6 +15436,20 @@ function offerPermanentAbilityChoice() {
                     if (eff.areaEffect) meta.areaEffect = true;
                 });
                 if (chosenDamageType) meta.damageType = chosenDamageType;
+                // If player has Duck Dynasty ability, prefer randomized duck sprite visuals for these projectiles
+                try {
+                    // Only apply Duck Dynasty visuals to non-enemy/projectiles originating from the player
+                    if (game.player && Array.isArray(game.player.abilities) && game.player.abilities.includes('Duck Dynasty')) {
+                        const isEnemyProj = (t && t.enemy) || (meta && meta.enemy);
+                        if (!isEnemyProj && !meta.spriteKey && !meta.goldTooth && !meta.laser) {
+                            const n = 1 + Math.floor(Math.random() * 5);
+                            meta.spriteKey = 'duck' + n;
+                            // Internal flag used by renderer to vertically flip these duck sprites
+                            meta._flipV = true;
+                        }
+                        meta.duckDynasty = true;
+                    }
+                } catch(_) {}
                 // Choose weapon visual type for the BASE projectile
                 // Rule: randomize among owned NON-sword melee weapons so sword never suppresses them.
                 // If Sword Throw is owned, we spawn an extra sword projectile separately (handled below).
@@ -24991,10 +25030,36 @@ function offerPermanentAbilityChoice() {
                 }
             }
             
-            // Duck Dynasty flock rendering (beneath projectile layer, above ground telegraphs)
+                // Duck Dynasty flock rendering (beneath projectile layer, above ground telegraphs)
             if (Array.isArray(game.duckFlocks) && game.duckFlocks.length) {
                 game.duckFlocks.forEach(d => {
                     if (d.x == null || d.y == null) return;
+                    // If a sprite is assigned and loaded, draw it; otherwise fall back to vector draw
+                    const imgKey = d.spriteKey || null;
+                    const img = (imgKey && window._bulletImages) ? window._bulletImages[imgKey] : null;
+                    if (img && (img._ok || (img.complete && img.naturalWidth))) {
+                        ctx.save();
+                        ctx.translate(d.x, d.y);
+                        // Keep sprite upright for image draw (don't rotate by motion)
+                        if (!d._lx) { d._lx = d.x; d._ly = d.y; }
+                        const mvx = d.x - d._lx; const mvy = d.y - d._ly;
+                        d._lx = d.x; d._ly = d.y;
+                        const ang = 0; // force upright sprite so vertical flip appears consistent while moving
+                        // no rotation applied for image sprites
+                        // Compute draw size from logical d.size while preserving image aspect
+                        const iw = img.naturalWidth || img.width || 32;
+                        const ih = img.naturalHeight || img.height || 32;
+                        const aspect = iw / ih || 1;
+                        // Let width scale with duck size; tweak multiplier for visual fit
+                        const drawW = Math.max(18, (d.size || 20) * 2.4);
+                        const drawH = drawW / aspect;
+                        // Vertical flip support
+                        if (d._flipV) { try { ctx.scale(1, -1); } catch(_) {} }
+                        try { ctx.imageSmoothingEnabled = true; ctx.drawImage(img, -drawW * 0.5, -drawH * 0.5, drawW, drawH); } catch(_) {}
+                        ctx.restore();
+                        return; // skip vector fallback
+                    }
+                    // Vector fallback (legacy drawing) if sprite not available
                     ctx.save();
                     ctx.translate(d.x, d.y);
                     // Orientation based on instantaneous motion (approx using last two positions if cached)
