@@ -9944,96 +9944,41 @@ function offerPermanentAbilityChoice() {
                 dealerImg.src = 'assets/dealer-sheet.png';
                 game.enemySprites.dealer = { image: dealerImg, loaded: false };
                 dealerImg.onload = () => {
-                    const container = game.enemySprites.dealer;
-                    container.loaded = true;
-                    try {
-                        const sheetW = dealerImg.naturalWidth || dealerImg.width || 0;
-                        const sheetH = dealerImg.naturalHeight || dealerImg.height || 0;
-                        if (!sheetW || !sheetH) {
-                            console.warn('[DealerSprite] sprite sheet has zero dimensions, aborting');
-                            return;
-                        }
-                        const cols = 8;
-                        const rows = 4;
-                        const cellW = Math.floor(sheetW / cols);
-                        const cellH = Math.floor(sheetH / rows);
-                        const rawFrames = [
-                            { index: 1,  row:0, col:1, x:308,  y:8,   w:166, h:243 },
-                            { index: 2,  row:0, col:2, x:564,  y:7,   w:166, h:244 },
-                            { index: 3,  row:0, col:3, x:820,  y:5,   w:166, h:246 },
-                            { index: 4,  row:0, col:4, x:1076, y:4,   w:166, h:247 },
-                            { index: 5,  row:0, col:5, x:1332, y:4,   w:166, h:247 },
-                            { index: 6,  row:0, col:6, x:1588, y:5,   w:166, h:246 },
-                            { index: 7,  row:0, col:7, x:1844, y:7,   w:166, h:244 },
-                            { index: 8,  row:1, col:0, x:52,   y:264, w:166, h:243 },
-                            { index: 9,  row:1, col:1, x:308,  y:263, w:166, h:244 },
-                            { index:10,  row:1, col:2, x:564,  y:262, w:166, h:245 },
-                            { index:11,  row:1, col:3, x:820,  y:261, w:166, h:246 },
-                            { index:12,  row:1, col:4, x:1076, y:260, w:166, h:247 },
-                            { index:13,  row:1, col:5, x:1332, y:261, w:166, h:246 },
-                            { index:14,  row:1, col:6, x:1588, y:263, w:166, h:244 },
-                            { index:15,  row:1, col:7, x:1844, y:263, w:166, h:244 },
-                            { index:16,  row:2, col:0, x:52,   y:519, w:166, h:244 },
-                            { index:17,  row:2, col:1, x:308,  y:518, w:166, h:245 },
-                            { index:18,  row:2, col:2, x:564,  y:517, w:166, h:246 },
-                            { index:19,  row:2, col:3, x:820,  y:516, w:166, h:247 },
-                            { index:20,  row:2, col:4, x:1076, y:517, w:166, h:246 },
-                            { index:21,  row:2, col:5, x:1332, y:519, w:166, h:244 },
-                            { index:22,  row:2, col:6, x:1588, y:519, w:166, h:244 },
-                            { index:23,  row:2, col:7, x:1844, y:519, w:166, h:244 },
-                            { index:24,  row:3, col:0, x:52,   y:774, w:166, h:245 },
-                            { index:25,  row:3, col:1, x:308,  y:773, w:166, h:246 },
-                            { index:26,  row:3, col:2, x:564,  y:772, w:166, h:247 },
-                            { index:27,  row:3, col:3, x:820,  y:772, w:166, h:247 },
-                            { index:28,  row:3, col:4, x:1076, y:773, w:166, h:246 },
-                            { index:29,  row:3, col:5, x:1332, y:775, w:166, h:244 },
-                            { index:30,  row:3, col:6, x:1588, y:775, w:166, h:244 }
-                        ];
-                        const refW = cellW;
-                        const refH = cellH;
-                        const clamp01 = (value) => Math.max(0, Math.min(1, value));
-                        const frames = rawFrames.map(frame => {
-                            const cellCenterX = frame.col * cellW + cellW / 2;
-                            const cellCenterY = frame.row * cellH + cellH / 2;
-                            const anchorX = frame.w ? (cellCenterX - frame.x) / frame.w : 0.5;
-                            const anchorY = frame.h ? (cellCenterY - frame.y) / frame.h : 0.5;
-                            return Object.assign({}, frame, {
-                                renderScale: 1,
-                                visibleHeight: refH,
-                                visibleWidth: refW,
-                                anchorRatioX: clamp01(anchorX),
-                                anchorRatioY: clamp01(anchorY)
-                            });
-                        });
-                        const downFrames = frames.filter(f => f.row === 0 || f.row === 3);
-                        const upFrames = frames.filter(f => f.row === 1);
-                        const rightFrames = frames.filter(f => f.row === 2);
-                        container.frames = {
-                            down: downFrames[0] || frames[0] || null,
-                            up: upFrames[0] || frames[0] || null,
-                            right: rightFrames[0] || frames[0] || null
-                        };
-                        container.anim = {
-                            sequence: frames,
-                            frameStep: 4
-                        };
-                        container.referenceHeight = refH;
-                        container.referenceWidth = refW;
-                        container.anchorRatioX = frames[0] ? frames[0].anchorRatioX : 0.5;
-                        container.anchorRatioY = frames[0] ? frames[0].anchorRatioY : 0.5;
-                        container.baseScaleForSize = (enemySize)=> ((enemySize*2)/(refH || 1));
-                        container.computeHitbox = (enemy)=> {
-                            const size = enemy.size;
-                            const scale = container.baseScaleForSize(size);
-                            const hitW = (refW * scale) * 0.66;
-                            const hitH = (refH * scale) * 0.70;
-                            return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + (refH * scale) * 0.06 };
-                        };
-                        container.image = dealerImg;
-                        console.info('[DealerSprite] Loaded assets/dealer-sheet.png', { frames: frames.length, refH, refW });
-                    } catch (err) {
-                        console.warn('[DealerSprite] processing failed', err);
+                    game.enemySprites.dealer.loaded = true;
+                    const atlas = {"frames":{"0":{"x":0,"y":0,"w":256,"h":256,"duration":1},"1":{"x":256,"y":0,"w":256,"h":256,"duration":1},"2":{"x":512,"y":0,"w":256,"h":256,"duration":1},"3":{"x":768,"y":0,"w":256,"h":256,"duration":1},"4":{"x":1024,"y":0,"w":256,"h":256,"duration":1},"5":{"x":1280,"y":0,"w":256,"h":256,"duration":1},"6":{"x":1536,"y":0,"w":256,"h":256,"duration":1},"7":{"x":1792,"y":0,"w":256,"h":256,"duration":1},"8":{"x":0,"y":256,"w":256,"h":256,"duration":1},"9":{"x":256,"y":256,"w":256,"h":256,"duration":1},"10":{"x":512,"y":256,"w":256,"h":256,"duration":1},"11":{"x":768,"y":256,"w":256,"h":256,"duration":1},"12":{"x":1024,"y":256,"w":256,"h":256,"duration":1},"13":{"x":1280,"y":256,"w":256,"h":256,"duration":1},"14":{"x":1536,"y":256,"w":256,"h":256,"duration":1},"15":{"x":1792,"y":256,"w":256,"h":256,"duration":1},"16":{"x":0,"y":512,"w":256,"h":256,"duration":1},"17":{"x":256,"y":512,"w":256,"h":256,"duration":1},"18":{"x":512,"y":512,"w":256,"h":256,"duration":1},"19":{"x":768,"y":512,"w":256,"h":256,"duration":1},"20":{"x":1024,"y":512,"w":256,"h":256,"duration":1},"21":{"x":1280,"y":512,"w":256,"h":256,"duration":1},"22":{"x":1536,"y":512,"w":256,"h":256,"duration":1},"23":{"x":1792,"y":512,"w":256,"h":256,"duration":1},"24":{"x":0,"y":768,"w":256,"h":256,"duration":1},"25":{"x":256,"y":768,"w":256,"h":256,"duration":1},"26":{"x":512,"y":768,"w":256,"h":256,"duration":1},"27":{"x":768,"y":768,"w":256,"h":256,"duration":1},"28":{"x":1024,"y":768,"w":256,"h":256,"duration":1},"29":{"x":1280,"y":768,"w":256,"h":256,"duration":1},"30":{"x":1536,"y":768,"w":256,"h":256,"duration":1},"31":{"x":1792,"y":768,"w":256,"h":256,"duration":1}},"meta":{"size":{"w":2048,"h":1024},"frame_size":{"w":256,"h":256},"background_mode":"spriteclean"}};
+                    const frames = [];
+                    // Use frames 1-30 (skip frame 0 and 31 which are blank)
+                    for (let i = 1; i <= 30; i++) {
+                        frames.push(atlas.frames[i.toString()]);
                     }
+                    const container = game.enemySprites.dealer;
+                    container.frames = frames;
+                    const makeSequence = (id, seqFrames, options)=> ({
+                        frames: seqFrames,
+                        frameStep: options.frameStep || 5,
+                        mirrorX: options.mirrorX || false,
+                        source: options.source || null,
+                        id: id
+                    });
+                    const rightSequence = makeSequence('right', frames, { frameStep: 5 });
+                    const leftSequence = makeSequence('left', frames, { frameStep: 5, mirrorX: true, source: 'right' });
+                    container.animations = { right: rightSequence, left: leftSequence };
+                    container.defaultAnimation = rightSequence;
+                    container.anim = { sequence: frames, frameStep: 5 };
+                    container.animFrameStep = 5;
+                    const refH = 256;
+                    container.referenceHeight = refH;
+                    container.referenceWidth = 256;
+                    container.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
+                    container.computeHitbox = (enemy)=> {
+                        const size = enemy.size; const scale = container.baseScaleForSize(size);
+                        const w = 256 * scale; const h = 256 * scale;
+                        const hitW = w * 0.70;
+                        const hitH = h * 0.74;
+                        return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.05 };
+                    };
+                    container.image = dealerImg;
+                    console.info('[DealerSprite] Loaded assets/dealer-sheet.png', { frames: frames.length });
                 };
                 dealerImg.onerror = (ev)=> { try { console.warn('[DealerSprite] failed to load assets/dealer-sheet.png', ev); } catch(_){} };
                 try { const resolved = (new URL('assets/dealer-sheet.png', document.baseURI)).href; dealerImg.src = resolved; } catch(_) { /* keep assigned src */ }
@@ -25643,48 +25588,43 @@ function offerPermanentAbilityChoice() {
                         // Dealer sprite override
                         if (enemy.type === 'Dealer' && game.enemySprites && game.enemySprites.dealer && game.enemySprites.dealer.loaded) {
                             const ds = game.enemySprites.dealer;
-                            const animSeq = ds.anim && Array.isArray(ds.anim.sequence) ? ds.anim.sequence : null;
+                            const animations = ds.animations;
+                            // Determine facing based on player's position relative to enemy's center
+                            const playerX = (game && game.player) ? game.player.x : 0;
+                            let facing = playerX < enemy.x ? 'left' : 'right';
                             const img = ds.image;
                             const size = enemy.size;
-                            let frame = null;
-                            if (animSeq && animSeq.length) {
-                                const frameStep = Math.max(1, ds.anim.frameStep || 4);
+                            const scale = ds.baseScaleForSize ? ds.baseScaleForSize(size) : ((size*2)/256);
+                            // Get sequence
+                            let sequenceEntry = null;
+                            if (animations && animations[facing]) {
+                                sequenceEntry = animations[facing];
+                            } else if (facing === 'left' && animations && animations.right) {
+                                sequenceEntry = animations.right;
+                            } else {
+                                sequenceEntry = ds.defaultAnimation || (ds.anim && ds.anim.sequence ? { frames: ds.anim.sequence, frameStep: ds.anim.frameStep || 5 } : null);
+                            }
+                            if (sequenceEntry && sequenceEntry.frames && sequenceEntry.frames.length) {
+                                const framesForSequence = sequenceEntry.frames;
+                                const mirrorSequence = sequenceEntry.mirrorX === true;
                                 const nowFrame = (game && typeof game.frame === 'number') ? game.frame : Math.floor(Date.now() / 16);
-                                if (typeof enemy._dealerAnimStart !== 'number') enemy._dealerAnimStart = nowFrame;
-                                const elapsed = Math.max(0, nowFrame - enemy._dealerAnimStart);
-                                const idx = animSeq.length ? (Math.floor(elapsed / frameStep) % animSeq.length) : 0;
-                                frame = animSeq[idx] || animSeq[0] || null;
-                                enemy._dealerAnimFrame = idx;
-                            }
-                            if (!frame) {
-                                const frameSet = ds.frames || {};
-                                frame = frameSet.down || frameSet.right || frameSet.up || null;
-                            }
-                            if (frame && img) {
-                                const referenceHeight = ds.referenceHeight || frame.h || 1;
-                                const baseScale = ds.baseScaleForSize ? ds.baseScaleForSize(size) : ((size*2)/Math.max(1, referenceHeight));
-                                const renderScale = frame.renderScale || 1;
-                                const drawW = frame.w * baseScale * renderScale;
-                                const drawH = frame.h * baseScale * renderScale;
-                                const anchorRatioX = (typeof frame.anchorRatioX === 'number') ? frame.anchorRatioX : (frame.w ? 0.5 : 0.5);
-                                const anchorRatioY = (typeof frame.anchorRatioY === 'number') ? frame.anchorRatioY : (frame.h ? 0.5 : 0.5);
-                                const destX = -drawW * anchorRatioX;
-                                const destY = -drawH * anchorRatioY;
-                                const playerX = (game && game.player && typeof game.player.x === 'number') ? game.player.x : enemy.x;
-                                const spriteCenterX = enemy.x + drawW * (0.5 - anchorRefX);
-                                let flipLeft = playerX < spriteCenterX;
-                                try { enemy.facing = flipLeft ? 'left' : 'right'; } catch(_) {}
-                                ctx.save();
-                                ctx.translate(enemy.x, enemy.y);
-                                if (flipLeft) {
-                                    ctx.scale(-1, 1);
+                                const frameStep = Math.max(1, sequenceEntry.frameStep || ds.animFrameStep || 5);
+                                const sequenceLength = framesForSequence.length;
+                                const frameIndex = Math.floor(nowFrame / frameStep) % sequenceLength;
+                                const box = framesForSequence[frameIndex];
+                                if (box && img) {
+                                    const drawW = box.w * scale;
+                                    const drawH = box.h * scale;
+                                    ctx.save();
+                                    ctx.translate(enemy.x, enemy.y);
+                                    if (mirrorSequence && facing === 'left') {
+                                        ctx.scale(-1, 1);
+                                    }
+                                    ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
+                                    if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(255,255,0,0.6)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                                    ctx.restore();
+                                    return;
                                 }
-                                const drawX = flipLeft ? (-(destX + drawW)) : destX;
-                                try { enemy._noFallback = true; } catch(_) {}
-                                ctx.drawImage(img, frame.x, frame.y, frame.w, frame.h, drawX, destY, drawW, drawH);
-                                if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(255,255,0,0.55)'; ctx.strokeRect(drawX, destY, drawW, drawH); }
-                                ctx.restore();
-                                return;
                             }
                         }
                         // Gangster sprite override
