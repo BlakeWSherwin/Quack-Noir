@@ -1926,22 +1926,23 @@
                     // Pendulum swing flip detection: ring cue on sign change of lateral component
                     {
                         const metaP = game._projMeta && game._projMeta.get(i);
-                        if (metaP && metaP.pendulumPattern) {
-                            // Build perpendicular to spawn forward
-                            const fx0 = metaP._initialFx != null ? metaP._initialFx : (vx[i]||1)/Math.hypot(vx[i]||1,vy[i]||0.0001);
-                            const fy0 = metaP._initialFy != null ? metaP._initialFy : (vy[i]||0)/Math.hypot(vx[i]||1,vy[i]||0.0001);
-                            const px0 = -fy0, py0 = fx0;
-                            const lat = dx*px0 + dy*py0; // lateral component this frame
-                            const sign = lat >= 0 ? 1 : -1;
-                            const prev = metaP._pendPrevSign == null ? sign : metaP._pendPrevSign;
-                            metaP._pendPrevSign = sign;
-                            metaP._pendCd = (metaP._pendCd||0) - 1;
-                            if (sign !== prev && metaP._pendCd <= 0) {
-                                metaP._pendCue = 10; // frames to display
-                                metaP._pendCd = 14;  // cooldown
+                        if (metaP && metaP.pendulumPattern && !metaP._pendDone) {
+                            // Ensure state fields exist
+                            metaP._pendCd = metaP._pendCd || 0;
+                            metaP._pendCue = metaP._pendCue || 0;
+                            // Simple cooldown decrement
+                            if (metaP._pendCd > 0) metaP._pendCd--;
+                            // If cue is active, show a subtle ring and then set cooldown
+                            if (metaP._pendCue > 0) {
+                                addParticle(x[i], y[i], '#CFE8FF', 'ring');
+                                metaP._pendCd = 14;
                             }
-                            if (metaP._pendCue>0) metaP._pendCue--;
+                            // Occasionally trigger a cue when not on cooldown (conservative test trigger)
+                            if (metaP._pendCd === 0 && Math.random() < 0.006) {
+                                metaP._pendCue = 6;
+                            }
                         }
+                        if (metaP && metaP._pendCue > 0) metaP._pendCue--;
                     }
                     // Vector Pivot: periodic 90° turns with a brief pre-telegraph; choose left/right randomly each turn
                     {
@@ -4839,7 +4840,7 @@
                         const img = window._bulletImages && window._bulletImages.axe;
                         // Maintain a spin angle on meta
                         if (typeof meta._axeSpin !== 'number') meta._axeSpin = 0;
-                        const spinSpeed = meta._axeSpinSpeed || (0.22 + Math.min(0.18, (r||8) * 0.01));
+                            carImgH.onload = ()=>{ carImgH._ok = true; console.info('[CarImage] Loaded assets/cars/car-horizontal.png'); };
                         meta._axeSpin += spinSpeed;
                         ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang + meta._axeSpin);
                         if (img && img._ok && img.complete && img.naturalWidth) {
@@ -11688,15 +11689,15 @@ function offerPermanentAbilityChoice() {
                 window.pickRandomBackground();
             }
 
-            // Create perimeter walls
-            // Build perimeter walls spanning full logical canvas area
+            // Create perimeter collision-only walls (invisible) so projectiles can bounce off edges
+            // These walls are marked `invisible:true` to avoid drawing sprites but preserve collision behavior.
             for (let x = 0; x < ROOM_WIDTH; x++) {
-                game.walls.push({ x: x * TILE_SIZE, y: 0, type: 'building' }); // top
-                game.walls.push({ x: x * TILE_SIZE, y: (ROOM_HEIGHT - 1) * TILE_SIZE, type: 'building' }); // bottom
+                game.walls.push({ x: x * TILE_SIZE, y: 0, type: 'building', invisible: true, bounce: true }); // top (invisible)
+                game.walls.push({ x: x * TILE_SIZE, y: (ROOM_HEIGHT - 1) * TILE_SIZE, type: 'building', invisible: true, bounce: true }); // bottom (invisible)
             }
             for (let y = 1; y < ROOM_HEIGHT - 1; y++) {
-                game.walls.push({ x: 0, y: y * TILE_SIZE, type: 'building' }); // left
-                game.walls.push({ x: (ROOM_WIDTH - 1) * TILE_SIZE, y: y * TILE_SIZE, type: 'building' }); // right
+                game.walls.push({ x: 0, y: y * TILE_SIZE, type: 'building', invisible: true, bounce: true }); // left (invisible)
+                game.walls.push({ x: (ROOM_WIDTH - 1) * TILE_SIZE, y: y * TILE_SIZE, type: 'building', invisible: true, bounce: true }); // right (invisible)
             }
             
             // Add varied obstacles (streetlight removed per design request)
@@ -11930,11 +11931,11 @@ function offerPermanentAbilityChoice() {
                                         }
                                     };
                                     preKick.onerror = function(ev){ console.warn('[WunderswanSprite][pre-kick] failed', ev); };
-                                    try { preKick.src = new URL('assets/wunderswan.png', document.baseURI).href; console.info('[WunderswanSprite][pre-kick] requesting', preKick.src); } catch(e){ preKick.src = 'assets/wunderswan.png'; }
+                                    try { preKick.src = new URL('assets/wunderswan-sheet-1-30.png', document.baseURI).href; console.info('[WunderswanSprite][pre-kick] requesting', preKick.src); } catch(e){ preKick.src = 'assets/wunderswan-sheet-1-30.png'; }
                                     // keep reference
                                     game._wunderswan_preKick = preKick;
                                 } else {
-                                    try { const ws = game.enemySprites.wunderswan; if (ws && ws.image && (!ws.image.src || !ws.image.src.includes('wunderswan.png'))) { ws.image.src = 'assets/wunderswan.png'; console.info('[WunderswanSprite][pre-kick] set existing image.src'); } } catch(_){}
+                                    try { const ws = game.enemySprites.wunderswan; if (ws && ws.image && (!ws.image.src || !/wunderswan(-sheet-1-30)?\.png/.test(ws.image.src))) { ws.image.src = 'assets/wunderswan-sheet-1-30.png'; console.info('[WunderswanSprite][pre-kick] set existing image.src to spritesheet'); } } catch(_){ }
                                 }
                             } catch(e) { console.warn('[WunderswanSprite][pre-kick] error', e); }
                         } else if (game._selectedAct === 'II') {
@@ -12116,7 +12117,7 @@ function offerPermanentAbilityChoice() {
                                         }
                                     };
                                     kick.onerror = function(ev){ console.warn('[WunderswanSprite][spawn-kick] failed to load', ev); };
-                                    try { kick.src = new URL('assets/wunderswan.png', document.baseURI).href; console.info('[WunderswanSprite][spawn-kick] requesting', kick.src); } catch(e){ kick.src = 'assets/wunderswan.png'; }
+                                    try { kick.src = new URL('assets/wunderswan-sheet-1-30.png', document.baseURI).href; console.info('[WunderswanSprite][spawn-kick] requesting', kick.src); } catch(e){ kick.src = 'assets/wunderswan-sheet-1-30.png'; }
                                     // keep reference so GC doesn't drop it before onload
                                     game._wunderswan_spawnKick = kick;
                                 } catch(e){ console.warn('[WunderswanSprite][spawn-kick] error', e); }
@@ -12124,8 +12125,8 @@ function offerPermanentAbilityChoice() {
                                 // If loader exists but not yet requested or not loaded, try to set src explicitly
                                 try {
                                     const ws = game.enemySprites.wunderswan;
-                                    if (ws && ws.image && (!ws.image.src || !ws.image.src.includes('wunderswan.png'))) {
-                                        try { ws.image.src = 'assets/wunderswan.png'; console.info('[WunderswanSprite][spawn] set existing image.src to assets/wunderswan.png'); } catch(_){}
+                                    if (ws && ws.image && (!ws.image.src || !/wunderswan(-sheet-1-30)?\.png/.test(ws.image.src))) {
+                                        try { ws.image.src = 'assets/wunderswan-sheet-1-30.png'; console.info('[WunderswanSprite][spawn] set existing image.src to spritesheet'); } catch(_){ }
                                     }
                                 } catch(_){}
                             }
@@ -23818,6 +23819,8 @@ function offerPermanentAbilityChoice() {
             
             // Draw walls (restored original manual drawing)
             game.walls.forEach(wall => {
+                // Skip invisible collision-only walls (e.g., perimeter markers)
+                if (wall && wall.invisible) return;
                 ctx.save();
                 switch (wall.type) {
                     case 'building':
@@ -26201,6 +26204,46 @@ function offerPermanentAbilityChoice() {
                             return;
                         }
                         // Cygnus Prime sprite override (Act III boss)
+                        // Wunderswan sprite override (secret boss) - defensive: only draw when sprite data is usable
+                        if (enemy.type === 'Wunderswan' && game.enemySprites && game.enemySprites.wunderswan && (game.enemySprites.wunderswan.loaded || game.enemySprites.wunderswan._forcedBitmap)) {
+                            const ws = game.enemySprites.wunderswan;
+                            // Support both sequenced frames ({ seq: [...] }) and single-frame maps (e.g. { down: {x,y,w,h} })
+                            const seq = (ws.frames && ws.frames.seq) ? ws.frames.seq : (Array.isArray(ws.frames) ? ws.frames : null);
+                            const frameStep = (ws.anim && ws.anim.frameStep) ? ws.anim.frameStep : (ws.anim && ws.anim.frameStep === 0 ? 0 : 8);
+                            const animTicks = Math.floor((game && typeof game.frame === 'number' ? game.frame : Math.floor(Date.now()/16)) / (frameStep || 8));
+                            let box = null;
+                            if (Array.isArray(seq) && seq.length) box = seq[animTicks % seq.length];
+                            // If frames is a keyed map (e.g. { down: {...} }) prefer a 'down' frame
+                            if (!box && ws.frames && ws.frames.down) box = ws.frames.down;
+                            const img = ws.image;
+                            const size = (typeof enemy.size === 'number') ? enemy.size : (ws.referenceHeight || 256) / 2;
+                            const scale = (typeof ws.baseScaleForSize === 'function') ? ws.baseScaleForSize(size) : ((size*2)/256);
+                            // Resolve source width/height defensively
+                            const srcW = (box && box.w) ? box.w : (ws._forcedBitmap ? (ws._forcedBitmap.width || 0) : (img && (img.naturalWidth || img.width)) || (size*2));
+                            const srcH = (box && box.h) ? box.h : (ws._forcedBitmap ? (ws._forcedBitmap.height || 0) : (img && (img.naturalHeight || img.height)) || (size*2));
+                            // If no usable source dimensions, skip sprite draw and allow fallback rendering
+                            if (!srcW || !srcH) {
+                                // let later fallback drawing handle visuals
+                            } else {
+                                const drawW = srcW * scale;
+                                const drawH = srcH * scale;
+                                ctx.save(); ctx.translate(enemy.x, enemy.y);
+                                if (typeof ctx.imageSmoothingEnabled !== 'undefined') try{ ctx.imageSmoothingEnabled = true; } catch(_){ }
+                                try { if (enemy) enemy._noFallback = true; } catch(_){ }
+                                const dstW = Math.max(1, Math.round(drawW));
+                                const dstH = Math.max(1, Math.round(drawH));
+                                if (ws._forcedBitmap && box) {
+                                    ctx.drawImage(ws._forcedBitmap, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                                } else if (img && box) {
+                                    ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                                } else if (ws._forcedBitmap) {
+                                    ctx.drawImage(ws._forcedBitmap, 0, 0, ws._forcedBitmap.width, ws._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
+                                }
+                                if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(200,200,255,0.45)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                                ctx.restore();
+                                return;
+                            }
+                        }
                         if (enemy.type === 'Cygnus Prime' && game.enemySprites && game.enemySprites.cygnusPrime && (game.enemySprites.cygnusPrime.loaded || game.enemySprites.cygnusPrime._forcedBitmap)) {
                             const cp = game.enemySprites.cygnusPrime;
                             const { seq } = cp.frames || {};
