@@ -10526,153 +10526,47 @@ function offerPermanentAbilityChoice() {
             // === Boss Gangster enemy sprite sheet ===
             if (!game.enemySprites.bossGangster) {
                 const bossGImg = new Image();
-                bossGImg.src = 'assets/gunboss-sheet.png';
+                bossGImg.src = 'assets/gunboss-sheet-1-22.png';
                 game.enemySprites.bossGangster = { image: bossGImg, loaded: false };
                 bossGImg.onload = () => {
-                    const container = game.enemySprites.bossGangster;
-                    container.loaded = true;
-                    try {
-                        const sheetW = bossGImg.naturalWidth || bossGImg.width || 0;
-                        const sheetH = bossGImg.naturalHeight || bossGImg.height || 0;
-                        if (!sheetW || !sheetH) {
-                            console.warn('[BossGangsterSprite] gunboss-sheet.png has zero size');
-                            return;
-                        }
-                        const cols = 8;
-                        const rows = 3;
-                        const cellW = Math.floor(sheetW / cols);
-                        const cellH = Math.floor(sheetH / rows);
-                        const rawFrames = [
-                            { index:0,  row:0, col:0, x:40,  y:8,   w:190, h:258 },
-                            { index:1,  row:0, col:1, x:294, y:9,   w:190, h:257 },
-                            { index:2,  row:0, col:2, x:548, y:7,   w:189, h:259 },
-                            { index:3,  row:0, col:3, x:805, y:6,   w:185, h:260 },
-                            { index:4,  row:0, col:4, x:1061,y:6,   w:183, h:260 },
-                            { index:5,  row:0, col:5, x:1315,y:8,   w:189, h:258 },
-                            { index:6,  row:0, col:6, x:1571,y:8,   w:192, h:258 },
-                            { index:7,  row:0, col:7, x:1831,y:6,   w:191, h:260 },
-                            { index:8,  row:1, col:0, x:41,  y:266, w:191, h:266 },
-                            { index:9,  row:1, col:1, x:296, y:266, w:191, h:240 },
-                            { index:10, row:1, col:2, x:546, y:266, w:194, h:240 },
-                            { index:11, row:1, col:3, x:805, y:266, w:187, h:240 },
-                            { index:12, row:1, col:4, x:1061,y:266, w:184, h:240 },
-                            { index:13, row:1, col:5, x:1317,y:266, w:183, h:240 },
-                            { index:14, row:1, col:6, x:1570,y:266, w:191, h:240 },
-                            { index:15, row:1, col:7, x:1829,y:266, w:192, h:241 },
-                            { index:16, row:2, col:0, x:39,  y:532, w:192, h:231 }
-                        ];
-                        const clamp01 = (value) => Math.max(0, Math.min(1, value));
-                        const offsets = rawFrames.map(frame => {
-                            const cellOriginX = frame.col * cellW;
-                            const cellOriginY = frame.row * cellH;
-                            return Object.assign({}, frame, {
-                                offsetX: frame.x - cellOriginX,
-                                offsetY: frame.y - cellOriginY
-                            });
-                        });
-                        const minOffsetX = offsets.reduce((min, f) => Math.min(min, f.offsetX), Infinity);
-                        const minOffsetY = offsets.reduce((min, f) => Math.min(min, f.offsetY), Infinity);
-                        const maxRight = offsets.reduce((max, f) => Math.max(max, f.offsetX + f.w), 0);
-                        const maxBottom = offsets.reduce((max, f) => Math.max(max, f.offsetY + f.h), 0);
-                        const leftPad = Math.max(0, -minOffsetX);
-                        const topPad = Math.max(0, -minOffsetY);
-                        const baselineRef = maxBottom;
-                        const preparedWidth = Math.ceil(Math.max(maxRight + leftPad, cellW + leftPad));
-                        const preparedHeight = Math.ceil(Math.max(baselineRef + topPad, cellH + topPad));
-                        const refVisibleH = offsets.reduce((max, f) => Math.max(max, f.h), 1);
-                        const refVisibleW = offsets.reduce((max, f) => Math.max(max, f.w), 1);
-                        const frames = offsets.map(frame => {
-                            const baselineGap = Math.max(0, baselineRef - (frame.offsetY + frame.h));
-                            const drawX = frame.offsetX + leftPad;
-                            const drawY = frame.offsetY + baselineGap + topPad;
-                            const baselinePx = drawY + frame.h;
-                            const anchorX = clamp01((drawX + frame.w * 0.5) / preparedWidth);
-                            const centerPx = drawY + (frame.h * 0.5);
-                            const anchorY = clamp01(centerPx / preparedHeight);
-                            const baselineRatio = clamp01(baselinePx / preparedHeight);
-                            return Object.assign({}, frame, {
-                                renderScale: 1,
-                                anchorRatioX: anchorX,
-                                anchorRatioY: anchorY,
-                                atlasOffsetX: drawX,
-                                atlasOffsetY: drawY,
-                                baselineGap,
-                                baselineRatio,
-                                baselinePx,
-                                centerPx,
-                                preparedWidth,
-                                preparedHeight
-                            });
-                        });
-                        const useOffscreen = false;
-                        frames.forEach(frame => {
-                            let canvas;
-                            if (useOffscreen) {
-                                canvas = new OffscreenCanvas(preparedWidth, preparedHeight);
-                            } else {
-                                canvas = document.createElement('canvas');
-                                canvas.width = preparedWidth;
-                                canvas.height = preparedHeight;
-                            }
-                            const ctx = canvas.getContext('2d', { alpha: true });
-                            if (ctx) {
-                                ctx.clearRect(0, 0, preparedWidth, preparedHeight);
-                                const drawX = frame.atlasOffsetX || 0;
-                                const drawY = frame.atlasOffsetY || 0;
-                                ctx.drawImage(bossGImg, frame.x, frame.y, frame.w, frame.h, drawX, drawY, frame.w, frame.h);
-                                frame._rawAnchorPivotX = preparedWidth * frame.anchorRatioX;
-                                frame._rawAnchorPivotY = preparedHeight * frame.anchorRatioY;
-                            }
-                            frame._rawAnchorRatioX = frame.anchorRatioX;
-                            frame._rawAnchorRatioY = frame.anchorRatioY;
-                            if (useOffscreen && typeof canvas.transferToImageBitmap === 'function') {
-                                try {
-                                    frame.bitmap = canvas.transferToImageBitmap();
-                                } catch (e) {
-                                    frame.bitmap = null;
-                                }
-                                frame.canvas = canvas;
-                            } else {
-                                frame.canvas = canvas;
-                            }
-                        });
-                        container.frames = {
-                            down: frames[0] || null,
-                            up: frames[0] || null,
-                            right: frames[0] || null
-                        };
-                        container.anim = {
-                            sequence: frames,
-                            frameStep: 5
-                        };
-                        container.referenceHeight = refVisibleH;
-                        container.referenceWidth = refVisibleW;
-                        container.preparedWidth = preparedWidth;
-                        container.preparedHeight = preparedHeight;
-                        container.baselineReference = baselineRef;
-                        container.maxVisibleWidth = refVisibleW;
-                        container.maxVisibleHeight = refVisibleH;
-                        container.anchorRatioX = frames[0] ? frames[0].anchorRatioX : 0.5;
-                        container.anchorRatioY = frames[0] ? frames[0].anchorRatioY : 0.5;
-                        container.baselineRatio = frames[0] ? frames[0].baselineRatio : 1;
-                        container.baseScaleForSize = (enemySize)=> ((enemySize*2)/(refVisibleH || 1));
-                        container.computeHitbox = (enemy)=> {
-                            const size = enemy.size;
-                            const scale = container.baseScaleForSize(size);
-                            const visibleW = container.maxVisibleWidth || container.referenceWidth || container.preparedWidth || 1;
-                            const visibleH = container.maxVisibleHeight || container.referenceHeight || container.preparedHeight || 1;
-                            const hitW = (visibleW * scale) * 0.68;
-                            const hitH = (visibleH * scale) * 0.75;
-                            return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + (visibleH * scale) * 0.05 };
-                        };
-                        container.image = bossGImg;
-                        console.info('[BossGangsterSprite] Loaded gunboss-sheet.png', { frames: frames.length, preparedWidth, preparedHeight, refVisibleH, refVisibleW });
-                    } catch(err) {
-                        console.warn('[BossGangsterSprite] processing error', err);
+                    game.enemySprites.bossGangster.loaded = true;
+                    const atlas = {"frames":{"0":{"x":0,"y":0,"w":256,"h":256,"duration":1},"1":{"x":256,"y":0,"w":256,"h":256,"duration":1},"2":{"x":512,"y":0,"w":256,"h":256,"duration":1},"3":{"x":768,"y":0,"w":256,"h":256,"duration":1},"4":{"x":1024,"y":0,"w":256,"h":256,"duration":1},"5":{"x":1280,"y":0,"w":256,"h":256,"duration":1},"6":{"x":1536,"y":0,"w":256,"h":256,"duration":1},"7":{"x":1792,"y":0,"w":256,"h":256,"duration":1},"8":{"x":0,"y":256,"w":256,"h":256,"duration":1},"9":{"x":256,"y":256,"w":256,"h":256,"duration":1},"10":{"x":512,"y":256,"w":256,"h":256,"duration":1},"11":{"x":768,"y":256,"w":256,"h":256,"duration":1},"12":{"x":1024,"y":256,"w":256,"h":256,"duration":1},"13":{"x":1280,"y":256,"w":256,"h":256,"duration":1},"14":{"x":1536,"y":256,"w":256,"h":256,"duration":1},"15":{"x":1792,"y":256,"w":256,"h":256,"duration":1},"16":{"x":0,"y":512,"w":256,"h":256,"duration":1},"17":{"x":256,"y":512,"w":256,"h":256,"duration":1},"18":{"x":512,"y":512,"w":256,"h":256,"duration":1},"19":{"x":768,"y":512,"w":256,"h":256,"duration":1},"20":{"x":1024,"y":512,"w":256,"h":256,"duration":1},"21":{"x":1280,"y":512,"w":256,"h":256,"duration":1},"22":{"x":1536,"y":512,"w":256,"h":256,"duration":1},"23":{"x":1792,"y":512,"w":256,"h":256,"duration":1},"24":{"x":0,"y":768,"w":256,"h":256,"duration":1},"25":{"x":256,"y":768,"w":256,"h":256,"duration":1},"26":{"x":512,"y":768,"w":256,"h":256,"duration":1},"27":{"x":768,"y":768,"w":256,"h":256,"duration":1},"28":{"x":1024,"y":768,"w":256,"h":256,"duration":1},"29":{"x":1280,"y":768,"w":256,"h":256,"duration":1},"30":{"x":1536,"y":768,"w":256,"h":256,"duration":1},"31":{"x":1792,"y":768,"w":256,"h":256,"duration":1}},"meta":{"size":{"w":2048,"h":1024},"frame_size":{"w":256,"h":256},"background_mode":"spriteclean"}};
+                    const frames = [];
+                    // Use only frames 1-22
+                    for (let i = 1; i <= 22; i++) {
+                        frames.push(atlas.frames[i.toString()]);
                     }
+                    const container = game.enemySprites.bossGangster;
+                    container.frames = frames;
+                    const makeSequence = (id, seqFrames, options)=> ({
+                        frames: seqFrames,
+                        frameStep: options.frameStep || 5,
+                        mirrorX: options.mirrorX || false,
+                        source: options.source || null,
+                        id: id
+                    });
+                    const rightSequence = makeSequence('right', frames, { frameStep: 5 });
+                    const leftSequence = makeSequence('left', frames, { frameStep: 5, mirrorX: true, source: 'right' });
+                    container.animations = { right: rightSequence, left: leftSequence };
+                    container.defaultAnimation = rightSequence;
+                    container.anim = { sequence: frames, frameStep: 5 };
+                    container.animFrameStep = 5;
+                    const refH = 256;
+                    container.referenceHeight = refH;
+                    container.referenceWidth = 256;
+                    container.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
+                    container.computeHitbox = (enemy)=> {
+                        const size = enemy.size; const scale = container.baseScaleForSize(size);
+                        const w = 256 * scale; const h = 256 * scale;
+                        const hitW = w * 0.70;
+                        const hitH = h * 0.74;
+                        return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.05 };
+                    };
+                    container.image = bossGImg;
+                    console.info('[BossGangsterSprite] Loaded gunboss-sheet-1-22.png', { frames: frames.length });
                 };
-                bossGImg.onerror = (ev)=> { try { console.warn('[BossGangsterSprite] failed to load assets/gunboss-sheet.png', ev); } catch(_){} };
-                try { const resolved = (new URL('assets/gunboss-sheet.png', document.baseURI)).href; bossGImg.src = resolved; } catch(_) { /* keep assigned src */ }
+                bossGImg.onerror = (ev)=> { try { console.warn('[BossGangsterSprite] failed to load assets/gunboss-sheet-1-22.png', ev); } catch(_){} };
+                try { const resolved = (new URL('assets/gunboss-sheet-1-22.png', document.baseURI)).href; bossGImg.src = resolved; } catch(_) { /* keep assigned src */ }
             }
 
             // === The Big Quack final boss sprite sheet ===
