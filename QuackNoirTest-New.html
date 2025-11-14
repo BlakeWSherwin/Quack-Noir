@@ -659,6 +659,46 @@
                             try { window._bulletImages.loadQuackenTentacle(); } catch(_){ }
                         }
                     }
+                    if (String(name) === 'Tumbleweed' || String(name) === 'Kick the Can') {
+                        // Spawn immediately
+                        try {
+                            const startX = LOGICAL_W/2, startY = LOGICAL_H/2;
+                            const exclusionR = 120; const exclusionR2 = exclusionR*exclusionR;
+                            let tx, ty, attempts = 0;
+                            do {
+                                tx = 60 + Math.random() * (LOGICAL_W - 120);
+                                ty = 60 + Math.random() * (LOGICAL_H - 120);
+                                attempts++;
+                                const dxs = tx - startX, dys = ty - startY;
+                                var tooClose = (dxs*dxs + dys*dys) < exclusionR2;
+                            } while ((tooClose || isWall(tx, ty, 18)) && attempts < 80);
+                            if (attempts < 80) {
+                                const baseDmg = Math.max(6, Math.floor((typeof calculateDamage === 'function' ? calculateDamage() : 22) * 0.70));
+                                const idx = game.spawnProjectile({
+                                    x: tx, y: ty,
+                                    vx: (Math.random()*2-1) * 0.25,
+                                    vy: (Math.random()*2-1) * 0.25,
+                                    life: 60000,
+                                    radius: 14,
+                                    damage: baseDmg,
+                                    bouncing: true
+                                });
+                                if (!game._projMeta) game._projMeta = new Map();
+                                if (idx >= 0) {
+                                    if (name === 'Tumbleweed') {
+                                        game._projMeta.set(idx, { tumbleweed: true, bouncing: true, piercing: true, pierceCount: 999, pierceHits: 0, indestructible: true, baseDamage: baseDmg, _rollAngle: 0 });
+                                        game._tumbleweedIndex = idx;
+                                    } else {
+                                        game._projMeta.set(idx, { kickTheCan: true, bouncing: true, piercing: true, pierceCount: 999, pierceHits: 0, indestructible: true, baseDamage: baseDmg, _rollAngle: 0 });
+                                        game._kickCanIndex = idx;
+                                    }
+                                    const lowFx = !!(game.perf && game.perf.lowFx);
+                                    const reduceRings = !!(game.fxFlags && game.fxFlags.reduceRings);
+                                    if (!lowFx && !reduceRings && typeof addTransientEffect === 'function') addTransientEffect({ type:'ringFlash', x:tx, y:ty, color:'#EED7AA', radius: 18, life: 90 });
+                                }
+                            }
+                        } catch(_) {}
+                    }
                 } catch(_){ }
             };
             // Preload laser firing SFX for Act III enemy lasers
@@ -5927,6 +5967,12 @@ function grantPermanentAbilities(){
         game.player = game.player || { abilities: [], permanentAbilities: [], _seenAbilities: {} };
         if (!Array.isArray(game.player.permanentAbilities)) game.player.permanentAbilities = [];
         if (!Array.isArray(game.player.abilities)) game.player.abilities = [];
+        // In Duck and Cover mode, ignore permanent abilities
+        if (game._selectedAct === 'DuckAndCover') {
+            // Remove any permanent abilities that might be in abilities
+            game.player.abilities = game.player.abilities.filter(a => !game.player.permanentAbilities.includes(a));
+            return;
+        }
         try { if (!game._seenAbilitiesLoaded) ensureSeenAbilitiesLoaded(); } catch(_){ }
         game.player._seenAbilities = game.player._seenAbilities || {};
         let updated = false;
@@ -7067,7 +7113,7 @@ function showActTransition(actId, options){
     const minMs = typeof options.minMs === 'number' ? options.minMs : 2000;
     const preloadTimeout = typeof options.preloadTimeout === 'number' ? options.preloadTimeout : 1800;
     try { const ov = _createActTransitionOverlay(); const txt = document.getElementById('actTransitionOverlayText');
-    const label = (''+actId) === 'I' ? 'New Quack City' : ((''+actId) === 'II' ? 'Goose Ghetto' : ((''+actId) === 'III' ? 'Wunderswans Domain' : (''+actId)));
+    const label = (''+actId) === 'I' ? 'New Quack City' : ((''+actId) === 'II' ? 'Goose Ghetto' : ((''+actId) === 'III' ? 'Wunderswans Domain' : ((''+actId) === 'DuckAndCover' ? 'Duck and Cover' : (''+actId))));
         if (txt) txt.textContent = label;
         try { console.info('[ActTransition] show', actId, label); } catch(_){ }
         ov.style.pointerEvents = 'auto'; ov.style.opacity = '1';
@@ -7093,7 +7139,7 @@ function showTitleScreen() {
         fontFamily:'Courier New,monospace', transition:'opacity 380ms ease', opacity:'1'
     });
     overlay.innerHTML = `
-        <img id="titleLogo" src="assets/title.png" alt="Quack Noir" style="width:clamp(300px,60vw,780px);max-height:70vh;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 0 12px #400060);" />
+        <img id="titleLogo" src="assets/mallardvice-title-clean.png" alt="Quack Noir" style="width:clamp(300px,60vw,780px);max-height:70vh;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 0 12px #400060);" />
         <div id="pressStartPrompt" style="color:#bbb;font-size:22px;letter-spacing:2px;animation:pulsePrompt 2.8s ease-in-out infinite;">PRESS SPACE / CLICK TO START</div>
         <div style="position:absolute;bottom:12px;right:16px;font-size:11px;color:#444;">Build: Simplified Title v4</div>`;
     if (!document.getElementById('pulsePromptStyle')) {
@@ -12115,21 +12161,62 @@ function offerPermanentAbilityChoice() {
         }
 
         function getDuckWaveConfig(waveNumber) {
-            const index = Math.max(0, waveNumber - 1);
-            const base = DUCK_AND_COVER_WAVES[Math.min(index, DUCK_AND_COVER_WAVES.length - 1)];
-            if (!base) return null;
-            const extra = Math.max(0, index - (DUCK_AND_COVER_WAVES.length - 1));
-            const types = Array.isArray(base.types) ? base.types.slice() : [];
-            if (extra > 0) {
-                const lateAdds = ['Cardi Beak', 'Feather Krueger', 'Honkutus of Cygnus', 'Mr Gosling'];
-                lateAdds.forEach(t => { if (types.indexOf(t) === -1) types.push(t); });
+            const nonRanged = ['Thug', 'Street Dog', 'Punk', 'Enforcer', 'Goosey Smalls', 'Goosey Elliot', 'Fowl Pacino', 'Swanomaly', 'Swandroid 18'];
+            const ranged = ['Gangster', 'Dealer', 'Goose Willis', 'Lil Goosey', 'Geese Robbins', '2Honk Shakur', 'Cardi Beak', 'Feather Krueger', 'Honkutus of Cygnus', 'Mr Gosling', 'Swan Wick', 'The Honkinator'];
+            const minibosses = ['Boss Thug', 'Boss Gangster', 'Big Bill'];
+
+            let types = [];
+            let rangedPercent = 0;
+            let minibossPercent = 0;
+
+            if (waveNumber <= 10) {
+                types = nonRanged.slice();
+                rangedPercent = 0;
+            } else if (waveNumber <= 20) {
+                types = nonRanged.concat(ranged);
+                rangedPercent = 0.1;
+            } else if (waveNumber <= 30) {
+                types = nonRanged.concat(ranged);
+                rangedPercent = 0.25;
+            } else if (waveNumber <= 40) {
+                types = nonRanged.concat(ranged).concat(minibosses);
+                rangedPercent = 0.25;
+                minibossPercent = 0.05;
+            } else if (waveNumber <= 50) {
+                types = nonRanged.concat(ranged);
+                rangedPercent = 0.5;
+            } else if (waveNumber <= 60) {
+                types = nonRanged.concat(ranged);
+                rangedPercent = 0.75;
+            } else if (waveNumber >= 100) {
+                types = ranged.slice();
+                rangedPercent = 1.0;
+            } else {
+                // For waves 61-99, continue with 75% ranged
+                types = nonRanged.concat(ranged);
+                rangedPercent = 0.75;
             }
-            const enemyCount = Math.max(1, Math.floor(base.enemyCount + extra * 4));
-            const healthMult = (base.healthMult || 1) * (1 + extra * 0.08);
-            const eliteChance = Math.min(0.35, (base.eliteChance || 0) + extra * 0.04);
-            const chestOnClear = (typeof base.chestOnClear === 'number' && base.chestOnClear >= 0) ? base.chestOnClear : 1;
-            const chestStart = (typeof base.chestStart === 'number' && base.chestStart >= 0) ? base.chestStart : 0;
-            return { wave: waveNumber, enemyCount, types, healthMult, eliteChance, chestOnClear, chestStart };
+
+            // Base enemy count, increasing gradually
+            let enemyCount = 10 + Math.floor((waveNumber - 1) * 1.5); // Starts at 10, increases by 1.5 per wave
+
+            // Health multiplier increases with wave
+            const healthMult = 1.0 + (waveNumber - 1) * 0.05;
+
+            // Elite chance increases slightly
+            const eliteChance = Math.min(0.3, (waveNumber - 1) * 0.01);
+
+            return {
+                wave: waveNumber,
+                enemyCount,
+                types,
+                healthMult,
+                eliteChance,
+                chestOnClear: 1,
+                chestStart: 0,
+                rangedPercent,
+                minibossPercent
+            };
         }
 
         function showDuckWaveBanner(label) {
@@ -12287,16 +12374,39 @@ function offerPermanentAbilityChoice() {
             if (!Array.isArray(cfg.types) || cfg.types.length === 0) {
                 cfg.types = ['Thug'];
             }
-            const pool = cfg.types.filter(t => {
+            const nonRangedTypes = cfg.types.filter(t => {
                 const meta = ENEMY_TYPES[t];
-                return meta && !meta.boss && !meta.bossFinal && !meta.bossSecret;
+                return meta && !meta.ranged && !meta.boss && !meta.bossFinal && !meta.bossSecret;
             });
-            if (!pool.length) pool.push('Thug');
+            const rangedTypes = cfg.types.filter(t => {
+                const meta = ENEMY_TYPES[t];
+                return meta && meta.ranged && !meta.boss && !meta.bossFinal && !meta.bossSecret;
+            });
+            const minibossTypes = cfg.types.filter(t => {
+                const meta = ENEMY_TYPES[t];
+                return meta && meta.boss && !meta.bossFinal && !meta.bossSecret;
+            });
             let placed = 0;
             game._roomSpawnedEnemies = 0;
             let fails = 0;
-            while (placed < cfg.enemyCount && fails < cfg.enemyCount * 6) {
-                const typeName = pool[Math.floor(Math.random() * pool.length)];
+            while (placed < cfg.enemyCount && fails < 10000) {
+                let category;
+                const rand = Math.random();
+                if (cfg.minibossPercent > 0 && rand < cfg.minibossPercent) {
+                    category = minibossTypes;
+                } else if (rand < cfg.minibossPercent + cfg.rangedPercent) {
+                    category = rangedTypes;
+                } else {
+                    category = nonRangedTypes;
+                }
+                if (category.length === 0) {
+                    // Fallback to all types
+                    category = cfg.types.filter(t => {
+                        const meta = ENEMY_TYPES[t];
+                        return meta && !meta.bossFinal && !meta.bossSecret;
+                    });
+                }
+                const typeName = category[Math.floor(Math.random() * category.length)];
                 if (spawnDuckAndCoverEnemy(typeName, waveNumber, cfg)) {
                     placed++;
                 } else {
@@ -13069,7 +13179,9 @@ function offerPermanentAbilityChoice() {
             try {
                 const hasTw = game.player && Array.isArray(game.player.abilities) && game.player.abilities.includes('Tumbleweed');
                 const hasCan = game.player && Array.isArray(game.player.abilities) && game.player.abilities.includes('Kick the Can');
-                if (hasTw || hasCan) {
+                const twAlreadySpawned = typeof game._tumbleweedIndex === 'number' && game._tumbleweedIndex >= 0;
+                const canAlreadySpawned = typeof game._kickCanIndex === 'number' && game._kickCanIndex >= 0;
+                if ((hasTw && !twAlreadySpawned) || (hasCan && !canAlreadySpawned)) {
                     // Pick a spot away from center/start and not inside walls/obstacles
                     const startX = LOGICAL_W/2, startY = LOGICAL_H/2;
                     const exclusionR = 120; const exclusionR2 = exclusionR*exclusionR;
@@ -24333,6 +24445,11 @@ function offerPermanentAbilityChoice() {
                 lastDirection: { x: 0, y: 1 },
                 invulnerable: false, invulnTime: 0,
                 speed: 2.5,
+                // Animation state
+                animFrame: 0,
+                animTimer: 0,
+                animSpeed: 7,
+                moving: false,
                 // Terrifying Aura tracking
                 killCount: 0,
                 auraActive: false,
@@ -24356,6 +24473,10 @@ function offerPermanentAbilityChoice() {
 
             // Load persisted seen-abilities map (merge into newly created player object)
             try { if (typeof loadSeenAbilities === 'function') loadSeenAbilities(); } catch(_) {}
+
+            // Reset projectile indices
+            game._tumbleweedIndex = -1;
+            game._kickCanIndex = -1;
 
             // If sprite sheet was lost (first ever reset before load code ran), reinitialize it similar to startup
             if (!game.player.walkSheet) {
