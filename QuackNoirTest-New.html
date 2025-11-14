@@ -32,6 +32,9 @@
         .stat-row { display:flex; justify-content:flex-start; align-items:center; gap:6px; margin:4px 0 2px; padding:1px 0 3px; border-bottom:1px solid #222; flex-wrap:wrap; }
         .stat-label { color:#ccc; font-size:11px; letter-spacing:0.5px; min-width:72px; }
         .stat-value { color:#00ff88; font-weight:bold; font-size:11px; text-shadow:0 0 3px #004422; }
+        #nowPlayingContainer { display:none; flex-direction:column; align-items:flex-start; gap:2px; margin-top:8px; padding-top:6px; border-top:1px solid #222; }
+        #nowPlayingLabel { color:#ccc; font-size:11px; letter-spacing:0.5px; }
+        #nowPlayingText { color:#ffcc66; font-size:11px; letter-spacing:0.4px; text-shadow:0 0 3px #664400; white-space:pre-line; }
         #abilities > div:first-child { font-weight:bold; margin-bottom:4px; color:#ffdd55; text-shadow:0 0 6px #664400; }
         #abilities { font-family:'Courier New', monospace; }
         .tooltip {
@@ -127,7 +130,9 @@
                                         <div id="potatoBadge" title="Reduced FX active">LOW FX</div>
                                     </div>
                                     <div style="margin:2px 0;">Health: <span id="health"></span> / <span id="maxHealth"></span></div>
-                                    <div style="margin:2px 0;">District: <span id="dungeon"></span> | Street: <span id="room"></span></div>
+                                    <div id="actProgressRow" style="margin:2px 0;">
+                                        <span id="dungeonLabel">District</span>: <span id="dungeon"></span><span id="streetLabelWrap"> | Street: <span id="room"></span></span>
+                                    </div>
                                     <div style="margin:2px 0;">Score: <span id="score"></span></div>
                                     <div class="progress-bar" style="margin-top:8px; margin-bottom:6px; height:10px;"><div id="healthBar" class="progress-fill" style="width:100%; height:100%"></div></div>
                                     <div id="chestLegend" style="margin-top:2px;font-size:11px;color:#ffdd55;letter-spacing:0.5px;">Chests: <span id="statChests" style="color:#ffd700"></span></div>
@@ -141,7 +146,11 @@
                                     <div class="stat-row"><span class="stat-label">Crit</span><span id="statCrit" class="stat-value"></span></div>
                                     <div class="stat-row"><span class="stat-label">Block</span><span id="statBlock" class="stat-value"></span></div>
                                     <div class="stat-row"><span class="stat-label">Kills</span><span id="statKills" class="stat-value"></span></div>
-                                    <div class="stat-row"><span class="stat-label">Rooms</span><span id="statRooms" class="stat-value"></span></div>
+                                    <div class="stat-row"><span id="statRoomsLabel" class="stat-label">Rooms</span><span id="statRooms" class="stat-value"></span></div>
+                                    <div id="nowPlayingContainer">
+                                        <span id="nowPlayingLabel">Now Playing</span>
+                                        <span id="nowPlayingText"></span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -240,6 +249,40 @@
                     }
                 } catch(_){ }
                 try { window._safeUnlockActIII_flushing = false; } catch(_){ }
+            };
+        }
+        if (typeof window.unlockDuckAndCover !== 'function') {
+            window.unlockDuckAndCover = function(source){
+                try { if (!window.game) window.game = {}; } catch(_){ }
+                try { game._duckAndCoverUnlocked = true; } catch(_){ }
+                try { if (localStorage && localStorage.setItem) localStorage.setItem('duckAndCoverUnlocked', '1'); } catch(_){ }
+                try { console.info('[Progress-stub] Duck and Cover unlocked (early stub)', source || 'early-stub'); } catch(_){ }
+                try { if (typeof showToast === 'function') showToast('Duck and Cover unlocked!'); } catch(_){ }
+                try { const menu = document.getElementById('titleActMenu'); if (menu && typeof menu._refresh === 'function') menu._refresh(); } catch(_){ }
+            };
+        }
+        if (typeof window.safeUnlockDuckAndCover !== 'function') {
+            window._unlockDuckCoverQueue = window._unlockDuckCoverQueue || [];
+            window._safeUnlockDuckCover_flushing = false;
+            window.safeUnlockDuckAndCover = function(source){
+                try {
+                    if (typeof window.unlockDuckAndCover === 'function' && window._safeUnlockDuckCover_flushing === false) {
+                        try { window.unlockDuckAndCover(source); return; } catch(e) { /* fallthrough to queue */ }
+                    }
+                } catch(_){ }
+                try { window._unlockDuckCoverQueue.push(source || 'queued'); } catch(_){ }
+            };
+            window._flushUnlockDuckCoverQueue = function(){
+                try {
+                    if (!window._unlockDuckCoverQueue || window._unlockDuckCoverQueue.length === 0) return;
+                    if (window._safeUnlockDuckCover_flushing) return;
+                    window._safeUnlockDuckCover_flushing = true;
+                    const q = window._unlockDuckCoverQueue.slice(); window._unlockDuckCoverQueue.length = 0;
+                    for (let i=0;i<q.length;i++){
+                        try { if (typeof window.unlockDuckAndCover === 'function') window.unlockDuckAndCover(q[i]); } catch(e) { try { console.warn('[safeUnlockDuck] queued unlock failed', e); } catch(_){} }
+                    }
+                } catch(_){ }
+                try { window._safeUnlockDuckCover_flushing = false; } catch(_){ }
             };
         }
     // Dev: write-access verified 2025-10-06
@@ -913,7 +956,9 @@
                     const b = window._streetBackgrounds;
                     if (!b) return;
                     const act = (game && game._selectedAct) ? String(game._selectedAct) : null;
-                    if (act === 'II') {
+                    if (act === 'DuckAndCover') {
+                        b.list = ['assets/streets/waves/lot1.png'];
+                    } else if (act === 'II') {
                         // Replace list with gooseghetto image set (user-provided filenames)
                         b.list = [
                             'assets/streets/gooseghetto/goosestreet1.png',
@@ -1123,8 +1168,24 @@
             fxSuppression: { particleSkip: 0 },
             _roomSpawnedEnemies: 0,
             _restartGraceFrames: 0,
-            nextDuckFlockFrame: 0 // scheduling for Duck Dynasty flocks
+            _pendingRoomClearReview: false,
+            nextDuckFlockFrame: 0, // scheduling for Duck Dynasty flocks
+            _duckAndCoverUnlocked: false,
+            _duckAndCoverActive: false,
+            _duckWave: 0,
+            _duckNextWaveAt: null,
+            _duckPendingWave: null,
+            _duckStageInitialized: false,
+            _duckInitialChestsPlaced: false,
+            _duckWaveSpawning: false,
+            _duckWaveBannerTimer: null
         };
+        try {
+            if (localStorage && localStorage.getItem && localStorage.getItem('duckAndCoverUnlocked') === '1') {
+                game._duckAndCoverUnlocked = true;
+            }
+        } catch(_){ }
+
         // Debug helper: dump enemies near a given point (calls from console)
         try {
             game._debugDumpEnemiesAt = function(px, py, radius) {
@@ -4840,7 +4901,7 @@
                         const img = window._bulletImages && window._bulletImages.axe;
                         // Maintain a spin angle on meta
                         if (typeof meta._axeSpin !== 'number') meta._axeSpin = 0;
-                            carImgH.onload = ()=>{ carImgH._ok = true; console.info('[CarImage] Loaded assets/cars/car-horizontal.png'); };
+                        const spinSpeed = meta._axeSpinSpeed || (0.20 + Math.min(0.18, (r || 8) * 0.008));
                         meta._axeSpin += spinSpeed;
                         ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang + meta._axeSpin);
                         if (img && img._ok && img.complete && img.naturalWidth) {
@@ -7083,16 +7144,20 @@ function showTitleScreen() {
         menu.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);min-width:280px;max-width:86vw;padding:18px 20px;border-radius:10px;background:rgba(6,6,8,0.92);border:2px solid #444;z-index:10001;display:flex;flex-direction:column;gap:12px;font-family:Courier New,monospace;color:#eee;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.6);';
         const hdr = document.createElement('div'); hdr.textContent = 'SELECT ACT'; hdr.style.cssText = 'font-weight:800;letter-spacing:2px;color:#fff;font-size:16px;';
     const list = document.createElement('div'); list.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-top:6px;';
+    const actItems = [];
 
         // Evaluate unlocked state from runtime flags or persisted progress
         let actIIUnlocked = false; let actIIIUnlocked = false;
     try { actIIUnlocked = !!(game && game._actIIUnlocked) || (localStorage && localStorage.getItem && localStorage.getItem('actIIUnlocked') === '1'); } catch(_) { actIIUnlocked = !!(game && game._actIIUnlocked); }
     try { actIIIUnlocked = !!(game && game._actIIIUnlocked) || (localStorage && localStorage.getItem && localStorage.getItem('actIIIUnlocked') === '1'); } catch(_) { actIIIUnlocked = !!(game && game._actIIIUnlocked); }
+    let duckUnlocked = false;
+    try { duckUnlocked = !!(game && game._duckAndCoverUnlocked) || (localStorage && localStorage.getItem && localStorage.getItem('duckAndCoverUnlocked') === '1'); } catch(_) { duckUnlocked = !!(game && game._duckAndCoverUnlocked); }
 
         let acts = [ 
             { id: 'I', label: 'Act I', locked: false }, 
             { id: 'II', label: 'Act II', locked: !actIIUnlocked, lockReason: 'Find and defeat the Golden Goose' }, 
-            { id: 'III', label: 'Act III', locked: !actIIIUnlocked, lockReason: 'Survive the Wunderswan' } 
+            { id: 'III', label: 'Act III', locked: !actIIIUnlocked, lockReason: 'Survive the Wunderswan' },
+            { id: 'DuckAndCover', label: 'Duck and Cover', locked: !duckUnlocked, lockReason: 'Complete Act III to unlock' }
         ];
     const items = [];
     const actions = []; // parallel array of actions to invoke for keyboard/enter presses
@@ -7105,7 +7170,7 @@ function showTitleScreen() {
                 it.style.opacity = '0.45';
                 it.style.cursor = 'default';
             }
-            const lockSpan = document.createElement('span');
+            const lockSpan = document.createElement('span'); lockSpan.className = 'act-lock-icon';
             lockSpan.textContent = a.locked ? '🔒' : '';
             lockSpan.style.cssText = 'margin-right:6px;font-size:14px;';
             const lbl = document.createElement('span'); lbl.textContent = a.label;
@@ -7142,6 +7207,7 @@ function showTitleScreen() {
             actions.push(()=> { try { it.click(); } catch(_){} });
             items.push(it);
             list.appendChild(it);
+            actItems.push({ element: it, actIndex: idx });
         });
 
         // Add a utility entry: Discovered Abilities (opens an overlay listing all abilities)
@@ -7164,13 +7230,26 @@ function showTitleScreen() {
                 // Re-evaluate persisted/unlocked state
                 try { actIIUnlocked = !!(game && game._actIIUnlocked) || (localStorage && localStorage.getItem && localStorage.getItem('actIIUnlocked') === '1'); } catch(_) { actIIUnlocked = !!(game && game._actIIUnlocked); }
                 try { actIIIUnlocked = !!(game && game._actIIIUnlocked) || (localStorage && localStorage.getItem && localStorage.getItem('actIIIUnlocked') === '1'); } catch(_) { actIIIUnlocked = !!(game && game._actIIIUnlocked); }
+                try { duckUnlocked = !!(game && game._duckAndCoverUnlocked) || (localStorage && localStorage.getItem && localStorage.getItem('duckAndCoverUnlocked') === '1'); } catch(_) { duckUnlocked = !!(game && game._duckAndCoverUnlocked); }
                 // Update acts and DOM items
-                acts[1].locked = !actIIUnlocked; acts[2].locked = !actIIIUnlocked;
-                items.forEach((el, i)=>{
-                    const a = acts[i];
-                    const lockSpan = el.querySelector('span');
-                    if (a.locked) { el.style.opacity='0.45'; el.style.cursor='default'; if(lockSpan) lockSpan.textContent='🔒'; }
-                    else { el.style.opacity='1'; el.style.cursor='pointer'; if(lockSpan) lockSpan.textContent=''; }
+                acts[1].locked = !actIIUnlocked;
+                acts[2].locked = !actIIIUnlocked;
+                acts[3].locked = !duckUnlocked;
+                actItems.forEach((ref)=>{
+                    if (!ref || !ref.element) return;
+                    const a = acts[ref.actIndex];
+                    if (!a) return;
+                    const el = ref.element;
+                    const lockSpan = el.querySelector('.act-lock-icon');
+                    if (a.locked) {
+                        el.style.opacity = '0.45';
+                        el.style.cursor = 'default';
+                        if (lockSpan) lockSpan.textContent = '🔒';
+                    } else {
+                        el.style.opacity = '1';
+                        el.style.cursor = 'pointer';
+                        if (lockSpan) lockSpan.textContent = '';
+                    }
                 });
             } catch(_){}
         };
@@ -7459,6 +7538,45 @@ function showTitleScreen() {
             } catch(_){ }
         } catch(_){ }
     }
+
+    try { window.unlockActIII = unlockActIII; } catch(_){ }
+    try { if (typeof window._flushUnlockActIIIQueue === 'function') window._flushUnlockActIIIQueue(); } catch(_){ }
+
+    function unlockDuckAndCover(source) {
+        let alreadyUnlocked = false;
+        try { alreadyUnlocked = !!(game && game._duckAndCoverUnlocked); } catch(_){ }
+        if (!alreadyUnlocked) {
+            try {
+                if (localStorage && localStorage.getItem && localStorage.getItem('duckAndCoverUnlocked') === '1') {
+                    alreadyUnlocked = true;
+                }
+            } catch(_){ }
+        }
+        try { if (!game) window.game = window.game || {}; } catch(_){ }
+        try { game._duckAndCoverUnlocked = true; } catch(_){ }
+        try { if (localStorage && localStorage.setItem) localStorage.setItem('duckAndCoverUnlocked', '1'); } catch(_){ }
+        if (alreadyUnlocked) {
+            try {
+                const menu = document.getElementById('titleActMenu');
+                if (menu && typeof menu._refresh === 'function') menu._refresh();
+            } catch(_){ }
+            return;
+        }
+        try { console.info('[Progress] Duck and Cover unlocked', source || 'unknown'); } catch(_){ }
+        try {
+            const toastMsg = 'Duck and Cover unlocked!';
+            if (typeof showToast === 'function') {
+                showToast(toastMsg, { subtitle: 'Wave survival mode available on the title screen.' });
+            }
+        } catch(_){ }
+        try {
+            const menu = document.getElementById('titleActMenu');
+            if (menu && typeof menu._refresh === 'function') menu._refresh();
+        } catch(_){ }
+    }
+
+    try { window.unlockDuckAndCover = unlockDuckAndCover; } catch(_){ }
+    try { if (typeof window._flushUnlockDuckCoverQueue === 'function') window._flushUnlockDuckCoverQueue(); } catch(_){ }
 
     // Lightweight on-screen toast used for unlock notifications. If a more advanced
     // implementation exists elsewhere, this will not clobber it.
@@ -7884,6 +8002,50 @@ function ensureActMusic(actId) {
     try {
         // Normalize input
         const act = (typeof actId === 'undefined' || actId === null) ? '' : String(actId);
+
+        if (act === 'DuckAndCover') {
+            let trackSrc = null;
+            try { trackSrc = (game && game._duckActiveTrack) ? game._duckActiveTrack : null; } catch(_){ }
+            if (!trackSrc) {
+                trackSrc = pickDuckWaveTrack();
+            }
+            if (!trackSrc) {
+                trackSrc = 'assets/audio/QuackshotChronicles.mp3';
+            }
+
+            const currentSrc = (game && game.bgMusic && game.bgMusic.src) ? String(game.bgMusic.src) : '';
+            const needsSwap = currentSrc.indexOf(trackSrc) === -1;
+
+            if (needsSwap) {
+                try {
+                    if (game && game.bgMusic) {
+                        game._prevMusicSrc = game.bgMusic.src;
+                        try { game.bgMusic.pause(); } catch(_){ }
+                    }
+                } catch(_){ }
+                try {
+                    const next = new Audio(trackSrc);
+                    next.loop = true;
+                    const priorVol = (game && game.bgMusic && typeof game.bgMusic.volume === 'number') ? game.bgMusic.volume : 0.55;
+                    next.volume = priorVol;
+                    game.bgMusic = next;
+                    if (game.musicEnabled) {
+                        try { next.play().catch(()=>{}); } catch(_){ }
+                    }
+                } catch(err) {
+                    console.warn('[ensureActMusic] Failed to set Duck & Cover track', err);
+                }
+            }
+            try { game._duckActiveTrack = trackSrc.indexOf('assets/audio/waves/') !== -1 ? trackSrc : null; } catch(_){ }
+            if (typeof setDuckNowPlaying === 'function') {
+                try { setDuckNowPlaying(game._duckActiveTrack || null); } catch(_){ }
+            }
+            try { applyMusicPreference(); } catch(_){ }
+            try { updateAudioButtons(); } catch(_){ }
+            try { game._actMusicSet = true; } catch(_){ }
+            return;
+        }
+
         // Map act to desired source
         let desired = 'assets/audio/QuackshotChronicles.mp3';
         if (act === 'II') desired = 'assets/audio/GooseGhetto.mp3';
@@ -7898,6 +8060,10 @@ function ensureActMusic(actId) {
             try { applyMusicPreference(); } catch(_){}
             try { updateAudioButtons(); } catch(_){}
             try { game._actMusicSet = (act === 'II' || act === 'III'); } catch(_){}
+            if (act !== 'DuckAndCover') {
+                try { if (typeof setDuckNowPlaying === 'function') setDuckNowPlaying(null); } catch(_){ }
+                try { game._duckActiveTrack = null; } catch(_){ }
+            }
             return;
         }
 
@@ -7911,7 +8077,9 @@ function ensureActMusic(actId) {
             game.bgMusic = m;
             try { applyMusicPreference(); } catch(_){}
             try { updateAudioButtons(); } catch(_){}
-            try { game._actMusicSet = (act === 'II' || act === 'III'); } catch(_){}
+            try { game._actMusicSet = (act === 'II' || act === 'III'); } catch(_){ }
+            try { if (typeof setDuckNowPlaying === 'function') setDuckNowPlaying(null); } catch(_){ }
+            try { game._duckActiveTrack = null; } catch(_){ }
         } catch(e) {
             console.warn('[ensureActMusic] failed to set bgMusic', e);
         }
@@ -8705,6 +8873,14 @@ function offerPermanentAbilityChoice() {
                         game._finalAbilityOffered = true;
                         return; // stop propagation to any firing logic
                     }
+                }
+                if ((e.code === 'Digit8' || e.code === 'Numpad8') && !e.altKey && !e.ctrlKey && !e.metaKey) {
+                    if (e.repeat) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    try { openStageJumpDebugMenu(); }
+                    catch (err) { console.warn('[StageJump] Failed to open debug menu', err); }
+                    return;
                 }
                 // Dev: toggle sprite bounds with F3
                 if (e.code === 'F3') {
@@ -11645,6 +11821,542 @@ function offerPermanentAbilityChoice() {
             });
         }
 
+        const DUCK_AND_COVER_WAVES = [
+            { enemyCount: 10, types: ['Thug', 'Street Dog', 'Punk'], healthMult: 1.0, eliteChance: 0, chestStart: 2, chestOnClear: 1 },
+            { enemyCount: 14, types: ['Thug', 'Punk', 'Gangster'], healthMult: 1.06, eliteChance: 0.05, chestOnClear: 1 },
+            { enemyCount: 18, types: ['Gangster', 'Dealer', 'Enforcer'], healthMult: 1.12, eliteChance: 0.09, chestOnClear: 1 },
+            { enemyCount: 22, types: ['Enforcer', 'Goosey Smalls', 'Goosey Elliot', 'Goose Willis'], healthMult: 1.2, eliteChance: 0.13, chestOnClear: 1 },
+            { enemyCount: 26, types: ['Enforcer', 'Goose Willis', 'Cardi Beak', 'Feather Krueger', 'Honkutus of Cygnus'], healthMult: 1.28, eliteChance: 0.17, chestOnClear: 1 }
+        ];
+
+        const DUCK_WAVE_TRACKS = [
+            'assets/audio/waves/track1.mp3',
+            'assets/audio/waves/track2.mp3',
+            'assets/audio/waves/track3.mp3',
+            'assets/audio/waves/track4.mp3',
+            'assets/audio/waves/track5.mp3',
+            'assets/audio/waves/track6.mp3',
+            'assets/audio/waves/track7.mp3',
+            'assets/audio/waves/track8.mp3',
+            'assets/audio/waves/track9.mp3',
+            'assets/audio/waves/track10.mp3',
+            'assets/audio/waves/track11.mp3',
+            'assets/audio/waves/track12.mp3',
+            'assets/audio/waves/track13.mp3',
+            'assets/audio/waves/track14.mp3',
+            'assets/audio/waves/track15.mp3'
+        ];
+
+        function pickDuckWaveTrack() {
+            if (!Array.isArray(DUCK_WAVE_TRACKS) || DUCK_WAVE_TRACKS.length === 0) return null;
+            const idx = Math.floor(Math.random() * DUCK_WAVE_TRACKS.length);
+            return DUCK_WAVE_TRACKS[idx];
+        }
+
+        function ensureDuckTrackMetaCache() {
+            if (typeof window === 'undefined') {
+                return {};
+            }
+            window._duckTrackMetaCache = window._duckTrackMetaCache || {};
+            return window._duckTrackMetaCache;
+        }
+
+        async function loadDuckTrackMetadata(src) {
+            if (!src || typeof fetch !== 'function') return {};
+            const cache = ensureDuckTrackMetaCache();
+            const cached = cache[src];
+            if (cached) {
+                if (cached.meta) return cached.meta;
+                if (cached.promise) return cached.promise;
+            }
+            const loader = (async () => {
+                try {
+                    let resolved = src;
+                    try {
+                        if (typeof document !== 'undefined' && document.baseURI) {
+                            resolved = new URL(src, document.baseURI).href;
+                        }
+                    } catch(_){ }
+                    if (resolved && resolved.indexOf('file:') === 0) {
+                        if (!cache.__warnedFileProtocol) {
+                            cache.__warnedFileProtocol = true;
+                            try { console.warn('[DuckMusic] Metadata unavailable when running from file://. Start a local server for ID3 tags.'); } catch(_){ }
+                        }
+                        return {};
+                    }
+                    const resp = await fetch(resolved);
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    const buffer = await resp.arrayBuffer();
+                    const meta = parseId3v2(buffer) || parseId3v1(buffer) || {};
+                    cache[src] = { meta };
+                    return meta;
+                } catch (err) {
+                    try { console.warn('[DuckMusic] Metadata fetch failed', { src, err }); } catch(_){}
+                    cache[src] = { meta: {} };
+                    return {};
+                }
+            })();
+            cache[src] = { promise: loader };
+            const meta = await loader;
+            cache[src] = { meta };
+            return meta;
+        }
+
+        function readSynchsafeInt(b1, b2, b3, b4) {
+            return ((b1 & 0x7f) << 21) | ((b2 & 0x7f) << 14) | ((b3 & 0x7f) << 7) | (b4 & 0x7f);
+        }
+
+        function decodeId3TextFrame(bytes) {
+            if (!bytes || bytes.length === 0) return '';
+            const encoding = bytes[0];
+            const data = bytes.subarray(1);
+            if (!data.length) return '';
+            try {
+                let textDecoder;
+                if (encoding === 0) {
+                    textDecoder = new TextDecoder('iso-8859-1');
+                    return textDecoder.decode(data).replace(/\u0000+/g, ' ').trim();
+                } else if (encoding === 1) {
+                    if (data.length >= 2) {
+                        const bom = (data[0] << 8) | data[1];
+                        if (bom === 0xfeff) {
+                            textDecoder = new TextDecoder('utf-16be');
+                            return textDecoder.decode(data.subarray(2)).replace(/\u0000+/g, ' ').trim();
+                        }
+                        if (bom === 0xfffe) {
+                            textDecoder = new TextDecoder('utf-16le');
+                            return textDecoder.decode(data.subarray(2)).replace(/\u0000+/g, ' ').trim();
+                        }
+                    }
+                    textDecoder = new TextDecoder('utf-16le');
+                    return textDecoder.decode(data).replace(/\u0000+/g, ' ').trim();
+                } else if (encoding === 2) {
+                    textDecoder = new TextDecoder('utf-16be');
+                    return textDecoder.decode(data).replace(/\u0000+/g, ' ').trim();
+                } else if (encoding === 3) {
+                    textDecoder = new TextDecoder('utf-8');
+                    return textDecoder.decode(data).replace(/\u0000+/g, ' ').trim();
+                }
+            } catch(_) {}
+            return '';
+        }
+
+        function parseId3v2(buffer) {
+            try {
+                if (!buffer || buffer.byteLength < 10) return null;
+                const bytes = new Uint8Array(buffer);
+                if (bytes[0] !== 0x49 || bytes[1] !== 0x44 || bytes[2] !== 0x33) return null; // 'ID3'
+                const version = bytes[3];
+                const flags = bytes[5];
+                const tagSize = readSynchsafeInt(bytes[6], bytes[7], bytes[8], bytes[9]);
+                let offset = 10;
+                const tagEnd = Math.min(bytes.length, offset + tagSize);
+                const view = new DataView(buffer);
+
+                if (flags & 0x40) {
+                    if (version === 3) {
+                        if (offset + 4 > tagEnd) return null;
+                        const extSize = view.getUint32(offset, false);
+                        offset += 4 + extSize;
+                    } else if (version === 4) {
+                        if (offset + 4 > tagEnd) return null;
+                        const extSize = readSynchsafeInt(bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]);
+                        offset += 4 + extSize;
+                    } else if (version === 2) {
+                        // v2.2 extended header size is 10 bytes if present, skip defensively
+                        const extSize = view.getUint16(offset, false);
+                        offset += 2 + extSize;
+                    }
+                }
+
+                let title = null;
+                let artist = null;
+                if (version === 2) {
+                    while (offset + 6 <= tagEnd) {
+                        const frameId = String.fromCharCode(bytes[offset], bytes[offset + 1], bytes[offset + 2]);
+                        if (!/^[A-Z0-9]{3}$/.test(frameId)) break;
+                        const frameSize = (bytes[offset + 3] << 16) | (bytes[offset + 4] << 8) | bytes[offset + 5];
+                        offset += 6;
+                        if (frameSize <= 0) continue;
+                        if (offset + frameSize > tagEnd) break;
+                        const frameBytes = bytes.subarray(offset, offset + frameSize);
+                        offset += frameSize;
+                        if (frameId === 'TT2') {
+                            const text = decodeId3TextFrame(frameBytes);
+                            if (text) title = text;
+                        } else if (frameId === 'TP1') {
+                            const text = decodeId3TextFrame(frameBytes);
+                            if (text) artist = text;
+                        }
+                        if (title && artist) break;
+                    }
+                } else {
+                    while (offset + 10 <= tagEnd) {
+                        const frameId = String.fromCharCode(bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]);
+                        if (!/^[A-Z0-9]{4}$/.test(frameId)) break;
+                        let frameSize = 0;
+                        if (version === 4) {
+                            frameSize = readSynchsafeInt(bytes[offset + 4], bytes[offset + 5], bytes[offset + 6], bytes[offset + 7]);
+                        } else {
+                            frameSize = view.getUint32(offset + 4, false);
+                        }
+                        if (frameSize <= 0) break;
+                        if (offset + 10 + frameSize > tagEnd) break;
+                        const frameBytes = bytes.subarray(offset + 10, offset + 10 + frameSize);
+                        offset += 10 + frameSize;
+                        if (frameId === 'TIT2') {
+                            const text = decodeId3TextFrame(frameBytes);
+                            if (text) title = text;
+                        } else if (frameId === 'TPE1') {
+                            const text = decodeId3TextFrame(frameBytes);
+                            if (text) artist = text;
+                        }
+                        if (title && artist) break;
+                    }
+                }
+
+                if (!title && !artist) return null;
+                return { title: title || null, artist: artist || null };
+            } catch(err) {
+                try { console.warn('[DuckMusic] ID3v2 parse failed', err); } catch(_){}
+                return null;
+            }
+        }
+
+        function parseId3v1(buffer) {
+            try {
+                if (!buffer || buffer.byteLength < 128) return null;
+                const bytes = new Uint8Array(buffer);
+                const start = buffer.byteLength - 128;
+                if (bytes[start] !== 0x54 || bytes[start + 1] !== 0x41 || bytes[start + 2] !== 0x47) return null; // 'TAG'
+                const decoder = (typeof TextDecoder === 'function') ? new TextDecoder('iso-8859-1') : null;
+                const read = (offset, length) => {
+                    const slice = bytes.subarray(start + offset, start + offset + length);
+                    let text;
+                    if (decoder) {
+                        text = decoder.decode(slice);
+                    } else {
+                        text = String.fromCharCode.apply(null, slice);
+                    }
+                    text = text.replace(/\u0000/g, '').trim();
+                    return text.length ? text : null;
+                };
+                const title = read(3, 30);
+                const artist = read(33, 30);
+                return { title, artist };
+            } catch (err) {
+                try { console.warn('[DuckMusic] ID3 parse failed', err); } catch(_){}
+                return null;
+            }
+        }
+
+        function buildDuckNowPlayingDisplay(meta, src) {
+            const fileName = (src || '').split('/').pop() || src || '';
+            const fallbackTitle = fileName ? fileName.replace(/\.[^.]*$/, '') : 'Unknown Track';
+            const title = (meta && meta.title) ? meta.title : fallbackTitle;
+            const artist = (meta && meta.artist) ? meta.artist : '';
+            const displayArtist = artist || 'Unknown Artist';
+            return {
+                title,
+                artist,
+                fallbackTitle,
+                display: 'Artist: ' + displayArtist + '\nTitle: ' + title
+            };
+        }
+
+        function setDuckNowPlaying(trackSrc) {
+            try {
+                if (!window.game) return;
+                if (!trackSrc) {
+                    game._duckNowPlaying = null;
+                    if (typeof updateUI === 'function') updateUI();
+                    return;
+                }
+                const fallbackTitle = (trackSrc.split('/').pop() || trackSrc).replace(/\.[^.]*$/, '') || 'Unknown Track';
+                game._duckNowPlaying = {
+                    src: trackSrc,
+                    artist: '',
+                    title: '',
+                    display: 'Loading...',
+                    fallbackTitle
+                };
+                if (typeof updateUI === 'function') updateUI();
+                loadDuckTrackMetadata(trackSrc).then(meta => {
+                    if (!game._duckNowPlaying || game._duckNowPlaying.src !== trackSrc) return;
+                    const info = buildDuckNowPlayingDisplay(meta || {}, trackSrc);
+                    game._duckNowPlaying.artist = info.artist || '';
+                    game._duckNowPlaying.title = info.title || fallbackTitle;
+                    game._duckNowPlaying.display = info.display || fallbackTitle;
+                    game._duckNowPlaying.fallbackTitle = info.fallbackTitle || fallbackTitle;
+                    game._duckNowPlaying.meta = meta || {};
+                    if (typeof updateUI === 'function') updateUI();
+                }).catch(err => {
+                    try { console.warn('[DuckMusic] Metadata load error', { src: trackSrc, err }); } catch(_){}
+                    if (!game._duckNowPlaying || game._duckNowPlaying.src !== trackSrc) return;
+                    game._duckNowPlaying.artist = '';
+                    game._duckNowPlaying.title = fallbackTitle;
+                    game._duckNowPlaying.display = fallbackTitle;
+                    if (typeof updateUI === 'function') updateUI();
+                });
+            } catch (err) {
+                try { console.warn('[DuckMusic] setDuckNowPlaying failed', err); } catch(_){}
+            }
+        }
+
+        function isDuckAndCoverMode() {
+            try {
+                if (!game) return false;
+                if (game._duckAndCoverActive) return true;
+                if (String(game._selectedAct) === 'DuckAndCover') return true;
+                return false;
+            } catch(_) {
+                return false;
+            }
+        }
+
+        function getDuckWaveConfig(waveNumber) {
+            const index = Math.max(0, waveNumber - 1);
+            const base = DUCK_AND_COVER_WAVES[Math.min(index, DUCK_AND_COVER_WAVES.length - 1)];
+            if (!base) return null;
+            const extra = Math.max(0, index - (DUCK_AND_COVER_WAVES.length - 1));
+            const types = Array.isArray(base.types) ? base.types.slice() : [];
+            if (extra > 0) {
+                const lateAdds = ['Cardi Beak', 'Feather Krueger', 'Honkutus of Cygnus', 'Mr Gosling'];
+                lateAdds.forEach(t => { if (types.indexOf(t) === -1) types.push(t); });
+            }
+            const enemyCount = Math.max(1, Math.floor(base.enemyCount + extra * 4));
+            const healthMult = (base.healthMult || 1) * (1 + extra * 0.08);
+            const eliteChance = Math.min(0.35, (base.eliteChance || 0) + extra * 0.04);
+            const chestOnClear = (typeof base.chestOnClear === 'number' && base.chestOnClear >= 0) ? base.chestOnClear : 1;
+            const chestStart = (typeof base.chestStart === 'number' && base.chestStart >= 0) ? base.chestStart : 0;
+            return { wave: waveNumber, enemyCount, types, healthMult, eliteChance, chestOnClear, chestStart };
+        }
+
+        function showDuckWaveBanner(label) {
+            try {
+                let el = document.getElementById('duckWaveBanner');
+                if (!el) {
+                    el = document.createElement('div');
+                    el.id = 'duckWaveBanner';
+                    el.style.cssText = 'position:fixed;top:20%;left:50%;transform:translateX(-50%);padding:18px 32px;font-family:"Courier New",monospace;font-size:42px;letter-spacing:4px;color:#ffe98a;text-shadow:0 0 16px #111;background:rgba(0,0,0,0.55);border:2px solid rgba(255,233,138,0.5);border-radius:12px;z-index:40000;pointer-events:none;opacity:0;transition:opacity 220ms ease;';
+                    document.body.appendChild(el);
+                }
+                el.textContent = label;
+                el.style.opacity = '1';
+                if (game._duckWaveBannerTimer) {
+                    clearTimeout(game._duckWaveBannerTimer);
+                    game._duckWaveBannerTimer = null;
+                }
+                game._duckWaveBannerTimer = setTimeout(() => {
+                    try { el.style.opacity = '0'; } catch(_) {}
+                }, 3000);
+            } catch(_) {}
+        }
+
+        function spawnDuckAndCoverChests(count) {
+            if (!count || count <= 0) return;
+            if (!Array.isArray(game.chests)) game.chests = [];
+            const startX = LOGICAL_W / 2;
+            const startY = LOGICAL_H / 2;
+            const exclusionR2 = 100 * 100;
+            for (let c = 0; c < count; c++) {
+                let attempts = 0;
+                while (attempts < 80) {
+                    const x = 60 + Math.random() * (LOGICAL_W - 120);
+                    const y = 60 + Math.random() * (LOGICAL_H - 120);
+                    attempts++;
+                    const dxs = x - startX;
+                    const dys = y - startY;
+                    if ((dxs * dxs + dys * dys) < exclusionR2) continue;
+                    if (isWall(x, y)) continue;
+                    if (game.chests.some(ch => Math.hypot(ch.x - x, ch.y - y) < 64)) continue;
+                    const pool = Object.keys(ABILITIES).filter(a => !game.player.abilities.includes(a));
+                    let chosenAbility = null;
+                    if (pool.length) {
+                        const weighted = [];
+                        pool.forEach(a => {
+                            const tier = (ABILITIES[a] && ABILITIES[a].tier) || 1;
+                            const weight = Math.max(1, 4 - tier);
+                            for (let i = 0; i < weight; i++) weighted.push(a);
+                        });
+                        chosenAbility = weighted[Math.floor(Math.random() * weighted.length)] || null;
+                    }
+                    let variant = 'gold';
+                    if (chosenAbility) {
+                        const tier = (ABILITIES[chosenAbility] && ABILITIES[chosenAbility].tier) || 1;
+                        if (tier === 1) variant = 'platinum';
+                        else if (tier >= 3) variant = 'irradiated';
+                    }
+                    game.chests.push({ x, y, opened: false, variant, jigglePhase: 0, ability: chosenAbility, rainbow: false });
+                    break;
+                }
+            }
+        }
+
+        function spawnDuckAndCoverEnemy(typeName, waveNumber, cfg) {
+            const base = ENEMY_TYPES[typeName];
+            if (!base || base.boss || base.bossFinal || base.bossSecret) return false;
+            const edgeInset = 72;
+            const edgeJitter = 32;
+            const laneInset = 90;
+            const startX = LOGICAL_W / 2;
+            const startY = LOGICAL_H / 2;
+            const exclusionR2 = 90 * 90;
+            let attempts = 0;
+            while (attempts < 80) {
+                attempts++;
+                const side = Math.floor(Math.random() * 4);
+                let x;
+                let y;
+                if (side === 0) {
+                    // top edge
+                    y = edgeInset + Math.random() * edgeJitter;
+                    x = laneInset + Math.random() * (LOGICAL_W - laneInset * 2);
+                } else if (side === 1) {
+                    // bottom edge
+                    y = LOGICAL_H - edgeInset - Math.random() * edgeJitter;
+                    x = laneInset + Math.random() * (LOGICAL_W - laneInset * 2);
+                } else if (side === 2) {
+                    // left edge
+                    x = edgeInset + Math.random() * edgeJitter;
+                    y = laneInset + Math.random() * (LOGICAL_H - laneInset * 2);
+                } else {
+                    // right edge
+                    x = LOGICAL_W - edgeInset - Math.random() * edgeJitter;
+                    y = laneInset + Math.random() * (LOGICAL_H - laneInset * 2);
+                }
+                const dxs = x - startX;
+                const dys = y - startY;
+                if ((dxs * dxs + dys * dys) < exclusionR2) continue;
+                if (isWall(x, y)) continue;
+                if (game.chests && game.chests.some(ch => Math.hypot(ch.x - x, ch.y - y) < 70)) continue;
+                if (game.enemies && game.enemies.some(en => Math.hypot((en.x || 0) - x, (en.y || 0) - y) < ((en.size || 24) + (base.size || 24)) * 0.65)) continue;
+                const waveScale = 1 + Math.max(0, waveNumber - 1) * 0.08;
+                const healthMult = (cfg && cfg.healthMult ? cfg.healthMult : 1) * waveScale;
+                const hp = Math.max(1, Math.floor((base.health || 40) * healthMult));
+                const enemyObj = {
+                    x,
+                    y,
+                    type: typeName,
+                    facing: base.ranged ? 'right' : 'down',
+                    health: hp,
+                    maxHealth: hp,
+                    speed: base.speed || 0.8,
+                    baseSpeed: base.speed || 0.8,
+                    damage: base.damage || 10,
+                    color: base.color || '#ffffff',
+                    size: base.size || 24,
+                    xp: base.xp || 20,
+                    ranged: !!base.ranged,
+                    rangedCooldown: base.ranged ? (base.rangedCooldown || 2000) : 0,
+                    armor: base.armor || 0,
+                    lastAttack: 0,
+                    poisoned: false, poisonTime: 0,
+                    slowed: false, slowTime: 0,
+                    burning: false, burnTime: 0,
+                    wunderScribble: false, wunderScribbleTime: 0,
+                    wunderScribbleInterval: 0, wunderScribbleTickDamage: 0,
+                    _wunderScribbleTick: 0,
+                    quackenSnared: false, quackenSnareTime: 0,
+                    _quackenStack: 0, _quackenTick: 0,
+                    _quackenBaseDamage: 0, _quackenDotScale: 0,
+                    _quackenRingCd: 0,
+                    elite: false,
+                    _duckWave: waveNumber
+                };
+                const eliteChance = cfg && typeof cfg.eliteChance === 'number' ? cfg.eliteChance : 0;
+                if (eliteChance > 0 && Math.random() < eliteChance) {
+                    enemyObj.elite = true;
+                    enemyObj.health = Math.floor(enemyObj.health * 5.0);
+                    enemyObj.maxHealth = enemyObj.health;
+                    enemyObj.speed *= 1.1;
+                    enemyObj.damage = Math.ceil(enemyObj.damage * 1.4);
+                    enemyObj.eliteGlow = 1.0;
+                }
+                if (!Array.isArray(game.enemies)) game.enemies = [];
+                game.enemies.push(enemyObj);
+                if (typeof game._roomSpawnedEnemies === 'number') game._roomSpawnedEnemies++;
+                return true;
+            }
+            return false;
+        }
+
+        function spawnDuckAndCoverWave(waveNumber) {
+            const cfg = getDuckWaveConfig(waveNumber);
+            if (!cfg) return;
+            if (!Array.isArray(cfg.types) || cfg.types.length === 0) {
+                cfg.types = ['Thug'];
+            }
+            const pool = cfg.types.filter(t => {
+                const meta = ENEMY_TYPES[t];
+                return meta && !meta.boss && !meta.bossFinal && !meta.bossSecret;
+            });
+            if (!pool.length) pool.push('Thug');
+            let placed = 0;
+            game._roomSpawnedEnemies = 0;
+            let fails = 0;
+            while (placed < cfg.enemyCount && fails < cfg.enemyCount * 6) {
+                const typeName = pool[Math.floor(Math.random() * pool.length)];
+                if (spawnDuckAndCoverEnemy(typeName, waveNumber, cfg)) {
+                    placed++;
+                } else {
+                    fails++;
+                }
+            }
+            if (placed === 0) {
+                spawnDuckAndCoverEnemy('Thug', waveNumber, cfg);
+                placed = 1;
+            }
+            game._duckWave = waveNumber;
+            game.roomsCleared = Math.max(0, waveNumber - 1);
+            game.roomCleared = false;
+            game._roomClearedAt = null;
+            game._duckPendingWave = null;
+            game._duckNextWaveAt = null;
+            game._duckWaveSpawning = false;
+            game.roomStartTime = Date.now();
+            showDuckWaveBanner('Wave ' + waveNumber);
+            updateUI();
+            console.info('[DuckAndCover] Wave spawned', { wave: waveNumber, placed, cfg });
+        }
+
+        function queueDuckAndCoverWave(waveNumber, delayMs) {
+            const delay = Math.max(0, delayMs || 0);
+            if (delay === 0) {
+                spawnDuckAndCoverWave(waveNumber);
+                return;
+            }
+            const now = (typeof game._frameNow === 'number') ? game._frameNow : ((performance && performance.now) ? performance.now() : Date.now());
+            game._duckPendingWave = waveNumber;
+            game._duckNextWaveAt = now + delay;
+            game._duckWaveSpawning = true;
+        }
+
+        function handleDuckWaveCleared() {
+            if (!isDuckAndCoverMode() || game._duckWaveSpawning) return;
+            const currentWave = game._duckWave || 0;
+            const cfg = getDuckWaveConfig(Math.max(1, currentWave));
+            const rewardChests = (cfg && cfg.chestOnClear) ? cfg.chestOnClear : 1;
+            spawnDuckAndCoverChests(Math.max(1, rewardChests));
+            if (typeof game._roomSpawnedEnemies === 'number') game._roomSpawnedEnemies = 0;
+            game.score = (game.score || 0) + 150 + currentWave * 50;
+            game.roomsCleared = Math.max(game.roomsCleared || 0, currentWave);
+            const nextWave = currentWave + 1;
+            queueDuckAndCoverWave(nextWave, 3000);
+            updateUI();
+            console.info('[DuckAndCover] Wave cleared', { wave: currentWave, nextWave });
+        }
+
+        function updateDuckAndCoverMode() {
+            if (!isDuckAndCoverMode()) return;
+            if (!game._duckWaveSpawning || game._duckNextWaveAt == null) return;
+            const now = (typeof game._frameNow === 'number') ? game._frameNow : ((performance && performance.now) ? performance.now() : Date.now());
+            if (now >= game._duckNextWaveAt) {
+                const wave = game._duckPendingWave || ((game._duckWave || 0) + 1);
+                spawnDuckAndCoverWave(wave);
+            }
+        }
+
         function generateRoom() {
             console.info('[generateRoom] START', { dungeon: game.dungeon, room: game.room });
             game.walls = [];
@@ -11665,6 +12377,7 @@ function offerPermanentAbilityChoice() {
             // Mark the start time of the room for gating early ranged attacks
             game.roomStartTime = Date.now();
             game.roomCleared = false;
+            const duckMode = isDuckAndCoverMode();
             // Prefetch Wunderswan sprite one room early (when player is in room 4) so it's likely cached
             // if the next room (room 5) may spawn the secret Wunderswan boss.
             try {
@@ -11698,6 +12411,28 @@ function offerPermanentAbilityChoice() {
             for (let y = 1; y < ROOM_HEIGHT - 1; y++) {
                 game.walls.push({ x: 0, y: y * TILE_SIZE, type: 'building', invisible: true, bounce: true }); // left (invisible)
                 game.walls.push({ x: (ROOM_WIDTH - 1) * TILE_SIZE, y: y * TILE_SIZE, type: 'building', invisible: true, bounce: true }); // right (invisible)
+            }
+
+            if (duckMode) {
+                if (!game._duckStageInitialized) {
+                    game._duckStageInitialized = true;
+                    game._duckWave = 0;
+                    game._duckPendingWave = null;
+                    game._duckNextWaveAt = null;
+                }
+                if (!game._duckInitialChestsPlaced) {
+                    const firstCfg = getDuckWaveConfig(1);
+                    const firstChests = firstCfg ? Math.max(1, firstCfg.chestStart || 2) : 2;
+                    spawnDuckAndCoverChests(firstChests);
+                    game._duckInitialChestsPlaced = true;
+                }
+                game.player.x = LOGICAL_W / 2;
+                game.player.y = LOGICAL_H / 2;
+                if ((!game._duckWave || game._duckWave < 1) && !game._duckWaveSpawning) {
+                    spawnDuckAndCoverWave(1);
+                }
+                updateUI();
+                return;
             }
             
             // Add varied obstacles (streetlight removed per design request)
@@ -11898,17 +12633,23 @@ function offerPermanentAbilityChoice() {
                         // the legacy Wunderswan/Big Bill/etc logic.
                         if (String(game._selectedAct) === 'III') {
                             try {
-                                const cpMeta = ENEMY_TYPES['Cygnus Prime'];
-                                if (cpMeta && cpMeta.spawnStreet && Number(cpMeta.spawnStreet) === Number(game.room)) {
-                                    typeName = 'Cygnus Prime';
-                                    console.info('[RoomGen] Act III boss forced to Cygnus Prime (room ' + game.room + ')');
-                                } else if (!game._wunderswanSpawned) {
+                                const isFinalActStreet = Number(game.dungeon) === 10 && Number(game.room) === 5;
+                                if (isFinalActStreet) {
                                     typeName = 'Wunderswan';
                                     game._wunderswanSpawned = true;
-                                    console.info('[RoomGen] Act III final boss forced to Wunderswan');
+                                    console.info('[RoomGen] Act III final boss forced to Wunderswan (dungeon ' + game.dungeon + ', room ' + game.room + ')');
+                                } else {
+                                    const cpMeta = ENEMY_TYPES['Cygnus Prime'];
+                                    if (cpMeta && cpMeta.spawnStreet && Number(cpMeta.spawnStreet) === Number(game.room)) {
+                                        typeName = 'Cygnus Prime';
+                                        console.info('[RoomGen] Act III boss forced to Cygnus Prime (room ' + game.room + ')');
+                                    } else if (!game._wunderswanSpawned) {
+                                        typeName = 'Wunderswan';
+                                        game._wunderswanSpawned = true;
+                                        console.info('[RoomGen] Act III boss forced to first-time Wunderswan');
+                                    }
                                 }
                             } catch(_) {
-                                // Fallback to original behavior if anything throws
                                 if (!game._wunderswanSpawned) { typeName = 'Wunderswan'; game._wunderswanSpawned = true; }
                             }
                         } else if (game._selectedAct === 'II' && !game._wunderswanSpawned && Math.random() < 0.05) {
@@ -13935,6 +14676,7 @@ function offerPermanentAbilityChoice() {
                     game.fxSuppression.particleSkip = perf.lowFx ? 0.55 : 0;
                 }
             }
+            updateDuckAndCoverMode();
             updatePlayer();
             updateEnemies();
             // Rebuild enemy spatial hash (throttle if low enemy count)
@@ -15076,7 +15818,7 @@ function offerPermanentAbilityChoice() {
             }
             
             // Stage cleared advance: require FIRE input with short guard delay to prevent accidental skip
-            if (game.roomCleared) {
+            if (!isDuckAndCoverMode() && game.roomCleared) {
                 if (!game._roomClearedAt) game._roomClearedAt = performance.now();
                 const dt = performance.now() - game._roomClearedAt;
                 const fireNow = !!(game.keys[' '] || (game.input && game.input.gpFire));
@@ -17270,7 +18012,6 @@ function offerPermanentAbilityChoice() {
                                     const dxk = (Math.random() - 0.5) * 40; const dyk = (Math.random() - 0.5) * 40;
                                     const assigned = picks[k] || null;
                                     game.pickups.push({ type: 'irradiatedCan', variant: 'irradiated', x: enemy.x + dxk, y: enemy.y + dyk, spawnTime: performance.now(), collected: false, abilityChoice: assigned });
-                                    try { console.debug('[Wunderswan][DEBUG] pickup created', game.pickups[game.pickups.length - 1]); } catch(_) {}
                                 }
                                 console.info('[Wunderswan] assigned irradiatedCan abilities', picks);
                             } catch (e) {
@@ -17279,7 +18020,6 @@ function offerPermanentAbilityChoice() {
                                     const dxk = (Math.random()-0.5)*40; const dyk = (Math.random()-0.5)*40;
                                     const pObj = { type: 'irradiatedCan', variant: 'irradiated', x: enemy.x + dxk, y: enemy.y + dyk, spawnTime: performance.now(), collected: false };
                                     game.pickups.push(pObj);
-                                    try { console.debug('[Wunderswan][DEBUG] fallback pickup created', pObj); } catch(_) {}
                                 }
                             }
                             // Schedule quick follow-up diagnostic dumps so we can see if pickups are removed/collected
@@ -17299,16 +18039,64 @@ function offerPermanentAbilityChoice() {
                                 try { console.info('[Wunderswan][AUDIO] global audio timer cleared and stopped'); } catch(_){}
                             } catch(_){}
                             } catch(e) { console.warn('Wunderswan death handler failed', e); }
-                                // Ensure defeating the secret boss reliably unlocks Act III for future runs
+                                // Ensure defeating the secret boss reliably unlocks the proper progression reward based on act
                                 try {
-                                    try { if (typeof devLog === 'function') devLog('[Wunderswan] defeated - unlocking Act III'); } catch(_){}
-                                    // Extra defensive write: set flags/persistence immediately to avoid ordering issues
+                                    const act = String((game && game._selectedAct) || '');
+                                    const isActIII = act === 'III';
+                                    const isActII = act === 'II';
+                                    const isFinalDistrict = Number(game && game.dungeon) === 10;
+                                    const isFinalStreet = Number(game && game.room) === 5;
+                                    const isFinalActIIIEncounter = isActIII && isFinalDistrict && isFinalStreet;
                                     try { if (!game) window.game = window.game || {}; } catch(_){ }
-                                    try { game._actIIIUnlocked = true; } catch(_){ }
-                                    try { if (localStorage && localStorage.setItem) localStorage.setItem('actIIIUnlocked','1'); } catch(_){ }
-                                    try { if (typeof showToast === 'function') showToast('Act III unlocked!'); } catch(_){}
-                                    try { if (typeof unlockActIII === 'function') { unlockActIII('Wunderswan defeat'); } else { try { console.warn('[Wunderswan] unlockActIII not available at death time'); } catch(_){} } } catch(_){ }
-                                    try { if (typeof window._flushUnlockActIIIQueue === 'function') { window._flushUnlockActIIIQueue(); } } catch(_){}
+
+                                    if (!isActIII) {
+                                        try { if (typeof devLog === 'function') devLog('[Wunderswan] defeated - unlocking Act III'); } catch(_){ }
+                                        try { game._actIIIUnlocked = true; } catch(_){ }
+                                        try { if (localStorage && localStorage.setItem) localStorage.setItem('actIIIUnlocked', '1'); } catch(_){ }
+                                        try {
+                                            if (typeof safeUnlockActIII === 'function') {
+                                                safeUnlockActIII('Wunderswan defeat');
+                                            } else if (typeof unlockActIII === 'function') {
+                                                unlockActIII('Wunderswan defeat');
+                                            } else {
+                                                try { console.warn('[Wunderswan] unlockActIII not available at death time'); } catch(_){ }
+                                            }
+                                        } catch(_){ }
+                                        try { if (typeof window._flushUnlockActIIIQueue === 'function') window._flushUnlockActIIIQueue(); } catch(_){ }
+                                    } else {
+                                        try { game._actIIIUnlocked = true; } catch(_){ }
+                                        try { if (localStorage && localStorage.setItem) localStorage.setItem('actIIIUnlocked', '1'); } catch(_){ }
+                                        try { console.info('[Wunderswan] Act III defeat detected — skipping Act III unlock toast'); } catch(_){ }
+                                    }
+
+                                    if (isActIII) {
+                                        try {
+                                            if (typeof safeUnlockDuckAndCover === 'function') {
+                                                safeUnlockDuckAndCover('Act III Wunderswan defeat');
+                                            } else if (typeof unlockDuckAndCover === 'function') {
+                                                unlockDuckAndCover('Act III Wunderswan defeat');
+                                            }
+                                        } catch(_){ }
+                                        try { if (typeof window._flushUnlockDuckCoverQueue === 'function') window._flushUnlockDuckCoverQueue(); } catch(_){ }
+                                    } else if (!isActII) {
+                                        try { console.info('[Wunderswan] Duck and Cover unlock skipped', { act, dungeon: game && game.dungeon, room: game && game.room }); } catch(_){ }
+                                    }
+
+                                    if (isFinalActIIIEncounter) {
+                                        try {
+                                            completeGame();
+                                        } catch(e) {
+                                            try { console.warn('[Wunderswan] completeGame failed, offering permanent ability choice directly', e); } catch(_){ }
+                                            try {
+                                                if (!game._finalAbilityOffered) {
+                                                    offerPermanentAbilityChoice();
+                                                    game._finalAbilityOffered = true;
+                                                }
+                                            } catch(_){ }
+                                        }
+                                    }
+
+                                    try { game._pendingRoomClearReview = true; } catch(_){ }
                                 } catch(_){ }
                     }
 
@@ -17605,6 +18393,10 @@ function offerPermanentAbilityChoice() {
             });
             
             game.enemies = game.enemies.filter(enemy => enemy.health > 0);
+            if (game && game._pendingRoomClearReview) {
+                try { if (typeof checkRoomComplete === 'function') checkRoomComplete(); } catch(_){ }
+                try { game._pendingRoomClearReview = false; } catch(_){ }
+            }
         }
 
         // Post-update status ticks: doom and weakness durations
@@ -17643,7 +18435,7 @@ function offerPermanentAbilityChoice() {
                 }
                 // Bleeding: periodic physical damage (half mitigated by armor)
                 if (enemy.bleeding) {
-                    enemy.bleedTime = (enemy.bleedTime || 0) - 1;
+                    enemy.bleedTimeno = (enemy.bleedTime || 0) - 1;
                     if ((enemy.bleedTime % 25) === 0) {
                         const base = 4;
                         const mitigated = Math.max(1, base - (enemy.armor || 0) * 0.5);
@@ -23198,6 +23990,12 @@ function offerPermanentAbilityChoice() {
                 game._restartGraceFrames--;
                 return;
             }
+            if (isDuckAndCoverMode()) {
+                if (!game._duckWaveSpawning && game.enemies.length === 0 && (game._roomSpawnedEnemies || 0) > 0) {
+                    handleDuckWaveCleared();
+                }
+                return;
+            }
             if (!game.roomCleared && game.enemies.length === 0 && (game._roomSpawnedEnemies||0) > 0) {
                 game.roomCleared = true;
                 game._roomClearedAt = performance.now();
@@ -23242,6 +24040,136 @@ function offerPermanentAbilityChoice() {
             if (typeof game.resetProjectilePool === 'function') game.resetProjectilePool();
             generateRoom();
             updateUI();
+        }
+
+        // Temporary debug helper: jump directly to a specific district and street.
+        function debugJumpToStage(district, street) {
+            if (!game || typeof generateRoom !== 'function') {
+                console.warn('[StageJump] Game not ready for stage jump');
+                return false;
+            }
+            const d = Math.min(10, Math.max(1, parseInt(district, 10) || 1));
+            const s = Math.min(5, Math.max(1, parseInt(street, 10) || 1));
+            game.dungeon = d;
+            game.room = s;
+            // Keep scoreboard roughly aligned with the selected stage.
+            if (typeof game.roomsCleared === 'number') {
+                const targetCleared = Math.max(0, (d - 1) * 5 + (s - 1));
+                game.roomsCleared = targetCleared;
+            }
+            if (typeof game.chestsThisCycle === 'number') game.chestsThisCycle = 0;
+            game.roomCleared = false;
+            game._pendingAdvance = false;
+            game._restartGraceFrames = 0;
+            game._roomSpawnedEnemies = 0;
+            game._wunderswanPrefetched = false;
+            game._wunderswanSpawned = false;
+            if (typeof game.resetProjectilePool === 'function') {
+                try { game.resetProjectilePool(); } catch (err) { console.warn('[StageJump] resetProjectilePool failed', err); }
+            }
+            try {
+                generateRoom();
+                updateUI();
+            } catch (err) {
+                console.error('[StageJump] Failed to regenerate room', err);
+                return false;
+            }
+            try { addScreenShake(1); } catch (_) {}
+            try { showToast('Jumped to District ' + d + ', Street ' + s, 'debug'); }
+            catch (_) { console.info('[StageJump] Jumped to District ' + d + ', Street ' + s); }
+            return true;
+        }
+
+        function openStageJumpDebugMenu() {
+            try {
+                if (!document || !document.body) return;
+            } catch (_) { return; }
+            const existing = document.getElementById('debugStageJump');
+            if (existing) {
+                existing.remove();
+                return;
+            }
+            const overlay = document.createElement('div');
+            overlay.id = 'debugStageJump';
+            overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;z-index:2000;';
+            const panel = document.createElement('div');
+            panel.style.cssText = 'background:#111;border:1px solid #555;padding:18px 22px;border-radius:8px;color:#eee;min-width:260px;font-family:Courier New,monospace;box-shadow:0 6px 20px rgba(0,0,0,0.5);';
+            panel.innerHTML = '' +
+                '<h3 style="margin:0 0 12px;font-size:18px;text-align:center;letter-spacing:1px;">Stage Debug Jump</h3>' +
+                '<label style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:14px;">' +
+                    '<span>District</span>' +
+                    '<select id="debugStageDistrict" style="margin-left:12px;background:#000;color:#0f0;border:1px solid #555;padding:4px 6px;"></select>' +
+                '</label>' +
+                '<label style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;font-size:14px;">' +
+                    '<span>Street</span>' +
+                    '<select id="debugStageStreet" style="margin-left:12px;background:#000;color:#0f0;border:1px solid #555;padding:4px 6px;"></select>' +
+                '</label>' +
+                '<div style="display:flex;justify-content:space-between;gap:10px;margin-top:14px;">' +
+                    '<button id="debugStageCancel" style="flex:1;padding:6px 0;background:#333;color:#ccc;border:1px solid #555;cursor:pointer;">Cancel</button>' +
+                    '<button id="debugStageConfirm" style="flex:1;padding:6px 0;background:#146314;color:#fff;border:1px solid #3a3;cursor:pointer;">Jump</button>' +
+                '</div>' +
+                '<div style="margin-top:10px;font-size:11px;color:#888;text-align:center;">Press 8 again to close</div>';
+            overlay.appendChild(panel);
+
+            const districtSelect = panel.querySelector('#debugStageDistrict');
+            const streetSelect = panel.querySelector('#debugStageStreet');
+            for (let d = 1; d <= 10; d++) {
+                const opt = document.createElement('option');
+                opt.value = String(d);
+                opt.textContent = 'District ' + d;
+                districtSelect.appendChild(opt);
+            }
+            for (let s = 1; s <= 5; s++) {
+                const opt = document.createElement('option');
+                opt.value = String(s);
+                opt.textContent = 'Street ' + s;
+                streetSelect.appendChild(opt);
+            }
+            if (game) {
+                districtSelect.value = String(Math.min(10, Math.max(1, parseInt(game.dungeon, 10) || 1)));
+                streetSelect.value = String(Math.min(5, Math.max(1, parseInt(game.room, 10) || 1)));
+            }
+
+            const confirmBtn = panel.querySelector('#debugStageConfirm');
+            const cancelBtn = panel.querySelector('#debugStageCancel');
+
+            const closeOverlay = () => {
+                document.removeEventListener('keydown', escHandler, true);
+                if (overlay.parentElement) overlay.parentElement.removeChild(overlay);
+            };
+
+            const attemptJump = () => {
+                const targetDistrict = parseInt(districtSelect.value, 10);
+                const targetStreet = parseInt(streetSelect.value, 10);
+                if (debugJumpToStage(targetDistrict, targetStreet)) closeOverlay();
+            };
+
+            const escHandler = (evt) => {
+                if (evt.key === 'Escape') {
+                    evt.preventDefault();
+                    closeOverlay();
+                } else if (evt.key === 'Enter') {
+                    evt.preventDefault();
+                    attemptJump();
+                }
+            };
+
+            overlay.addEventListener('click', closeOverlay);
+            panel.addEventListener('click', (evt) => evt.stopPropagation());
+            panel.addEventListener('keydown', escHandler);
+            confirmBtn.addEventListener('click', (evt) => { evt.preventDefault(); attemptJump(); });
+            cancelBtn.addEventListener('click', (evt) => { evt.preventDefault(); closeOverlay(); });
+            districtSelect.addEventListener('change', (evt) => evt.stopPropagation());
+            streetSelect.addEventListener('change', (evt) => evt.stopPropagation());
+
+            document.addEventListener('keydown', escHandler, true);
+            document.body.appendChild(overlay);
+            try { districtSelect.focus(); } catch (_) {}
+        }
+
+        if (typeof window !== 'undefined') {
+            window.debugJumpToStage = debugJumpToStage;
+            window.openStageJumpDebugMenu = openStageJumpDebugMenu;
         }
 
         function completeGame() {
@@ -23298,7 +24226,34 @@ function offerPermanentAbilityChoice() {
             const options = opts || {};
             const suppressMusic = !!options.suppressMusic;
             const skipRoomInit = !!options.skipRoomInit;
+            let duckMode = false;
             console.info('[resetGame] called', { dungeon: game.dungeon, room: game.room, skipRoomInit });
+                    // Configure Duck and Cover state before rebuilding player data
+                    try {
+                        duckMode = String(game && game._selectedAct) === 'DuckAndCover';
+                        game._duckAndCoverActive = duckMode;
+                        if (duckMode) {
+                            game.dungeon = 1;
+                            game.room = 1;
+                            game.roomsCleared = 0;
+                            game._duckWave = 0;
+                            game._duckNextWaveAt = null;
+                            game._duckPendingWave = null;
+                            game._duckStageInitialized = false;
+                            game._duckInitialChestsPlaced = false;
+                            game._duckWaveSpawning = false;
+                            game._duckWaveBannerTimer = null;
+                            game.chestsThisCycle = 0;
+                        } else {
+                            game._duckWave = 0;
+                            game._duckNextWaveAt = null;
+                            game._duckPendingWave = null;
+                            game._duckStageInitialized = false;
+                            game._duckInitialChestsPlaced = false;
+                            game._duckWaveSpawning = false;
+                            game._duckWaveBannerTimer = null;
+                        }
+                    } catch(_){ }
                     // Preserve existing sprite sheet/meta before wiping player object so we don't lose load state
                     const prevSheet = game.player && game.player.spriteSheet;
                     const prevMeta = game.player && game.player.spriteMeta;
@@ -23314,20 +24269,42 @@ function offerPermanentAbilityChoice() {
                         if (!suppressMusic) {
                             // Choose music based on selected act (persisted via saveSelectedAct/loadSelectedAct)
                             try {
-                                if (game && game._selectedAct && String(game._selectedAct) === 'III') {
+                                if (duckMode) {
+                                    const picked = pickDuckWaveTrack();
+                                    if (picked) {
+                                        game.bgMusic = new Audio(picked);
+                                        game.bgMusic.loop = true;
+                                        try { game._actMusicSet = true; } catch(_){ }
+                                        game._duckActiveTrack = picked;
+                                        setDuckNowPlaying(picked);
+                                    } else {
+                                        game.bgMusic = new Audio('assets/audio/QuackshotChronicles.mp3');
+                                        try { game._actMusicSet = false; } catch(_){ }
+                                        game._duckActiveTrack = null;
+                                        setDuckNowPlaying(null);
+                                    }
+                                } else if (game && game._selectedAct && String(game._selectedAct) === 'III') {
                                     // Preserve Act III music when restarting from Act III
                                     game.bgMusic = new Audio('assets/audio/MetalHeartsCollide.mp3');
                                     try { game._actMusicSet = true; } catch(_){ }
+                                    game._duckActiveTrack = null;
+                                    setDuckNowPlaying(null);
                                 } else if (game && game._selectedAct && String(game._selectedAct) === 'II') {
                                     game.bgMusic = new Audio('assets/audio/GooseGhetto.mp3');
                                     try { game._actMusicSet = true; } catch(_){ }
+                                    game._duckActiveTrack = null;
+                                    setDuckNowPlaying(null);
                                 } else {
                                     game.bgMusic = new Audio('assets/audio/QuackshotChronicles.mp3');
                                     try { game._actMusicSet = false; } catch(_){ }
+                                    game._duckActiveTrack = null;
+                                    setDuckNowPlaying(null);
                                 }
                             } catch(_) {
                                 game.bgMusic = new Audio('assets/audio/QuackshotChronicles.mp3');
                                 try { game._actMusicSet = false; } catch(_){ }
+                                game._duckActiveTrack = null;
+                                setDuckNowPlaying(null);
                             }
                             if (game.bgMusic) {
                                 game.bgMusic.loop = true;
@@ -23337,6 +24314,8 @@ function offerPermanentAbilityChoice() {
                         } else {
                             try { if (game.bgMusic) { game.bgMusic.currentTime = 0; } } catch(_){ }
                             try { game._actMusicSet = false; } catch(_){ }
+                            game._duckActiveTrack = null;
+                            setDuckNowPlaying(null);
                         }
                         game._bossMusicPlaying = false;
                     } catch(e) {}
@@ -28854,7 +29833,9 @@ function offerPermanentAbilityChoice() {
                 }
                 const walkFrames = Array.isArray(game.player.walkFrames) && game.player.walkFrames.length ? game.player.walkFrames : null;
                 const hasWalkAnim = !!walkFrames;
-                const wantsStatic = !game.player.moving || !hasWalkAnim;
+                const hasGridAnim = !!(meta && (((meta.totalFrames || 0) > 1) || (((meta.cols || 1) * (meta.rows || 1)) > 1)));
+                // When trimmed walk frames are missing (Duck & Cover late loads), fall back to meta-grid animation instead of locking to idle art.
+                const wantsStatic = !game.player.moving || (!hasWalkAnim && !hasGridAnim);
                 let frameW, frameH, sx, sy, sourceW, sourceH;
                 let visibleHeight = null;
                 let useStatic = false;
@@ -29145,7 +30126,7 @@ function offerPermanentAbilityChoice() {
             }
 
             // Room cleared overlay
-            if (game.roomCleared) {
+            if (game.roomCleared && !isDuckAndCoverMode()) {
                 // NOTE: removed the heavy fullscreen dim so leftover chests and items remain visible.
                 // If readability of the text becomes an issue, consider adding a small outline or
                 // a faint translucent panel behind the text only instead of dimming the whole scene.
@@ -29357,12 +30338,19 @@ function offerPermanentAbilityChoice() {
             }
         } catch(_){}
 
+        let statRoomsOrigLabel = null;
+
         function updateStats() {
             if (!window.game || !game.player) {
                 return;
             }
             const abilitiesList = Array.isArray(game.player.abilities) ? game.player.abilities : [];
             const abilityCatalog = (typeof ABILITIES !== 'undefined' && ABILITIES) ? ABILITIES : null;
+            const duckModeActive = isDuckAndCoverMode();
+            const roomsLabelEl = document.getElementById('statRoomsLabel');
+            const statRoomsEl = document.getElementById('statRooms');
+            if (statRoomsOrigLabel == null && roomsLabelEl) statRoomsOrigLabel = roomsLabelEl.textContent || 'Rooms';
+            if (roomsLabelEl) roomsLabelEl.textContent = duckModeActive ? 'Waves' : (statRoomsOrigLabel || 'Rooms');
 
             let damage = 25;
             let projectileCount = 1;
@@ -29416,7 +30404,14 @@ function offerPermanentAbilityChoice() {
             document.getElementById('statCrit').textContent = Math.round(critChance * 100) + '%';
             document.getElementById('statBlock').textContent = Math.round(blockChance * 100) + '%';
             document.getElementById('statKills').textContent = game.totalKills || 0;
-            document.getElementById('statRooms').textContent = game.roomsCleared || 0;
+            if (statRoomsEl) {
+                if (duckModeActive) {
+                    const waveCleared = Math.max(0, ((game._duckWave || 0) - 1));
+                    statRoomsEl.textContent = waveCleared;
+                } else {
+                    statRoomsEl.textContent = game.roomsCleared || 0;
+                }
+            }
             document.getElementById('statChests').textContent = game.chestsOpened || 0;
         }
 
@@ -29425,23 +30420,46 @@ function offerPermanentAbilityChoice() {
             let lastUIUpdate = 0;
             const UI_INTERVAL = 250; // ms (4Hz)
             // Cached element references (resolved lazily on first call)
-            let elHealth, elMaxHealth, elDungeon, elRoom, elScore, elProj, elHealthBar, elAura;
+            let elHealth, elMaxHealth, elDungeon, elRoom, elScore, elProj, elHealthBar, elAura, elDungeonLabel, elStreetWrap, elNowPlayingWrap, elNowPlayingText;
             // Last displayed primitive values for diffing
             let lastHealth=-1, lastMaxHealth=-1, lastDungeon, lastRoom, lastScore, lastProjText, lastHealthBarWidth=-1, lastHealthBarColor='', lastAuraText='';
+            let origDistrictLabel = null;
+            let lastDuckMode = null;
+            let lastNowPlayingText = '';
+            let lastNowPlayingVisible = '';
             function cache() {
-                if (!elHealth) {
-                    elHealth = document.getElementById('health');
-                    elMaxHealth = document.getElementById('maxHealth');
-                    elDungeon = document.getElementById('dungeon');
-                    elRoom = document.getElementById('room');
-                    elScore = document.getElementById('score');
-                    elProj = document.getElementById('statProjectiles');
-                    elHealthBar = document.getElementById('healthBar');
-                    elAura = document.getElementById('auraStatus');
-                }
+                if (!elHealth) elHealth = document.getElementById('health');
+                if (!elMaxHealth) elMaxHealth = document.getElementById('maxHealth');
+                if (!elDungeon || !document.body.contains(elDungeon)) elDungeon = document.getElementById('dungeon');
+                if (!elRoom || !document.body.contains(elRoom)) elRoom = document.getElementById('room');
+                if (!elScore) elScore = document.getElementById('score');
+                if (!elProj) elProj = document.getElementById('statProjectiles');
+                if (!elHealthBar) elHealthBar = document.getElementById('healthBar');
+                if (!elAura) elAura = document.getElementById('auraStatus');
+                if (!elDungeonLabel || !document.body.contains(elDungeonLabel)) elDungeonLabel = document.getElementById('dungeonLabel');
+                if (!elStreetWrap || !document.body.contains(elStreetWrap)) elStreetWrap = document.getElementById('streetLabelWrap');
+                if (!elNowPlayingWrap || !document.body.contains(elNowPlayingWrap)) elNowPlayingWrap = document.getElementById('nowPlayingContainer');
+                if (!elNowPlayingText || !document.body.contains(elNowPlayingText)) elNowPlayingText = document.getElementById('nowPlayingText');
+                if (origDistrictLabel == null && elDungeonLabel) origDistrictLabel = elDungeonLabel.textContent;
             }
             window.updateUI = function updateUI(){
                 cache();
+                const duckMode = isDuckAndCoverMode();
+                let minimapRefresh = false;
+                if (duckMode !== lastDuckMode) {
+                    if (duckMode) {
+                        if (elDungeonLabel) elDungeonLabel.textContent = 'Wave';
+                        if (elStreetWrap) elStreetWrap.style.display = 'none';
+                        if (elRoom) elRoom.textContent = '';
+                    } else {
+                        if (elDungeonLabel && origDistrictLabel != null) elDungeonLabel.textContent = origDistrictLabel;
+                        if (elStreetWrap) elStreetWrap.style.display = 'inline';
+                    }
+                    lastDuckMode = duckMode;
+                    lastDungeon = null;
+                    lastRoom = null;
+                    minimapRefresh = true;
+                }
                 // Always update health bar width immediately (player feedback critical)
                 const healthPercent = (game.player.health / game.player.maxHealth) * 100;
                 const widthVal = Math.max(0, healthPercent).toFixed(2) + '%';
@@ -29461,6 +30479,9 @@ function offerPermanentAbilityChoice() {
 
                 const now = performance.now();
                 if (now - lastUIUpdate < UI_INTERVAL) {
+                    if (minimapRefresh) {
+                        try { updateMinimap(); } catch(_){ }
+                    }
                     return; // defer non-critical DOM writes
                 }
                 lastUIUpdate = now;
@@ -29471,8 +30492,28 @@ function offerPermanentAbilityChoice() {
                 if (elMaxHealth && game.player.maxHealth !== lastMaxHealth) { elMaxHealth.textContent = game.player.maxHealth; lastMaxHealth = game.player.maxHealth; }
 
                 // Dungeon / room / score
-                if (elDungeon && game.dungeon !== lastDungeon) { elDungeon.textContent = game.dungeon; lastDungeon = game.dungeon; }
-                if (elRoom && game.room !== lastRoom) { elRoom.textContent = game.room; lastRoom = game.room; }
+                if (duckMode) {
+                    const waveDisplay = Math.max(1, game._duckWave || 1);
+                    if (elDungeon && waveDisplay !== lastDungeon) {
+                        elDungeon.textContent = waveDisplay;
+                        lastDungeon = waveDisplay;
+                        minimapRefresh = true;
+                    }
+                    if (elRoom) {
+                        if (lastRoom !== '') { elRoom.textContent = ''; lastRoom = ''; }
+                    }
+                } else {
+                    if (elDungeon && game.dungeon !== lastDungeon) {
+                        elDungeon.textContent = game.dungeon;
+                        lastDungeon = game.dungeon;
+                        minimapRefresh = true;
+                    }
+                    if (elRoom && game.room !== lastRoom) {
+                        elRoom.textContent = game.room;
+                        lastRoom = game.room;
+                        minimapRefresh = true;
+                    }
+                }
                 const scoreStr = game.score.toLocaleString();
                 if (elScore && scoreStr !== lastScore) { elScore.textContent = scoreStr; lastScore = scoreStr; }
 
@@ -29515,12 +30556,58 @@ function offerPermanentAbilityChoice() {
                     }
                     if (auraText !== lastAuraText) { elAura.textContent = auraText; lastAuraText = auraText; }
                 }
+
+                const nowPlayingInfo = (duckMode && game._duckNowPlaying && game._duckNowPlaying.display) ? game._duckNowPlaying.display : '';
+                const showNowPlaying = !!(duckMode && nowPlayingInfo);
+                if (elNowPlayingWrap) {
+                    const displayStyle = showNowPlaying ? 'flex' : 'none';
+                    if (displayStyle !== lastNowPlayingVisible) {
+                        elNowPlayingWrap.style.display = displayStyle;
+                        lastNowPlayingVisible = displayStyle;
+                    }
+                }
+                if (elNowPlayingText) {
+                    const textOut = showNowPlaying ? nowPlayingInfo : '';
+                    if (textOut !== lastNowPlayingText) {
+                        elNowPlayingText.textContent = textOut;
+                        lastNowPlayingText = textOut;
+                    }
+                }
+                if (minimapRefresh) {
+                    try { updateMinimap(); } catch(_){ }
+                }
             }
         })();
 
         function updateMinimap() {
             const minimap = document.getElementById('minimap');
             if (!minimap) return;
+            if (isDuckAndCoverMode()) {
+                const waveNow = Math.max(1, (game && (game._duckWave || game._duckPendingWave)) || 1);
+                const activeWave = Math.max(1, (game && game._duckWave) || waveNow);
+                const cfg = getDuckWaveConfig(activeWave);
+                const enemiesRemaining = (game && Array.isArray(game.enemies)) ? game.enemies.filter(e => e && !e.dead && e.health > 0).length : 0;
+                const nextWave = (game && game._duckPendingWave) ? game._duckPendingWave : (activeWave + 1);
+                const nowMs = (typeof game !== 'undefined' && typeof game._frameNow === 'number') ? game._frameNow : Date.now();
+                let etaText = 'Awaiting clear';
+                if (game && game._duckWaveSpawning && typeof game._duckNextWaveAt === 'number') {
+                    const diff = Math.max(0, game._duckNextWaveAt - nowMs);
+                    etaText = diff > 0 ? (diff / 1000).toFixed(1) + 's' : 'Imminent';
+                } else if (enemiesRemaining <= 0) {
+                    etaText = 'Ready';
+                } else {
+                    etaText = enemiesRemaining + ' foes';
+                }
+                const chestOnClear = cfg ? Math.max(1, cfg.chestOnClear || 1) : 1;
+                minimap.innerHTML = `
+                    <div style="position:absolute; top:2px; left:8px; font-size:10px; letter-spacing:1px; color:#6de1ff; text-transform:uppercase;">Duck &amp; Cover</div>
+                    <div style="position:absolute; top:20px; left:8px; font-size:13px; color:#ffe98a; font-weight:bold;">Wave ${waveNow}</div>
+                    <div style="position:absolute; top:38px; left:8px; font-size:11px; color:#d0d0d0;">Enemies Remaining: ${enemiesRemaining}</div>
+                    <div style="position:absolute; top:52px; left:8px; font-size:11px; color:#c8e4ff;">Next Wave ${nextWave} &mdash; ${etaText}</div>
+                    <div style="position:absolute; top:66px; left:8px; font-size:10px; color:#ffd27f;">Chests on Clear: ${chestOnClear}</div>
+                `;
+                return;
+            }
             minimap.innerHTML = '<div style="position: absolute; top: 2px; left: 2px; font-size: 8px; color: #888;">District Map</div>';
             // Inject (idempotent) Potato Mode toggle button next to minimap if not present
             if (!document.getElementById('btnToggleCosmetic')) {
