@@ -7120,7 +7120,21 @@ function showActTransition(actId, options){
         ov.style.pointerEvents = 'auto'; ov.style.opacity = '1';
         try { console.info('[ActTransition] overlay set visible — element present?', !!ov, 'text=', (txt?txt.textContent:null)); } catch(_){ }
         const start = Date.now();
-        return Promise.all([ preloadActSprites(actId, preloadTimeout), new Promise(r=>setTimeout(r, minMs)) ]).then(()=>{
+        const tasks = [
+            preloadActSprites(actId, preloadTimeout),
+            new Promise(r=>setTimeout(r, minMs))
+        ];
+        if (String(actId) === 'DuckAndCover' && typeof preloadBackgroundList === 'function') {
+            try {
+                const duckBgPromise = preloadBackgroundList(['assets/streets/waves/lot1.png']);
+                if (duckBgPromise && typeof duckBgPromise.then === 'function') {
+                    const bgTimeout = Math.max(600, preloadTimeout || 1800);
+                    const guard = new Promise(resolve => setTimeout(resolve, bgTimeout));
+                    tasks.push(Promise.race([duckBgPromise.catch(()=>null), guard]));
+                }
+            } catch(_){ }
+        }
+        return Promise.all(tasks).then(()=>{
             // ensure minimum display time passed
             const passed = Date.now() - start; const remain = Math.max(0, 120 - (Date.now()-start));
             setTimeout(()=>{ try { ov.style.opacity = '0'; ov.style.pointerEvents = 'none'; try { console.info('[ActTransition] hide overlay'); } catch(_){} } catch(_){}; setTimeout(()=>{ try{ if (ov && ov.parentElement) {} }catch(_){} },240); }, remain);
