@@ -9009,6 +9009,7 @@ function offerPermanentAbilityChoice() {
             }
 
             const PLAYER_IDLE_BOUNDS = { x: 25, y: 42, w: 505, h: 756 };
+            const PLAYER_IDLE_SCALE_ADJUST = 1.05; // Nudge to keep idle render slightly smaller for parity with walk frames
             const PLAYER_WALK_BOUNDS = [
                 { x: 45, y: 13, w: 183, h: 253 },
                 { x: 301, y: 13, w: 183, h: 236 },
@@ -9069,8 +9070,8 @@ function offerPermanentAbilityChoice() {
                     image,
                     x: bounds.x,
                     y: bounds.y,
-                    w: bounds.w,
-                    h: bounds.h,
+                    w: bounds.visibleWidth || bounds.w,
+                    h: bounds.visibleHeight || bounds.h,
                     visibleHeight: bounds.visibleHeight || bounds.h,
                     visibleWidth: bounds.visibleWidth || bounds.w
                 };
@@ -9134,15 +9135,46 @@ function offerPermanentAbilityChoice() {
 
             function applyIdleFrame(image) {
                 if (!image) return;
+                let bounds = { ...PLAYER_IDLE_BOUNDS };
+                if (typeof computeOpaqueBounds === 'function') {
+                    try {
+                        const tight = computeOpaqueBounds(image, 12);
+                        if (tight && tight.w > 0 && tight.h > 0) {
+                            const padX = Math.min(18, Math.round(tight.w * 0.06));
+                            const padY = Math.min(24, Math.round(tight.h * 0.08));
+                            const x = Math.max(0, tight.x - padX);
+                            const y = Math.max(0, tight.y - padY);
+                            const fullW = image.naturalWidth || image.width || tight.w;
+                            const fullH = image.naturalHeight || image.height || tight.h;
+                            const maxW = Math.max(1, fullW - x);
+                            const maxH = Math.max(1, fullH - y);
+                            const w = Math.min(tight.w + padX * 2, maxW);
+                            const h = Math.min(tight.h + padY * 2, maxH);
+                            bounds = { x, y, w: Math.max(1, w), h: Math.max(1, h) };
+                        }
+                    } catch(_) {
+                        // Fallback to predefined bounds when opaque calculation fails
+                    }
+                }
                 const frames = buildDirectionalFramesFromBounds(image, {
-                    ...PLAYER_IDLE_BOUNDS,
-                    visibleHeight: PLAYER_IDLE_BOUNDS.h,
-                    visibleWidth: PLAYER_IDLE_BOUNDS.w
+                    ...bounds,
+                    visibleHeight: bounds.h,
+                    visibleWidth: bounds.w
                 });
                 if (frames) {
+                    const scaleBias = (typeof PLAYER_IDLE_SCALE_ADJUST === 'number' && PLAYER_IDLE_SCALE_ADJUST > 0) ? PLAYER_IDLE_SCALE_ADJUST : 1;
+                    if (scaleBias !== 1) {
+                        for (const key in frames) {
+                            const frame = frames[key];
+                            if (!frame) continue;
+                            const baseVisible = frame.visibleHeight || frame.h || bounds.h;
+                            frame.visibleHeight = baseVisible * scaleBias;
+                        }
+                    }
                     game.player.directionalFrames = frames;
                     game.player.spriteTargetHeight = game.player.spriteTargetHeight || PLAYER_TARGET_HEIGHT;
-                    applyPlayerScaleFromHeight(PLAYER_IDLE_BOUNDS.h);
+                    const referenceHeight = (bounds && bounds.h) ? bounds.h : PLAYER_IDLE_BOUNDS.h;
+                    applyPlayerScaleFromHeight(referenceHeight * ((scaleBias !== 1) ? scaleBias : 1));
                 }
             }
 
@@ -11890,7 +11922,14 @@ function offerPermanentAbilityChoice() {
             'assets/audio/waves/track12.mp3',
             'assets/audio/waves/track13.mp3',
             'assets/audio/waves/track14.mp3',
-            'assets/audio/waves/track15.mp3'
+            'assets/audio/waves/track15.mp3',
+            'assets/audio/waves/track16.mp3',
+            'assets/audio/waves/track17.mp3',
+            'assets/audio/waves/track18.mp3',
+            'assets/audio/waves/track19.mp3',
+            'assets/audio/waves/track20.mp3',
+            'assets/audio/waves/track21.mp3',
+            'assets/audio/waves/track22.mp3',
         ];
 
         function pickDuckWaveTrack() {
@@ -12225,10 +12264,23 @@ function offerPermanentAbilityChoice() {
                 if (!el) {
                     el = document.createElement('div');
                     el.id = 'duckWaveBanner';
-                    el.style.cssText = 'position:fixed;top:20%;left:50%;transform:translateX(-50%);padding:18px 32px;font-family:"Courier New",monospace;font-size:42px;letter-spacing:4px;color:#ffe98a;text-shadow:0 0 16px #111;background:rgba(0,0,0,0.55);border:2px solid rgba(255,233,138,0.5);border-radius:12px;z-index:40000;pointer-events:none;opacity:0;transition:opacity 220ms ease;';
+                    el.style.cssText = 'position:fixed;padding:18px 32px;font-family:"Courier New",monospace;font-size:42px;letter-spacing:4px;color:#ffe98a;text-shadow:0 0 16px #111;background:rgba(0,0,0,0.55);border:2px solid rgba(255,233,138,0.5);border-radius:12px;z-index:40000;pointer-events:none;opacity:0;transition:opacity 220ms ease;text-align:center;';
                     document.body.appendChild(el);
                 }
                 el.textContent = label;
+                // Position centered horizontally on the canvas
+                const canvas = document.getElementById('gameCanvas');
+                if (canvas) {
+                    const rect = canvas.getBoundingClientRect();
+                    el.style.left = (rect.left + rect.width / 2) + 'px';
+                    el.style.top = (rect.top + rect.height * 0.2) + 'px';
+                    el.style.transform = 'translateX(-50%)';
+                } else {
+                    // Fallback to viewport center
+                    el.style.left = '50%';
+                    el.style.top = '20%';
+                    el.style.transform = 'translateX(-50%)';
+                }
                 el.style.opacity = '1';
                 if (game._duckWaveBannerTimer) {
                     clearTimeout(game._duckWaveBannerTimer);
@@ -13102,8 +13154,9 @@ function offerPermanentAbilityChoice() {
             } catch(_) {}
             
             // Spawn chests
+            const effectiveAbilities = isDuckAndCoverMode() ? game.player.abilities.filter(a => !game.player.permanentAbilities.includes(a)) : game.player.abilities;
             let chestSpawnChance = 0.5;
-            if (game.player.abilities.includes('Treasure Hunter')) chestSpawnChance = 0.8;
+            if (effectiveAbilities.includes('Treasure Hunter')) chestSpawnChance = 0.8;
             // Guaranteed minimum chest logic: ensure at least 2 chests every district (rooms 1-5)
             // Strategy: If still below quota and nearing end of cycle, force spawn.
             const roomsPerDistrict = 5;
@@ -15743,6 +15796,8 @@ function offerPermanentAbilityChoice() {
                 }
             }
             
+            const effectiveAbilities = isDuckAndCoverMode() ? game.player.abilities.filter(a => !game.player.permanentAbilities.includes(a)) : game.player.abilities;
+            
             // Attack handling
             // Base cooldown in ms. Previous model multiplied divisively (compounded) which blew up with many sources.
             // New model: treat (attackSpeedMultiplier - 1) as additive bonuses.
@@ -15750,7 +15805,7 @@ function offerPermanentAbilityChoice() {
             // Effective cooldown = base / (1 + sumBonuses).
             let baseAttackCooldown = 300;
             let attackSpeedBonusSum = 0; // sum of (multiplier - 1)
-            game.player.abilities.forEach(ability => {
+            effectiveAbilities.forEach(ability => {
                 const abilityData = ABILITIES[ability];
                 if (abilityData && abilityData.effect.attackSpeedMultiplier) {
                     attackSpeedBonusSum += (abilityData.effect.attackSpeedMultiplier - 1);
@@ -15768,7 +15823,7 @@ function offerPermanentAbilityChoice() {
             }
 
             // Continuous beam weapons: while holding space, spawn short beam segments at a high rate
-            if (isFiring && game.player.abilities.some(a => ABILITIES[a] && ABILITIES[a].effect.energyType === 'laser' && ABILITIES[a].effect.continuous)) {
+            if (isFiring && effectiveAbilities.some(a => ABILITIES[a] && ABILITIES[a].effect.energyType === 'laser' && ABILITIES[a].effect.continuous)) {
                 // spawn extra mini-attacks without resetting lastAttack to allow continuous fire
                 // create a rapid beam segment every 50ms
                 if (!game._lastBeamSpawn || Date.now() - game._lastBeamSpawn > 50) {
@@ -15778,7 +15833,7 @@ function offerPermanentAbilityChoice() {
                     let homing = false;
                     let wunder = false;
                     try {
-                        for (const a of (game.player.abilities||[])) {
+                        for (const a of (effectiveAbilities||[])) {
                             const ad = ABILITIES[a] && ABILITIES[a].effect;
                             if (!ad) continue;
                             if (ad.scribble) scribble = true;
@@ -15846,7 +15901,7 @@ function offerPermanentAbilityChoice() {
             }
 
             // Particle Beam: continuous segments while holding fire (tiled along aim direction)
-            if (isFiring && game.player.abilities.some(a => ABILITIES[a] && ABILITIES[a].effect.energyType === 'particle')) {
+            if (isFiring && effectiveAbilities.some(a => ABILITIES[a] && ABILITIES[a].effect.energyType === 'particle')) {
                 // Slightly lower cadence than laser since cores are thicker; about every 60ms
                 if (!game._lastPBeamSpawn || Date.now() - game._lastPBeamSpawn > 60) {
                     const dir = game.player.lastDirection;
@@ -15869,7 +15924,7 @@ function offerPermanentAbilityChoice() {
                     let pMeta = { beam: true, particleBeam: true, beamOwner: 'player', baseDamage: base, energyType: 'particle', _beamPatternPhase: 0 };
                     let wunder = false;
                     try {
-                        for (const a of (game.player.abilities||[])) {
+                        for (const a of (effectiveAbilities||[])) {
                             const ad = ABILITIES[a] && ABILITIES[a].effect;
                             if (!ad) continue;
                             if (ad.scribble) { pMeta.scribble = true; }
@@ -15888,7 +15943,7 @@ function offerPermanentAbilityChoice() {
             }
 
             // Ion Cannon: charge while holding space, release a single heavy blast on release
-            if (game.player.abilities.some(a => ABILITIES[a] && ABILITIES[a].effect.energyType === 'ion' && ABILITIES[a].effect.chargeShot)) {
+            if (effectiveAbilities.some(a => ABILITIES[a] && ABILITIES[a].effect.energyType === 'ion' && ABILITIES[a].effect.chargeShot)) {
                 // increment charge while holding
                 if (isFiring) {
                     game._ionChargeTime = (game._ionChargeTime || 0) + 1;
@@ -15968,6 +16023,7 @@ function offerPermanentAbilityChoice() {
         }
 
         function attack() {
+            const effectiveAbilities = isDuckAndCoverMode() ? game.player.abilities.filter(a => !game.player.permanentAbilities.includes(a)) : game.player.abilities;
             game.shotCounter++;
             // Play a minimal attack SFX (rate-limited) once per attack invocation (not per projectile)
             if (typeof playAttackSfx === 'function') playAttackSfx();
@@ -15975,7 +16031,7 @@ function offerPermanentAbilityChoice() {
             let projectileCount = 1;
             let shotgunBlast = false;
             let multiShotCount = 0;
-            game.player.abilities.forEach(ability => {
+            effectiveAbilities.forEach(ability => {
                 const abilityData = ABILITIES[ability];
                 if (abilityData && abilityData.effect.projectileCount) {
                     multiShotCount += abilityData.effect.projectileCount;
@@ -16023,14 +16079,14 @@ function offerPermanentAbilityChoice() {
                 });
             }
             // Determine pattern modifiers from abilities
-            const hasOmni = game.player.abilities.some(a => ABILITIES[a] && ABILITIES[a].effect.omniDirectional);
-            const hasRadial = game.player.abilities.some(a => ABILITIES[a] && ABILITIES[a].effect.radialBurst);
-            const hasSpiral = game.player.abilities.some(a => ABILITIES[a] && ABILITIES[a].effect.spiralPattern);
-            const hasUzumaki = game.player.abilities.some(a => ABILITIES[a] && ABILITIES[a].effect.uzumaki);
-            const hasCross = game.player.abilities.some(a => ABILITIES[a] && ABILITIES[a].effect.crossPattern);
-            const hasRandomSpread = game.player.abilities.some(a => ABILITIES[a] && ABILITIES[a].effect.randomSpread);
-            const hasQuackenRelease = game.player.abilities.includes('Release the Quacken!');
-            const hasReleaseQuacken = game.player.abilities.includes('Release the Quacken!');
+            const hasOmni = effectiveAbilities.some(a => ABILITIES[a] && ABILITIES[a].effect.omniDirectional);
+            const hasRadial = effectiveAbilities.some(a => ABILITIES[a] && ABILITIES[a].effect.radialBurst);
+            const hasSpiral = effectiveAbilities.some(a => ABILITIES[a] && ABILITIES[a].effect.spiralPattern);
+            const hasUzumaki = effectiveAbilities.some(a => ABILITIES[a] && ABILITIES[a].effect.uzumaki);
+            const hasCross = effectiveAbilities.some(a => ABILITIES[a] && ABILITIES[a].effect.crossPattern);
+            const hasRandomSpread = effectiveAbilities.some(a => ABILITIES[a] && ABILITIES[a].effect.randomSpread);
+            const hasQuackenRelease = effectiveAbilities.includes('Release the Quacken!');
+            const hasReleaseQuacken = effectiveAbilities.includes('Release the Quacken!');
 
             // Pattern count handling: Some pattern abilities define a baseline number of directions.
             // Radial Burst wants 16 evenly spaced shots. Omni Shot wants 8. If the player has additional
@@ -16068,7 +16124,7 @@ function offerPermanentAbilityChoice() {
             const patternCount = projectileCount; // final number of shots to emit
 
             // Defensive: ensure all pattern guard flags are defined before conditional spread tweaks
-            const hasQuad = game.player.abilities.includes('Quad Shot');
+            const hasQuad = effectiveAbilities.includes('Quad Shot');
             let quackenBurstSpawned = false;
 
             for (let i = 0; i < projectileCount; i++) {
@@ -16146,16 +16202,16 @@ function offerPermanentAbilityChoice() {
 
                 let speed = 6;
                 let size = 4;
-                let piercing = game.player.abilities.includes('Pierce Shot') || game.player.abilities.includes('Multi-Pierce');
-                let pierceCount = game.player.abilities.includes('Multi-Pierce') ? 999 : 3;
-                let homing = game.player.abilities.includes('Homing Shot');
-                let weakHoming = game.player.abilities.includes('Seeking Shot');
-                let bouncing = game.player.abilities.includes('Bouncing Shot');
-                let explosive = game.player.abilities.includes('Explosive Shot');
+                let piercing = effectiveAbilities.includes('Pierce Shot') || effectiveAbilities.includes('Multi-Pierce');
+                let pierceCount = effectiveAbilities.includes('Multi-Pierce') ? 999 : 3;
+                let homing = effectiveAbilities.includes('Homing Shot');
+                let weakHoming = effectiveAbilities.includes('Seeking Shot');
+                let bouncing = effectiveAbilities.includes('Bouncing Shot');
+                let explosive = effectiveAbilities.includes('Explosive Shot');
                 // Split Shot removed (previously set splitting flag here)
-                let growing = game.player.abilities.includes('Growing Shot');
+                let growing = effectiveAbilities.includes('Growing Shot');
                 // Spiral shot: causes the projectile to curve/rotate in-flight
-                let spiral = game.player.abilities.includes('Spiral Shot');
+                let spiral = effectiveAbilities.includes('Spiral Shot');
                 let bounces = 0;
                 // explicit per-attack flags (populated below from ability effects)
                 let boomerangFlag = false;
@@ -16165,7 +16221,7 @@ function offerPermanentAbilityChoice() {
                 let teleportingFlag = false;
 
                 // Map a few ability flags that weren't previously wired up
-                game.player.abilities.forEach(ability => {
+                effectiveAbilities.forEach(ability => {
                     const abilityData = ABILITIES[ability];
                     if (!abilityData || !abilityData.effect) return;
                     if (abilityData.effect.projectileSpeed) speed *= abilityData.effect.projectileSpeed;
@@ -16220,17 +16276,17 @@ function offerPermanentAbilityChoice() {
                     bouncing: bouncing,
                     teleporting: teleportingFlag,
                     spiralPattern: spiral,
-                    sineWave: game.player.abilities.some(a => ABILITIES[a] && ABILITIES[a].effect.sineWave),
-                    wackyZigzag: game.player.abilities.some(a => ABILITIES[a] && ABILITIES[a].effect.wackyZigzag),
-                    ekgWave: game.player.abilities.some(a => ABILITIES[a] && ABILITIES[a].effect.ekgWave),
+                    sineWave: effectiveAbilities.some(a => ABILITIES[a] && ABILITIES[a].effect.sineWave),
+                    wackyZigzag: effectiveAbilities.some(a => ABILITIES[a] && ABILITIES[a].effect.wackyZigzag),
+                    ekgWave: effectiveAbilities.some(a => ABILITIES[a] && ABILITIES[a].effect.ekgWave),
                     homing: homing,
                 });
                 if (!game._projMeta) game._projMeta = new Map();
                 const meta = { baseDamage, piercing, pierceCount, weakHoming, bouncing, bounces: (bouncing?bounces:0), explosive, growing, spiral, hasUzumaki, boomerang:boomerangFlag, orbital:orbitalFlag, drilling:drillingFlag, phasing:phasingFlag, teleporting:teleportingFlag };
                 if (usedAutoAimShot) meta.autoAimShot = true;
                 // Propagate pattern flags used by SoA updaters so synergies can be detected
-                if (game.player.abilities.includes('Pendulum Shot')) meta.pendulumPattern = true;
-                if (game.player.abilities.includes('Veering Fan')) { meta.veeringFan = true; meta._veeringTimer = 22; meta._veerMinDist = 80; meta._spawnX = game.player.x; meta._spawnY = game.player.y; }
+                if (effectiveAbilities.includes('Pendulum Shot')) meta.pendulumPattern = true;
+                if (effectiveAbilities.includes('Veering Fan')) { meta.veeringFan = true; meta._veeringTimer = 22; meta._veerMinDist = 80; meta._spawnX = game.player.x; meta._spawnY = game.player.y; }
                 if (hasQuackenRelease && !quackenBurstSpawned) {
                     quackenBurstSpawned = true;
                     try {
@@ -16256,7 +16312,7 @@ function offerPermanentAbilityChoice() {
                 }
                 // --- Ability effect aggregation (store directly onto metadata so collision/hit logic sees them) ---
                 let chosenDamageType = null; let chosenDamageTier = -1; let weaponType = null;
-                game.player.abilities.forEach(ability => {
+                effectiveAbilities.forEach(ability => {
                     const aData = ABILITIES[ability]; if(!aData || !aData.effect) return; const eff = aData.effect;
                     // Damage type precedence by tier so higher-tier elemental/combos override lower
                     if (eff.damageType) {
@@ -17311,6 +17367,7 @@ function offerPermanentAbilityChoice() {
         }
 
         function updateEnemies() {
+            const effectiveAbilities = isDuckAndCoverMode() ? game.player.abilities.filter(a => !game.player.permanentAbilities.includes(a)) : game.player.abilities;
             game.enemies.forEach(enemy => {
                 // If enemy is currently under Rizz pull animation, we only interpolate position (handled elsewhere) and skip AI.
                 if (enemy._rizzPull && enemy._rizzPull.active) {
@@ -17369,7 +17426,7 @@ function offerPermanentAbilityChoice() {
                         enemy.poisoned = false;
                     } else {
                         let poisonTick = 0.8;
-                        const abil = game.player.abilities;
+                        const abil = isDuckAndCoverMode() ? game.player.abilities.filter(a => !game.player.permanentAbilities.includes(a)) : game.player.abilities;
                         const hasVoid = abil.includes('Void Shot') || abil.includes('Black Hole');
                         const hasFire = abil.includes('Fire Shot') || abil.includes('Inferno') || abil.includes('Magma Shot');
                         if (hasVoid) poisonTick *= 1.25; // void amplifies decay
@@ -17387,7 +17444,7 @@ function offerPermanentAbilityChoice() {
                         enemy.burning = false;
                     } else {
                         let burnTick = 1.2;
-                        const abil = game.player.abilities;
+                        const abil = isDuckAndCoverMode() ? game.player.abilities.filter(a => !game.player.permanentAbilities.includes(a)) : game.player.abilities;
                         const hasWind = abil.includes('Wind Blade') || abil.includes('Blizzard');
                         const hasPoison = abil.includes('Poison Shot') || abil.includes('Toxic Cloud') || abil.includes('Silent But Deadly');
                         if (hasWind) burnTick *= 1.15; // oxygen fan effect
@@ -17412,7 +17469,7 @@ function offerPermanentAbilityChoice() {
                         if (enemy._wunderScribbleTick <= 0) {
                             enemy._wunderScribbleTick = interval;
                             let scribTick = enemy.wunderScribbleTickDamage || 1.2;
-                            const abil = (game.player && game.player.abilities) || [];
+                            const abil = effectiveAbilities;
                             const hasVoid = abil.includes('Void Shot') || abil.includes('Black Hole');
                             const hasLightning = abil.includes('Lightning Shot') || abil.includes('Storm Shot');
                             if (hasVoid) scribTick *= 1.08;
@@ -21438,10 +21495,11 @@ function offerPermanentAbilityChoice() {
         }
 
         function calculateDamage() {
+            const effectiveAbilities = isDuckAndCoverMode() ? game.player.abilities.filter(a => !game.player.permanentAbilities.includes(a)) : game.player.abilities;
             let damage = 25;
             
             // Base damage bonuses
-            game.player.abilities.forEach(ability => {
+            effectiveAbilities.forEach(ability => {
                 const abilityData = ABILITIES[ability];
                 if (abilityData && abilityData.effect.damageBonus) {
                     damage += abilityData.effect.damageBonus;
@@ -21449,12 +21507,12 @@ function offerPermanentAbilityChoice() {
             });
             
             // Rage mode
-            if (game.player.abilities.includes('Rage Mode')) {
+            if (effectiveAbilities.includes('Rage Mode')) {
                 damage += game.totalKills * 3;
             }
             
             // Berserker
-            if (game.player.abilities.includes('Berserker')) {
+            if (effectiveAbilities.includes('Berserker')) {
                 const healthPercent = game.player.health / game.player.maxHealth;
                 const berserkerMultiplier = 1 + (1 - healthPercent) * 0.5;
                 damage = Math.floor(damage * berserkerMultiplier);
@@ -21463,7 +21521,7 @@ function offerPermanentAbilityChoice() {
             // Critical strikes
             let critChance = 0;
             let critMultiplier = 2;
-            game.player.abilities.forEach(ability => {
+            effectiveAbilities.forEach(ability => {
                 const abilityData = ABILITIES[ability];
                 if (abilityData && abilityData.effect.critChance) {
                     critChance = Math.max(critChance, abilityData.effect.critChance);
@@ -21597,7 +21655,7 @@ function offerPermanentAbilityChoice() {
             // Elemental amplifier pre-processing: gather player elemental ability presence
             if (!proj._elemAmpComputed) {
                 proj._elemAmpComputed = true;
-                const abil = game.player.abilities;
+                const abil = isDuckAndCoverMode() ? game.player.abilities.filter(a => !game.player.permanentAbilities.includes(a)) : game.player.abilities;
                 proj._hasFire = abil.some(a=>a.includes('Fire Shot')||a.includes('Inferno')||a.includes('Magma')||a.includes('Inferno')||a.includes('Steam Shot')||a.includes('Magma Shot'));
                 proj._hasWind = abil.some(a=>a.includes('Wind Blade')||a.includes('Blizzard'));
                 proj._hasIce = abil.some(a=>a.includes('Ice Shot')||a.includes('Frost')||a.includes('Blizzard'));
@@ -26615,22 +26673,38 @@ function offerPermanentAbilityChoice() {
                                 if (typeof enemy._quackenAnimSeed !== 'number') enemy._quackenAnimSeed = nowFrame;
                                 const animTicks = Math.max(0, nowFrame - enemy._quackenAnimSeed);
                                 let facing = (enemy.facing && typeof enemy.facing === 'string') ? enemy.facing.toLowerCase() : '';
-                                if (!facing || facing === 'idle') {
-                                    const vx = (typeof enemy.vx === 'number') ? enemy.vx : ((typeof enemy.velX === 'number') ? enemy.velX : (typeof enemy.velocityX === 'number' ? enemy.velocityX : 0));
-                                    const vy = (typeof enemy.vy === 'number') ? enemy.vy : ((typeof enemy.velY === 'number') ? enemy.velY : (typeof enemy.velocityY === 'number' ? enemy.velocityY : 0));
-                                    if (Math.abs(vx) >= Math.abs(vy)) {
-                                        if (vx < -0.05) facing = 'left';
-                                        else if (vx > 0.05) facing = 'right';
+                                const playerObj = (game && game.player) || null;
+                                const playerX = (playerObj && typeof playerObj.x === 'number') ? playerObj.x : null;
+                                const hitbox = enemy.hitbox;
+                                const spriteCenterX = (hitbox && typeof hitbox.x === 'number' && typeof hitbox.w === 'number') ? (hitbox.x + hitbox.w / 2) : enemy.x;
+                                if (!facing || facing === 'idle' || enemy.type === 'The Quacken') {
+                                    let resolvedFromPlayer = false;
+                                    if (playerX != null) {
+                                        const dxPlayer = playerX - spriteCenterX;
+                                        const deadZone = Math.max(3, ((hitbox && typeof hitbox.w === 'number') ? hitbox.w : (enemy.size || 42) * 2) * 0.02);
+                                        if (Math.abs(dxPlayer) > deadZone) {
+                                            facing = dxPlayer < 0 ? 'left' : 'right';
+                                            resolvedFromPlayer = true;
+                                        }
                                     }
-                                    if (!facing) {
-                                        if (vy < -0.05) facing = 'up';
-                                        else if (vy > 0.05) facing = 'down';
+                                    if (!resolvedFromPlayer) {
+                                        const vx = (typeof enemy.vx === 'number') ? enemy.vx : ((typeof enemy.velX === 'number') ? enemy.velX : (typeof enemy.velocityX === 'number' ? enemy.velocityX : 0));
+                                        const vy = (typeof enemy.vy === 'number') ? enemy.vy : ((typeof enemy.velY === 'number') ? enemy.velY : (typeof enemy.velocityY === 'number' ? enemy.velocityY : 0));
+                                        if (Math.abs(vx) >= Math.abs(vy)) {
+                                            if (vx < -0.05) facing = 'left';
+                                            else if (vx > 0.05) facing = 'right';
+                                        }
+                                        if (!facing) {
+                                            if (vy < -0.05) facing = 'up';
+                                            else if (vy > 0.05) facing = 'down';
+                                        }
                                     }
                                 }
-                                if (!facing) {
-                                    const playerX = (game && game.player) ? game.player.x : null;
-                                    facing = (playerX != null && playerX < enemy.x) ? 'left' : 'right';
+                                if (!facing && playerX != null) {
+                                    const dxFallback = playerX - spriteCenterX;
+                                    if (Math.abs(dxFallback) > 1) facing = dxFallback < 0 ? 'left' : 'right';
                                 }
+                                if (!facing) facing = 'right';
                                 enemy.facing = facing;
                                 let mirror = false;
                                 let rowIndex = 0;
