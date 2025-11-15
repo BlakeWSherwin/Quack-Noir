@@ -22080,7 +22080,14 @@ function offerPermanentAbilityChoice() {
                                             meta.piercing = true; meta.pierceCount = Math.max(meta.pierceCount||0, 999999);
                                             meta.indestructible = true;
                                         }
-                                        if (consumedNow) { PL[i]=0; PA[i]=0; /* recycle stack push */ }
+                                        if (consumedNow) {
+                                            PL[i] = 0;
+                                            if (typeof game.recycleProjectile === 'function') {
+                                                game.recycleProjectile(i);
+                                            } else {
+                                                PA[i] = 0;
+                                            }
+                                        }
                                         consumed = consumedNow;
                                     }
                                 }
@@ -22136,7 +22143,14 @@ function offerPermanentAbilityChoice() {
                                     meta.piercing = true; meta.pierceCount = Math.max(meta.pierceCount||0, 999999);
                                     meta.indestructible = true;
                                 }
-                                if (consumedNow) { PL[i]=0; PA[i]=0; }
+                                if (consumedNow) {
+                                    PL[i] = 0;
+                                    if (typeof game.recycleProjectile === 'function') {
+                                        game.recycleProjectile(i);
+                                    } else {
+                                        PA[i] = 0;
+                                    }
+                                }
                                 consumed = consumedNow;
                             }
                         }
