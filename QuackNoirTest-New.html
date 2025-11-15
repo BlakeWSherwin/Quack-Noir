@@ -288,7 +288,8 @@
     // Dev: write-access verified 2025-10-06
     // Dev: write-access check OK (assistant) 2025-10-06
     // Dev: write-access re-verified (assistant) 2025-10-07
-    document.addEventListener('DOMContentLoaded', ()=> {
+        document.addEventListener('DOMContentLoaded', ()=> {
+            try { ensureEnemyDossierState(); } catch(_){ }
             const cv = document.getElementById('gameCanvas');
             if (cv) { cv.style.display='block'; cv.style.visibility='visible'; }
             // Preload car obstacle images
@@ -7127,6 +7128,604 @@ function showActTransition(actId, options){
     } catch(e) { return Promise.resolve(); }
 }
 
+const ENEMY_DOSSIER_STORAGE_KEY = 'enemyDossier_v1';
+const ENEMY_DOSSIER_VERSION = 1;
+const ENEMY_DOSSIER_ACT_ORDER = ['I','II','III','Secret'];
+const ENEMY_DOSSIER_ACT_LABELS = {
+    'I': 'Act I — New Quack City',
+    'II': 'Act II — Goose Ghetto',
+    'III': 'Act III — Wunderswan\'s Domain',
+    'Secret': 'Classified Encounters'
+};
+
+try { window.ENEMY_DOSSIER_DATA = window.ENEMY_DOSSIER_DATA || {}; } catch(_){ }
+try { window.ENEMY_DOSSIER_BIO_CACHE = window.ENEMY_DOSSIER_BIO_CACHE || {}; } catch(_){ }
+
+try {
+    window.ENEMY_DOSSIER_DATA['Thug'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Thug'] || {}, {
+        displayName: 'Flapper Capizzi',
+        image: 'assets/dossier/art/flappercapizzi.png',
+        bioPath: 'assets/dossier/text/flappercapizzi.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Street Dog'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Street Dog'] || {}, {
+        displayName: 'Tony "Breadsticks" Quackano',
+        image: 'assets/dossier/art/tonybreadsticksquackano.png',
+        bioPath: 'assets/dossier/text/tonybreadsticksquackano.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Punk'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Punk'] || {}, {
+        displayName: 'Jimmy "Two Wings" Malone',
+        image: 'assets/dossier/art/jimmytwowingsmalone.png',
+        bioPath: 'assets/dossier/text/jimmytwowingsmalone.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Gangster'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Gangster'] || {}, {
+        displayName: 'Machine Bill Kelly',
+        image: 'assets/dossier/art/machinebillkelly.png',
+        bioPath: 'assets/dossier/text/machinebillkelly.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Dealer'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Dealer'] || {}, {
+        displayName: 'Bugsy Mallard',
+        image: 'assets/dossier/art/bugsymallard.png',
+        bioPath: 'assets/dossier/text/bugsymallard.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Enforcer'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Enforcer'] || {}, {
+        displayName: 'Big Beak Bruno',
+        image: 'assets/dossier/art/bigbeakbruno.png',
+        bioPath: 'assets/dossier/text/bigbeakbruno.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Boss Thug'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Boss Thug'] || {}, {
+        displayName: 'Don Quackleone',
+        image: 'assets/dossier/art/donquackleone.png',
+        bioPath: 'assets/dossier/text/donquackleone.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Boss Gangster'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Boss Gangster'] || {}, {
+        displayName: 'Al Quackpone',
+        image: 'assets/dossier/art/alquackpone.png',
+        bioPath: 'assets/dossier/text/alquackpone.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['The Big Quack'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['The Big Quack'] || {}, {
+        image: 'assets/dossier/art/thebigquack.png',
+        bioPath: 'assets/dossier/text/thebigquack.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Eggscobar'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Eggscobar'] || {}, {
+        image: 'assets/dossier/art/eggscobar.png',
+        bioPath: 'assets/dossier/text/eggscobar.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Big Bill'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Big Bill'] || {}, {
+        image: 'assets/dossier/art/bigbill.png',
+        bioPath: 'assets/dossier/text/bigbill.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Goose Willis'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Goose Willis'] || {}, {
+        image: 'assets/dossier/art/goosewillis.png',
+        bioPath: 'assets/dossier/text/goosewillis.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Goosey Smalls'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Goosey Smalls'] || {}, {
+        image: 'assets/dossier/art/gooseysmalls.png',
+        bioPath: 'assets/dossier/text/gooseysmalls.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Lil Goosey'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Lil Goosey'] || {}, {
+        image: 'assets/dossier/art/lilgoosey.png',
+        bioPath: 'assets/dossier/text/lilgoosey.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Goosey Elliot'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Goosey Elliot'] || {}, {
+        image: 'assets/dossier/art/gooseyelliot.png',
+        bioPath: 'assets/dossier/text/gooseyelliot.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Fowl Pacino'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Fowl Pacino'] || {}, {
+        image: 'assets/dossier/art/fowlpacino.png',
+        bioPath: 'assets/dossier/text/fowlpacino.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['The Quacken'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['The Quacken'] || {}, {
+        image: 'assets/dossier/art/quacken.png',
+        bioPath: 'assets/dossier/text/quacken.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Geese Robbins'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Geese Robbins'] || {}, {
+        image: 'assets/dossier/art/geeserobbins.png',
+        bioPath: 'assets/dossier/text/geeserobbins.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['2Honk Shakur'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['2Honk Shakur'] || {}, {
+        image: 'assets/dossier/art/2honkshakur.png',
+        bioPath: 'assets/dossier/text/2honkshakur.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Cardi Beak'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Cardi Beak'] || {}, {
+        image: 'assets/dossier/art/cardibeak.png',
+        bioPath: 'assets/dossier/text/cardibeak.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Feather Krueger'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Feather Krueger'] || {}, {
+        image: 'assets/dossier/art/featherkrueger.png',
+        bioPath: 'assets/dossier/text/featherkrueger.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Honkutus of Cygnus'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Honkutus of Cygnus'] || {}, {
+        image: 'assets/dossier/art/honkutusofcygnus.png',
+        bioPath: 'assets/dossier/text/honkutusofcygnus.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Mr Gosling'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Mr Gosling'] || {}, {
+        image: 'assets/dossier/art/mrgosling.png',
+        bioPath: 'assets/dossier/text/mrgosling.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Cygnus Prime'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Cygnus Prime'] || {}, {
+        image: 'assets/dossier/art/cygnusprime.png',
+        bioPath: 'assets/dossier/text/cygnusprime.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['The Honkinator'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['The Honkinator'] || {}, {
+        image: 'assets/dossier/art/honkinator.png',
+        bioPath: 'assets/dossier/text/honkinator.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Swanomaly'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Swanomaly'] || {}, {
+        image: 'assets/dossier/art/swanomaly.png',
+        bioPath: 'assets/dossier/text/swanomaly.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Swan Wick'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Swan Wick'] || {}, {
+        image: 'assets/dossier/art/swanwick.png',
+        bioPath: 'assets/dossier/text/swanwick.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Swandroid 18'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Swandroid 18'] || {}, {
+        image: 'assets/dossier/art/swandroid18.png',
+        bioPath: 'assets/dossier/text/swandroid18.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Wunderswan'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Wunderswan'] || {}, {
+        image: 'assets/dossier/art/wunderswan.png',
+        bioPath: 'assets/dossier/text/wunderswan.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Golden Goose'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Golden Goose'] || {}, {
+        displayName: 'The Golden Goose',
+        image: 'assets/dossier/art/goldengoose.png',
+        bioPath: 'assets/dossier/text/goldengoose.md'
+    });
+} catch(_){ }
+
+function ensureEnemyDossierState() {
+    try { if (!window.game) window.game = {}; } catch(_){ }
+    const existing = game && game.enemyDossier;
+    if (existing && existing.version === ENEMY_DOSSIER_VERSION) {
+        if (!existing.kills || typeof existing.kills !== 'object') existing.kills = {};
+        return existing;
+    }
+    let stored = null;
+    try { stored = (typeof localStorage !== 'undefined' && localStorage) ? localStorage.getItem(ENEMY_DOSSIER_STORAGE_KEY) : null; } catch(_){ stored = null; }
+    let parsed = null;
+    if (stored) {
+        try { parsed = JSON.parse(stored); } catch(_){ parsed = null; }
+    }
+    const state = {
+        version: ENEMY_DOSSIER_VERSION,
+        kills: parsed && parsed.kills && typeof parsed.kills === 'object' ? parsed.kills : {}
+    };
+    try { game.enemyDossier = state; } catch(_){ }
+    return state;
+}
+
+function saveEnemyDossierState() {
+    try {
+        const state = ensureEnemyDossierState();
+        const payload = { version: ENEMY_DOSSIER_VERSION, kills: state.kills || {} };
+        if (typeof localStorage !== 'undefined' && localStorage && localStorage.setItem) {
+            localStorage.setItem(ENEMY_DOSSIER_STORAGE_KEY, JSON.stringify(payload));
+        }
+    } catch(_){ }
+}
+
+function recordEnemyDefeat(enemyType) {
+    if (!enemyType) return;
+    try {
+        const state = ensureEnemyDossierState();
+        if (!state.kills || typeof state.kills !== 'object') state.kills = {};
+        const key = String(enemyType);
+        state.kills[key] = (Number(state.kills[key]) || 0) + 1;
+        saveEnemyDossierState();
+        try {
+            const overlay = document.getElementById('enemyDossierOverlay');
+            if (overlay && typeof overlay._refresh === 'function') overlay._refresh(true);
+        } catch(_){ }
+    } catch(_){ }
+}
+
+function getEnemyActForDossier(name, meta) {
+    if (meta && meta.act) return String(meta.act);
+    if (meta && meta.bossSecret) return 'Secret';
+    if (meta && meta.bossFinal) return 'I';
+    return 'I';
+}
+
+function getEnemyActBadgeLabel(act) {
+    if (!act) return 'Act I';
+    if (act === 'Secret') return 'Secret';
+    if (act === 'DuckAndCover') return 'Duck & Cover';
+    if (typeof act === 'string' && /^[IVX]+$/.test(act)) return 'Act ' + act;
+    return 'Act ' + act;
+}
+
+function getEnemyActDisplayLabel(act) {
+    if (!act) return ENEMY_DOSSIER_ACT_LABELS['I'];
+    if (ENEMY_DOSSIER_ACT_LABELS[act]) return ENEMY_DOSSIER_ACT_LABELS[act];
+    if (act === 'DuckAndCover') return 'Duck and Cover';
+    if (typeof act === 'string' && /^[IVX]+$/.test(act)) return 'Act ' + act;
+    return String(act);
+}
+
+function buildEnemyDossierEntries() {
+    if (typeof ENEMY_TYPES === 'undefined' || !ENEMY_TYPES) return [];
+    const source = ENEMY_TYPES;
+    const names = Object.keys(source);
+    const orderMap = new Map();
+    names.forEach((name, idx) => orderMap.set(name, idx));
+    const entries = names.map(name => {
+        const meta = source[name] || {};
+        const act = getEnemyActForDossier(name, meta);
+        return {
+            name,
+            meta,
+            act,
+            order: orderMap.get(name) || 0
+        };
+    });
+    entries.sort((a, b) => {
+        const actIdxA = ENEMY_DOSSIER_ACT_ORDER.indexOf(a.act);
+        const actIdxB = ENEMY_DOSSIER_ACT_ORDER.indexOf(b.act);
+        const weightA = actIdxA === -1 ? ENEMY_DOSSIER_ACT_ORDER.length : actIdxA;
+        const weightB = actIdxB === -1 ? ENEMY_DOSSIER_ACT_ORDER.length : actIdxB;
+        if (weightA !== weightB) return weightA - weightB;
+        if (a.order !== b.order) return a.order - b.order;
+        return a.name.localeCompare(b.name);
+    });
+    entries.forEach((entry, idx) => { entry.number = idx + 1; });
+    return entries;
+}
+
+function showEnemyDossier() {
+    try { ensureEnemyDossierState(); } catch(_){ }
+    if (document.getElementById('enemyDossierOverlay')) return;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'enemyDossierOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:20020;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.88);padding:18px;font-family:"Courier New",monospace;';
+
+    const panel = document.createElement('div');
+    panel.style.cssText = 'width:min(1100px,94vw);max-height:86vh;background:#0d0f14;border:2px solid #333;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px;color:#eee;box-shadow:0 12px 34px rgba(0,0,0,0.6);';
+
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;';
+    const title = document.createElement('div');
+    title.textContent = 'Enemy Dossier';
+    title.style.cssText = 'font-weight:800;font-size:18px;letter-spacing:1px;color:#fff;';
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.textContent = 'Close';
+    closeBtn.style.cssText = 'padding:6px 12px;background:#1d1d22;border:2px solid #555;border-radius:6px;color:#ddd;cursor:pointer;';
+    closeBtn.setAttribute('data-gp-focus', '1');
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+
+    const intro = document.createElement('div');
+    intro.textContent = 'Track every foe you have defeated. Unknown entries unlock after their first defeat.';
+    intro.style.cssText = 'font-size:12px;color:#9aa7c0;letter-spacing:0.4px;';
+
+    const body = document.createElement('div');
+    body.style.cssText = 'display:flex;gap:14px;flex:1;min-height:320px;overflow:hidden;';
+
+    const listContainer = document.createElement('div');
+    listContainer.style.cssText = 'flex:0 0 360px;max-width:380px;overflow-y:auto;padding-right:6px;border-right:1px solid #242731;display:flex;flex-direction:column;gap:6px;';
+
+    const detailContainer = document.createElement('div');
+    detailContainer.style.cssText = 'flex:1;display:flex;flex-direction:column;overflow:hidden;';
+
+    const detailTitle = document.createElement('div');
+    detailTitle.style.cssText = 'font-weight:800;font-size:18px;color:#fff;letter-spacing:0.6px;';
+    const detailSubtitle = document.createElement('div');
+    detailSubtitle.style.cssText = 'font-size:12px;color:#8fbaff;letter-spacing:0.8px;text-transform:uppercase;margin-top:2px;';
+    const detailStats = document.createElement('div');
+    detailStats.style.cssText = 'font-size:12px;color:#8fd8a6;margin-top:6px;letter-spacing:0.3px;';
+
+    const detailImageWrap = document.createElement('div');
+    detailImageWrap.style.cssText = 'margin-top:12px;height:240px;border-radius:10px;border:1px solid #242731;background:#08090d;display:flex;align-items:center;justify-content:center;overflow:hidden;';
+    const detailImage = document.createElement('img');
+    detailImage.style.cssText = 'max-width:100%;max-height:100%;display:none;image-rendering:auto;';
+    const detailImageFallback = document.createElement('div');
+    detailImageFallback.style.cssText = 'color:#4f586d;font-size:11px;letter-spacing:1px;text-transform:uppercase;';
+    detailImageFallback.textContent = 'No entry selected';
+    detailImageWrap.appendChild(detailImage);
+    detailImageWrap.appendChild(detailImageFallback);
+
+    const detailBio = document.createElement('div');
+    detailBio.style.cssText = 'margin-top:12px;padding:12px;border-radius:10px;border:1px solid #242731;background:#0a0c12;color:#ccc;font-size:13px;line-height:1.45;white-space:pre-line;flex:1;overflow:auto;';
+
+    detailContainer.appendChild(detailTitle);
+    detailContainer.appendChild(detailSubtitle);
+    detailContainer.appendChild(detailStats);
+    detailContainer.appendChild(detailImageWrap);
+    detailContainer.appendChild(detailBio);
+
+    body.appendChild(listContainer);
+    body.appendChild(detailContainer);
+
+    panel.appendChild(header);
+    panel.appendChild(intro);
+    panel.appendChild(body);
+    overlay.appendChild(panel);
+
+    const focusableButtons = [];
+    let currentSelectionName = null;
+    let currentSelectionButton = null;
+
+    function applyButtonNeutral(btn) {
+        btn.style.border = '1px solid #2d303a';
+        btn.style.background = 'linear-gradient(180deg,rgba(255,255,255,0.05),rgba(0,0,0,0.05))';
+        btn.style.boxShadow = 'none';
+    }
+
+    function applyButtonActive(btn) {
+        btn.style.border = '1px solid #66c2ff';
+        btn.style.background = 'rgba(102,194,255,0.15)';
+        btn.style.boxShadow = '0 0 14px rgba(102,194,255,0.32)';
+    }
+
+    function clearDetail() {
+        detailTitle.textContent = 'Enemy Dossier';
+        detailSubtitle.textContent = 'Select an unlocked entry to review intel';
+        detailStats.textContent = '';
+        detailBio.textContent = 'Defeat enemies to reveal their dossiers. Entries are organized by act.';
+        detailImage.src = '';
+        detailImage.style.display = 'none';
+        detailImageFallback.textContent = 'No entry selected';
+        detailImageFallback.style.display = 'flex';
+    }
+
+    function updateGamepadBindings() {
+        try {
+            const items = focusableButtons.concat([closeBtn]);
+            if (!items.length) return;
+            game.uiNav = game.uiNav || {};
+            game.uiNav.container = overlay;
+            game.uiNav.items = items;
+            let idx = 0;
+            if (currentSelectionButton) {
+                const found = items.indexOf(currentSelectionButton);
+                if (found >= 0) idx = found;
+            }
+            game.uiNav.index = idx;
+            applyGpFocus();
+        } catch(_){ }
+    }
+
+    function selectEntry(entry, btn) {
+        if (!entry) {
+            clearDetail();
+            return;
+        }
+        if (currentSelectionButton && currentSelectionButton !== btn) {
+            applyButtonNeutral(currentSelectionButton);
+        }
+        currentSelectionName = entry.name;
+        currentSelectionButton = btn;
+        applyButtonActive(btn);
+        const state = ensureEnemyDossierState();
+        const kills = state.kills || {};
+        const killCount = Number(kills[entry.name]) || 0;
+        const overrides = (window.ENEMY_DOSSIER_DATA && window.ENEMY_DOSSIER_DATA[entry.name]) || {};
+        const displayName = overrides.displayName || entry.name;
+        detailTitle.textContent = '#' + String(entry.number).padStart(2,'0') + ' — ' + displayName;
+        detailSubtitle.textContent = getEnemyActDisplayLabel(entry.act);
+        detailStats.textContent = killCount > 0 ? 'Defeated ' + killCount + ' time' + (killCount === 1 ? '' : 's') + '.' : 'No defeats recorded yet.';
+        const defaultBio = overrides.bio || 'Bio coming soon.';
+        detailBio.textContent = defaultBio;
+        detailBio.dataset.entry = entry.name;
+        if (overrides.bioPath) {
+            const cache = (function(){
+                try { return window.ENEMY_DOSSIER_BIO_CACHE; } catch(_){ return {}; }
+            })() || {};
+            const path = overrides.bioPath;
+            const cached = cache[path];
+            const loadingText = 'Retrieving dossier file…';
+            if (cached && cached.ready) {
+                detailBio.textContent = cached.text;
+            } else {
+                detailBio.textContent = loadingText;
+                if (!cached || (!cached.ready && !cached.loading)) {
+                    if (cache !== undefined) {
+                        cache[path] = { loading: true, ready: false };
+                        try { window.ENEMY_DOSSIER_BIO_CACHE = cache; } catch(_){ }
+                    }
+                    fetch(path).then(resp => {
+                        if (!resp.ok) throw new Error('HTTP '+resp.status);
+                        return resp.text();
+                    }).then(text => {
+                        if (cache !== undefined) {
+                            cache[path] = { loading: false, ready: true, text };
+                            try { window.ENEMY_DOSSIER_BIO_CACHE = cache; } catch(_){ }
+                        }
+                        if (currentSelectionName === entry.name) detailBio.textContent = text;
+                    }).catch(err => {
+                        if (cache !== undefined) {
+                            cache[path] = { loading: false, ready: false, error: true };
+                            try { window.ENEMY_DOSSIER_BIO_CACHE = cache; } catch(_){ }
+                        }
+                        if (currentSelectionName === entry.name) detailBio.textContent = defaultBio;
+                        try { console.warn('[Dossier] Failed to load bio', path, err); } catch(_){ }
+                    });
+                }
+            }
+        }
+        const imgSrc = overrides.image;
+        if (imgSrc) {
+            detailImage.src = imgSrc;
+            detailImage.style.display = 'block';
+            detailImageFallback.style.display = 'none';
+        } else {
+            detailImage.src = '';
+            detailImage.style.display = 'none';
+            detailImageFallback.textContent = 'Intel image not yet recovered';
+            detailImageFallback.style.display = 'flex';
+        }
+    }
+
+    function renderList(keepSelection) {
+        const previousSelection = keepSelection ? currentSelectionName : null;
+        currentSelectionName = null;
+        currentSelectionButton = null;
+        listContainer.innerHTML = '';
+        focusableButtons.length = 0;
+        clearDetail();
+
+        const state = ensureEnemyDossierState();
+        const kills = state.kills || {};
+        const entries = buildEnemyDossierEntries();
+        const groups = [];
+        const actMap = new Map();
+        entries.forEach(entry => {
+            let group = actMap.get(entry.act);
+            if (!group) {
+                group = { act: entry.act, entries: [] };
+                actMap.set(entry.act, group);
+                groups.push(group);
+            }
+            group.entries.push(entry);
+        });
+
+        let firstUnlocked = null;
+        groups.forEach((group, gi) => {
+            const headerLabel = document.createElement('div');
+            headerLabel.textContent = getEnemyActDisplayLabel(group.act);
+            headerLabel.style.cssText = 'margin-top:' + (gi === 0 ? '0' : '10px') + ';font-size:12px;letter-spacing:1px;color:#8fbaff;text-transform:uppercase;';
+            listContainer.appendChild(headerLabel);
+
+            group.entries.forEach(entry => {
+                const killCount = Number(kills[entry.name]) || 0;
+                const discovered = killCount > 0;
+                const overrides = (window.ENEMY_DOSSIER_DATA && window.ENEMY_DOSSIER_DATA[entry.name]) || {};
+                const displayName = overrides.displayName || entry.name;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.style.cssText = 'display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:8px;font-size:13px;color:#eee;cursor:pointer;text-align:left;transition:background 120ms, border-color 120ms, box-shadow 120ms;';
+                applyButtonNeutral(btn);
+
+                const numberSpan = document.createElement('span');
+                numberSpan.textContent = '#' + String(entry.number).padStart(2,'0');
+                numberSpan.style.cssText = 'font-weight:700;color:#9fcaff;font-size:12px;min-width:54px;letter-spacing:0.6px;';
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = discovered ? displayName : '???';
+                nameSpan.style.cssText = 'flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+                const actBadge = document.createElement('span');
+                actBadge.textContent = getEnemyActBadgeLabel(entry.act);
+                actBadge.style.cssText = 'font-size:11px;color:#a5afc7;border:1px solid #2f3340;border-radius:6px;padding:2px 6px;letter-spacing:0.6px;';
+
+                btn.appendChild(numberSpan);
+                btn.appendChild(nameSpan);
+                btn.appendChild(actBadge);
+
+                if (discovered) {
+                    btn.onclick = () => selectEntry(entry, btn);
+                    btn.addEventListener('focus', () => selectEntry(entry, btn));
+                    btn.addEventListener('mouseenter', () => { if (currentSelectionButton !== btn) btn.style.background = 'rgba(102,194,255,0.08)'; });
+                    btn.addEventListener('mouseleave', () => { if (currentSelectionButton !== btn) applyButtonNeutral(btn); });
+                    btn.setAttribute('data-gp-focus', '1');
+                    focusableButtons.push(btn);
+                    if (previousSelection && previousSelection === entry.name) {
+                        selectEntry(entry, btn);
+                    }
+                    if (!firstUnlocked) {
+                        firstUnlocked = { entry, btn };
+                    }
+                } else {
+                    btn.disabled = true;
+                    btn.style.opacity = '0.45';
+                    btn.style.cursor = 'default';
+                    actBadge.style.opacity = '0.75';
+                }
+
+                listContainer.appendChild(btn);
+            });
+        });
+
+        if (!currentSelectionName && firstUnlocked) {
+            selectEntry(firstUnlocked.entry, firstUnlocked.btn);
+        }
+        if (!currentSelectionName) {
+            clearDetail();
+        }
+        updateGamepadBindings();
+    }
+
+    function closeOverlay() {
+        try { window.removeEventListener('keydown', escHandler, true); } catch(_){ }
+        try { if (game && game.uiNav && game.uiNav.container === overlay) game.uiNav = null; } catch(_){ }
+        try { overlay.remove(); } catch(_){ }
+    }
+
+    function escHandler(ev) {
+        if (ev.key === 'Escape') {
+            ev.preventDefault();
+            closeOverlay();
+        }
+    }
+
+    closeBtn.onclick = () => closeOverlay();
+    overlay.addEventListener('click', ev => { if (ev.target === overlay) closeOverlay(); });
+    window.addEventListener('keydown', escHandler, true);
+
+    document.body.appendChild(overlay);
+    renderList(false);
+
+    overlay._refresh = (keepSelection) => { renderList(!!keepSelection); };
+}
+try { window.showEnemyDossier = showEnemyDossier; } catch(_){ }
+
 // ================= Simplified Title Screen =================
 function showTitleScreen() {
     if (document.getElementById('titleOverlay') || game._started) return;
@@ -7270,6 +7869,19 @@ function showTitleScreen() {
             list.appendChild(dis);
         } catch(_) {}
 
+        try {
+            const dossier = document.createElement('div');
+            dossier.className = 'title-act-item';
+            dossier.style.cssText = 'padding:10px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(0,0,0,0.04));cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;gap:10px;';
+            const icon = document.createElement('span'); icon.textContent = '🗒️'; icon.style.cssText = 'margin-right:6px;';
+            const lbl = document.createElement('span'); lbl.textContent = 'Dossier';
+            dossier.appendChild(icon); dossier.appendChild(lbl);
+            dossier.onclick = ()=>{ try { showEnemyDossier(); } catch(e) { try { console.warn('[Dossier] Failed to open overlay', e); } catch(_){ } } };
+            items.push(dossier);
+            actions.push(()=>{ try { dossier.click(); } catch(_){} });
+            list.appendChild(dossier);
+        } catch(_) {}
+
         // Expose a refresh method so external code (e.g. unlock handler) can update the menu
         menu._refresh = function(){
             try {
@@ -7367,13 +7979,10 @@ function showTitleScreen() {
 
         // Gamepad polling for menu (separate small poller)
         let gpMenuInterval = (function(){
-            // Track last axis direction per-pad to implement simple rising-edge behaviour for analog sticks
-            // Use maps so multiple controllers don't clobber one another and so each pad's neutral state and cooldown are tracked independently.
+            // Track last direction per-pad so d-pad holds can repeat without analog drift issues.
             let gpLastDir = {};
             let gpLastMoveTs = {};
-            const AXIS_SEARCH_MIN = 0.4; // if primary axis is small, search other axes
-            const AXIS_MOVE_THRESH = 0.6; // require stronger deflection to count as a move
-            const MOVE_COOLDOWN_MS = 180; // prevent rapid repeat movements
+            const MOVE_COOLDOWN_MS = 200; // delay between repeated moves when holding d-pad
             return setInterval(()=>{
             try {
                 const pads = (navigator.getGamepads && navigator.getGamepads()) || [];
@@ -7382,30 +7991,35 @@ function showTitleScreen() {
                         const up = p.buttons && p.buttons[12];
                         const down = p.buttons && p.buttons[13];
                         const a = p.buttons && p.buttons[0];
-                        // Read primary vertical axis (left stick Y) and any additional axes
-                        let axisY = 0;
-                        try { if (p.axes && p.axes.length >= 2) axisY = Number(p.axes[1]) || 0; } catch(_){ }
-                        // Some controllers expose a hat via axes; if small axis, search for any large vertical axis
-                        if (Math.abs(axisY) < AXIS_SEARCH_MIN && p.axes && p.axes.length) {
-                            for (let ai=0; ai<p.axes.length; ai++) {
-                                try { const v = Number(p.axes[ai]) || 0; if (Math.abs(v) > Math.abs(axisY)) axisY = v; } catch(_){ }
-                            }
-                        }
-                        // Determine direction: -1 up, 1 down, 0 neutral
+                        // Determine direction using only digital-style inputs (d-pad buttons or POV hat)
                         let dir = 0;
-                        if (axisY < -AXIS_MOVE_THRESH) dir = -1;
-                        else if (axisY > AXIS_MOVE_THRESH) dir = 1;
-                        // If dpad buttons exist, prefer them for crisp nav
-                        try { if (up && (up.pressed || up.value>0.5)) dir = -1; } catch(_){ }
-                        try { if (down && (down.pressed || down.value>0.5)) dir = 1; } catch(_){ }
+                        try {
+                            const upPressed = up && (up.pressed || up.value > 0.5);
+                            const downPressed = down && (down.pressed || down.value > 0.5);
+                            if (upPressed && !downPressed) dir = -1;
+                            else if (downPressed && !upPressed) dir = 1;
+                        } catch(_){ }
+                        if (dir === 0 && p.axes && p.axes.length > 9) {
+                            try {
+                                if (typeof __gp_hatToVec === 'function') {
+                                    const hat = Number(p.axes[9]) || 0;
+                                    const vec = __gp_hatToVec(hat);
+                                    if (vec && vec.y) dir = vec.y > 0 ? 1 : -1;
+                                }
+                            } catch(_){ }
+                        }
 
                         // Rising-edge: only move when dir changes from neutral to a direction for THIS pad
                         const lastDir = gpLastDir[i] || 0;
                         const now = Date.now();
                         const lastMove = gpLastMoveTs[i] || 0;
-                        if (dir !== 0 && dir !== lastDir && (now - lastMove) > MOVE_COOLDOWN_MS) {
-                            if (dir === -1) { idx = (idx - 1 + items.length) % items.length; updateFocus(); gpLastDir[i] = dir; gpLastMoveTs[i] = now; return; }
-                            if (dir === 1) { idx = (idx + 1) % items.length; updateFocus(); gpLastDir[i] = dir; gpLastMoveTs[i] = now; return; }
+                        const allowMove = (dir !== 0) && ((dir !== lastDir) || ((now - lastMove) > MOVE_COOLDOWN_MS));
+                        if (allowMove) {
+                            if (dir === -1) { idx = (idx - 1 + items.length) % items.length; updateFocus(); }
+                            if (dir === 1) { idx = (idx + 1) % items.length; updateFocus(); }
+                            gpLastDir[i] = dir;
+                            gpLastMoveTs[i] = now;
+                            return;
                         }
                         if (dir === 0) gpLastDir[i] = 0;
 
@@ -8846,6 +9460,8 @@ function offerPermanentAbilityChoice() {
     // Act III melee enemy: Swandroid 18 (non-ranged, Act III exclusive)
     // Uses assets/swans/swandroid18.jpeg. Front/Rear/Side frames provided; side faces RIGHT by default.
     ENEMY_TYPES['Swandroid 18'] = { health: 260, speed: 0.70, damage: 26, color: '#9FB3FF', size: 52, xp: 380, ranged: false, armor: 4, act: 'III' };
+
+    try { window.ENEMY_TYPES = ENEMY_TYPES; } catch(_){ }
 
         function init() {
             canvas = document.getElementById('gameCanvas');
@@ -11930,6 +12546,8 @@ function offerPermanentAbilityChoice() {
             'assets/audio/waves/track20.mp3',
             'assets/audio/waves/track21.mp3',
             'assets/audio/waves/track22.mp3',
+            'assets/audio/waves/track23.mp3',
+            'assets/audio/waves/track24.mp3',
         ];
 
         function pickDuckWaveTrack() {
@@ -12477,6 +13095,16 @@ function offerPermanentAbilityChoice() {
             game._duckNextWaveAt = null;
             game._duckWaveSpawning = false;
             game.roomStartTime = Date.now();
+            if (game.player && isDuckAndCoverMode()) {
+                const shieldFrames = 120; // ~2 seconds of grace at 60fps
+                game.player.invulnerable = true;
+                game.player.invulnTime = Math.max(game.player.invulnTime || 0, shieldFrames);
+                game.player._invulnTimerMax = Math.max(game.player.invulnTime, shieldFrames, game.player._invulnTimerMax || 0);
+                game.player._invulnSource = 'duckWave';
+                game.player._duckSpawnShieldUntil = (performance && performance.now ? performance.now() : Date.now()) + 2000;
+            } else if (game.player && !isDuckAndCoverMode()) {
+                game.player._duckSpawnShieldUntil = null;
+            }
             showDuckWaveBanner('Wave ' + waveNumber);
             updateUI();
             console.info('[DuckAndCover] Wave spawned', { wave: waveNumber, placed, cfg });
@@ -13968,8 +14596,8 @@ function offerPermanentAbilityChoice() {
                 document.body.appendChild(overlay);
                 const close = ()=>{ try{ overlay.remove(); }catch(_){} };
                 btnAch.onclick = ()=>{ try { localStorage.removeItem('achievements_v1'); } catch(_) {} close(); location.reload(); };
-                btnProg.onclick = ()=>{ try { localStorage.removeItem('permanentAbilities'); localStorage.removeItem('seenAbilities_v1'); } catch(_) {} try { if (game) { game._actIIUnlocked = false; game._actIIIUnlocked = false; } } catch(_){} try { if (localStorage && localStorage.removeItem) { localStorage.removeItem('actIIUnlocked'); localStorage.removeItem('actIIIUnlocked'); } } catch(_){} close(); location.reload(); };
-                btnBoth.onclick = ()=>{ try { localStorage.removeItem('achievements_v1'); localStorage.removeItem('permanentAbilities'); localStorage.removeItem('seenAbilities_v1'); } catch(_) {} try { if (game) { game._actIIUnlocked = false; game._actIIIUnlocked = false; } } catch(_){} try { if (localStorage && localStorage.removeItem) { localStorage.removeItem('actIIUnlocked'); localStorage.removeItem('actIIIUnlocked'); } } catch(_){} close(); location.reload(); };
+                btnProg.onclick = ()=>{ try { localStorage.removeItem('permanentAbilities'); localStorage.removeItem('seenAbilities_v1'); localStorage.removeItem(ENEMY_DOSSIER_STORAGE_KEY); } catch(_) {} try { if (game) { game._actIIUnlocked = false; game._actIIIUnlocked = false; } } catch(_){} try { if (localStorage && localStorage.removeItem) { localStorage.removeItem('actIIUnlocked'); localStorage.removeItem('actIIIUnlocked'); } } catch(_){} close(); location.reload(); };
+                btnBoth.onclick = ()=>{ try { localStorage.removeItem('achievements_v1'); localStorage.removeItem('permanentAbilities'); localStorage.removeItem('seenAbilities_v1'); localStorage.removeItem(ENEMY_DOSSIER_STORAGE_KEY); } catch(_) {} try { if (game) { game._actIIUnlocked = false; game._actIIIUnlocked = false; } } catch(_){} try { if (localStorage && localStorage.removeItem) { localStorage.removeItem('actIIUnlocked'); localStorage.removeItem('actIIIUnlocked'); } } catch(_){} close(); location.reload(); };
                 btnCancel.onclick = ()=> close();
                 const esc = (e)=>{ if (e.key==='Escape') { e.preventDefault(); btnCancel.click(); window.removeEventListener('keydown', esc, true);} };
                 window.addEventListener('keydown', esc, true);
@@ -14207,6 +14835,8 @@ function offerPermanentAbilityChoice() {
             // Permanent ability choice overlay
             const permOv = document.getElementById('abilityChoiceOverlay');
             if (permOv && document.body.contains(permOv)) return permOv;
+            const dossierOv = document.getElementById('enemyDossierOverlay');
+            if (dossierOv && document.body.contains(dossierOv)) return dossierOv;
             // Ending overlay (final image that appears when Big Quack defeated)
             const endOv = document.getElementById('endingOverlay');
             if (endOv && document.body.contains(endOv)) return endOv;
@@ -14241,6 +14871,7 @@ function offerPermanentAbilityChoice() {
             const seen = new Set();
             const vis = arr.filter(el=>{
                 if (!el || !container.contains(el)) return false;
+                if (el.disabled || el.getAttribute('aria-disabled') === 'true') return false;
                 const key = el.tagName+"#"+(el.id||'')+"@"+(el.getAttribute('data-gp-focus')||'')+"@"+(el.textContent||'');
                 if (seen.has(key)) return false; seen.add(key);
                 const cs = window.getComputedStyle ? window.getComputedStyle(el) : null;
@@ -14251,6 +14882,32 @@ function offerPermanentAbilityChoice() {
             return vis;
         }
 
+        function collectScrollableTargets(container){
+            const list = [];
+            if (!container) return list;
+            const seen = new Set();
+            const consider = (el)=>{
+                if (!el || seen.has(el)) return;
+                seen.add(el);
+                try {
+                    if (typeof el.scrollHeight !== 'number') return;
+                    if ((el.scrollHeight - el.clientHeight) < 6) return;
+                    const cs = window.getComputedStyle ? window.getComputedStyle(el) : null;
+                    if (cs && !(cs.overflowY === 'auto' || cs.overflowY === 'scroll')) return;
+                } catch(_) { return; }
+                list.push(el);
+            };
+            try { container.querySelectorAll('[data-gp-scroll],[data-gp-scroll="1"]').forEach(consider); } catch(_) {}
+            try {
+                container.querySelectorAll('*').forEach(el=>{
+                    if (list.length >= 6) return;
+                    consider(el);
+                });
+            } catch(_) {}
+            consider(container);
+            return list;
+        }
+
         function gpUiNavReset(){
             game.uiNav = game.uiNav || {};
             const cont = getActiveUiContainer();
@@ -14259,6 +14916,12 @@ function offerPermanentAbilityChoice() {
             game.uiNav.items = items;
             game.uiNav.index = items.length ? 0 : -1;
             game.uiNav.lastDX = 0; game.uiNav.lastDY = 0; game.uiNav.lastMoveAt = 0; game.uiNav.lastFire = false; game.uiNav.lastFireAt = 0;
+            game.uiNav.scrollTargets = collectScrollableTargets(cont);
+            game.uiNav.lastScrollDir = 0;
+            game.uiNav.lastScrollAt = 0;
+            game.uiNav._lastScrollCount = (game.uiNav.scrollTargets || []).length;
+            game.uiNav._lastScrollRefresh = performance.now ? performance.now() : Date.now();
+            game.uiNav._aimScrollActive = false;
             applyGpFocus();
         }
 
@@ -14333,24 +14996,59 @@ function offerPermanentAbilityChoice() {
             if (!game.uiNav || game.uiNav.container !== cont) gpUiNavReset();
             // Refresh items in case menu changed
             const items = gatherFocusables(cont);
-            // Only update items list if it actually changed length or the container changed — avoid forcing focus each frame
-            if (!game.uiNav._lastContainer || game.uiNav._lastContainer !== cont || (game.uiNav._lastItemsLen || 0) !== items.length) {
+            const containerChanged = (!game.uiNav._lastContainer || game.uiNav._lastContainer !== cont);
+            const lengthChanged = ((game.uiNav._lastItemsLen || 0) !== items.length);
+            if (containerChanged || lengthChanged) {
                 game.uiNav.items = items;
-                // store tracking values so we don't reapply focus/scroll on every frame
                 game.uiNav._lastContainer = cont;
                 game.uiNav._lastItemsLen = items.length;
                 if (items.length && (game.uiNav.index == null || game.uiNav.index < 0 || game.uiNav.index >= items.length)) game.uiNav.index = 0;
-                // apply focus once when the set changes
+                game.uiNav.scrollTargets = collectScrollableTargets(cont);
+                game.uiNav._lastScrollCount = (game.uiNav.scrollTargets || []).length;
+                game.uiNav._lastScrollRefresh = performance.now ? performance.now() : Date.now();
+                game.uiNav.lastScrollDir = 0;
+                game.uiNav.lastScrollAt = 0;
+                game.uiNav._aimScrollActive = false;
                 applyGpFocus();
+            } else {
+                const nowCheck = performance.now ? performance.now() : Date.now();
+                const needScrollRefresh = !game.uiNav.scrollTargets || (!game.uiNav.scrollTargets.length && items.length) || !game.uiNav._lastScrollRefresh || (nowCheck - game.uiNav._lastScrollRefresh) > 520;
+                if (needScrollRefresh) {
+                    game.uiNav.scrollTargets = collectScrollableTargets(cont);
+                    game.uiNav._lastScrollCount = (game.uiNav.scrollTargets || []).length;
+                    game.uiNav._lastScrollRefresh = nowCheck;
+                    if (!game.uiNav.scrollTargets || !game.uiNav.scrollTargets.length) game.uiNav._aimScrollActive = false;
+                }
             }
 
             const inp = game.input;
             if (!inp || !inp.gamepadEnabled) return;
+            const now = performance.now ? performance.now() : Date.now();
             // Digitalize nav from gpMove (supports dpad or stick)
             const dx = (inp.gpMove.x > 0.5) ? 1 : (inp.gpMove.x < -0.5) ? -1 : 0;
             const dy = (inp.gpMove.y > 0.5) ? 1 : (inp.gpMove.y < -0.5) ? -1 : 0; // down is +1 visually, but we use that as next
-            const now = performance.now ? performance.now() : Date.now();
             const repeatDelay = 200; // ms between repeats
+            const scrollTargets = game.uiNav.scrollTargets || [];
+            const applyScrollDelta = (delta)=>{
+                if (!delta || !scrollTargets.length) return false;
+                for (let s = 0; s < scrollTargets.length; s++) {
+                    const el = scrollTargets[s];
+                    if (!el) continue;
+                    try {
+                        const max = Math.max(0, (el.scrollHeight || 0) - (el.clientHeight || 0));
+                        if (max <= 0) continue;
+                        const before = el.scrollTop;
+                        let next = before + delta;
+                        if (next < 0) next = 0;
+                        else if (next > max) next = max;
+                        if (next !== before) {
+                            el.scrollTop = next;
+                            return true;
+                        }
+                    } catch(_) {}
+                }
+                return false;
+            };
 
             // Special case: when pause overlay Abilities tab is active, use left stick to scroll the list
             // rather than moving focus vertically (so you can read long lists easily)
@@ -14360,25 +15058,52 @@ function offerPermanentAbilityChoice() {
             const inPauseAbilities = !!(game.paused && pauseMenuEl && pauseAbilitiesEl && pauseAbilitiesEl.style.display !== 'none' && cont && (cont.id === 'pauseOverlay'));
             const inPauseAchievements = !!(game.paused && pauseMenuEl && pauseAchievementsEl && pauseAchievementsEl.style.display !== 'none' && cont && (cont.id === 'pauseOverlay'));
             let consumedVertical = false;
-            if (inPauseAbilities || inPauseAchievements) {
-                // Analog scroll for smoothness; fallback to digital step with repeat
+            let movedFocus = false;
+            let scrolledThisFrame = false;
+            if ((inPauseAbilities || inPauseAchievements) && scrollTargets.length) {
                 const ay = inp.gpMove.y || 0;
                 if (Math.abs(ay) > 0.28) {
-                    // Scale speed with magnitude; smaller on low FX devices
                     const base = 16;
                     const speed = base + Math.min(1, Math.abs(ay)) * 24;
-                    pauseMenuEl.scrollTop += ay * speed;
-                    consumedVertical = true;
-                } else if (dy !== 0) {
-                    const canRepeat = (game.uiNav.lastDY === dy) ? (now - (game.uiNav.lastMoveAt||0) > repeatDelay) : true;
-                    if (canRepeat) {
-                        pauseMenuEl.scrollTop += dy * 64; // discrete step per repeat
-                        game.uiNav.lastMoveAt = now;
+                    if (applyScrollDelta(ay * speed)) {
+                        consumedVertical = true;
+                        scrolledThisFrame = true;
+                        game.uiNav.lastScrollDir = ay > 0 ? 1 : -1;
+                        game.uiNav.lastScrollAt = now;
+                        game.uiNav.lastDY = 0;
                     }
-                    game.uiNav.lastDY = dy;
+                } else if (dy !== 0) {
+                    const canRepeat = (game.uiNav.lastScrollDir === dy) ? (now - (game.uiNav.lastScrollAt||0) > repeatDelay) : true;
+                    if (canRepeat && applyScrollDelta(dy * 64)) {
+                        game.uiNav.lastScrollAt = now;
+                        game.uiNav.lastScrollDir = dy;
+                        scrolledThisFrame = true;
+                        game.uiNav.lastDY = 0;
+                    }
                     consumedVertical = true;
-                } else {
-                    game.uiNav.lastDY = 0;
+                }
+            }
+
+            if (!consumedVertical && scrollTargets.length) {
+                const aimY = inp.gpAim ? inp.gpAim.y : 0;
+                const aimAbs = Math.abs(aimY);
+                const deadzone = Math.min(0.6, Math.max(0.05, inp.gpDeadzone || 0.25));
+                const aimStart = Math.max(0.55, Math.min(0.85, deadzone + 0.35));
+                const aimStop = Math.max(0.35, aimStart - 0.22);
+                let aimActive = !!game.uiNav._aimScrollActive;
+                if (!aimActive && aimAbs > aimStart) aimActive = true;
+                else if (aimActive && aimAbs < aimStop) aimActive = false;
+                game.uiNav._aimScrollActive = aimActive;
+                if (aimActive) {
+                    const base = 22;
+                    const speed = base + Math.min(1, aimAbs) * 96;
+                    if (applyScrollDelta(aimY * speed)) {
+                        consumedVertical = true;
+                        scrolledThisFrame = true;
+                        game.uiNav.lastScrollDir = aimY > 0 ? 1 : -1;
+                        game.uiNav.lastScrollAt = now;
+                        game.uiNav.lastDY = 0;
+                    }
                 }
             }
 
@@ -14388,11 +15113,17 @@ function offerPermanentAbilityChoice() {
                 const currentIndex = game.uiNav.index|0;
                 const best = findBestIndexForDirection(items, currentIndex, 0, dy);
                 const canRepeat = (game.uiNav.lastDY === dy) ? (now - (game.uiNav.lastMoveAt||0) > repeatDelay) : true;
+                let focusChangedThisStep = false;
                 if (best >= 0 && canRepeat) {
                     const delta = best - currentIndex;
+                    const prevIdx = game.uiNav.index|0;
                     moveGpFocus(delta);
-                    game.uiNav.lastMoveAt = now;
-                    game.uiNav.lastDY = dy;
+                    const newIdx = game.uiNav.index|0;
+                    if (newIdx !== prevIdx) {
+                        game.uiNav.lastMoveAt = now;
+                        game.uiNav.lastDY = dy;
+                        focusChangedThisStep = true;
+                    }
                 } else {
                     // Fallback to row-step logic (columns heuristic) if visual selection didn't find a candidate
                     let cols = 1;
@@ -14409,13 +15140,38 @@ function offerPermanentAbilityChoice() {
                         }
                     } catch(_) { cols = 1; }
                     if (canRepeat) {
+                        const prevIdx = game.uiNav.index|0;
                         moveGpFocus(cols * dy);
-                        game.uiNav.lastMoveAt = now;
+                        const newIdx = game.uiNav.index|0;
+                        if (newIdx !== prevIdx) {
+                            game.uiNav.lastMoveAt = now;
+                            game.uiNav.lastDY = dy;
+                            focusChangedThisStep = true;
+                        }
                     }
-                    game.uiNav.lastDY = dy;
+                }
+                if (focusChangedThisStep) {
+                    movedFocus = true;
+                } else {
+                    game.uiNav.lastDY = 0;
                 }
             } else if (!consumedVertical) {
                 game.uiNav.lastDY = 0;
+            }
+
+            if (!consumedVertical && dy !== 0 && !movedFocus && scrollTargets.length) {
+                const canRepeatScroll = (game.uiNav.lastScrollDir === dy) ? (now - (game.uiNav.lastScrollAt||0) > repeatDelay) : true;
+                if (canRepeatScroll && applyScrollDelta(dy * 72)) {
+                    game.uiNav.lastScrollAt = now;
+                    game.uiNav.lastScrollDir = dy;
+                    consumedVertical = true;
+                    scrolledThisFrame = true;
+                    game.uiNav.lastDY = 0;
+                }
+            }
+
+            if (dy === 0 && !scrolledThisFrame && (!inp.gpAim || Math.abs(inp.gpAim.y||0) < 0.2)) {
+                game.uiNav.lastScrollDir = 0;
             }
             // Horizontal navigation for rows/grids
             if (dx !== 0 && dy === 0) {
@@ -15741,8 +16497,8 @@ function offerPermanentAbilityChoice() {
                 }
             });
             
-            if (game.keys['w']) { dy -= speed; game.player.lastDirection = { x: 0, y: -1 }; game.player.facing = 'up'; }
-            if (game.keys['s']) { dy += speed; game.player.lastDirection = { x: 0, y: 1 }; game.player.facing = 'down'; }
+            if (game.keys['w']) { dy -= speed; game.player.lastDirection = { x: 0, y: -1 }; }
+            if (game.keys['s']) { dy += speed; game.player.lastDirection = { x: 0, y: 1 }; }
             if (game.keys['a']) { dx -= speed; game.player.lastDirection = { x: -1, y: 0 }; game.player.facing = 'left'; }
             if (game.keys['d']) { dx += speed; game.player.lastDirection = { x: 1, y: 0 }; game.player.facing = 'right'; }
 
@@ -15760,14 +16516,13 @@ function offerPermanentAbilityChoice() {
                 // Aim stick sets lastDirection independent of movement
                 if (avLen > 0) {
                     game.player.lastDirection = { x: av.x / avLen, y: av.y / avLen };
-                    // Facing from aim
-                    const ax = game.player.lastDirection.x, ay = game.player.lastDirection.y;
-                    if (Math.abs(ax) > Math.abs(ay)) game.player.facing = ax < 0 ? 'left' : 'right'; else game.player.facing = ay < 0 ? 'up' : 'down';
+                    const ax = game.player.lastDirection.x;
+                    if (Math.abs(ax) > 0.05) game.player.facing = ax < 0 ? 'left' : 'right';
                 } else if (mvLen > 0) {
                     // If no aim input, derive facing from movement
                     const nx = mv.x / mvLen, ny = mv.y / mvLen;
                     game.player.lastDirection = { x: nx, y: ny };
-                    if (Math.abs(nx) > Math.abs(ny)) game.player.facing = nx < 0 ? 'left' : 'right'; else game.player.facing = ny < 0 ? 'up' : 'down';
+                    if (Math.abs(nx) > 0.05) game.player.facing = nx < 0 ? 'left' : 'right';
                 }
             }
             
@@ -18108,6 +18863,7 @@ function offerPermanentAbilityChoice() {
             const deadEnemies = game.enemies.filter(enemy => enemy.health <= 0);
             deadEnemies.forEach(enemy => {
                 game.totalKills++;
+                try { recordEnemyDefeat(enemy && enemy.type ? enemy.type : null); } catch(_){ }
                 // Per-player kill counter (initialize lazily if missing)
                 if (game.player) {
                     if (typeof game.player.killCount !== 'number') game.player.killCount = 0;
@@ -22007,7 +22763,7 @@ function offerPermanentAbilityChoice() {
             if (proj.realityBreak) {
                 if (!game.realityBreakDistort) game.realityBreakDistort = { time:0, intensity:0 };
                 game.realityBreakDistort.time = Math.min(game.realityBreakDistort.time + 24, 160);
-                game.realityBreakDistort.intensity = Math.min(0.65, game.realityBreakDistort.intensity + 0.08);
+                game.realityBreakDistort.intensity = Math.min(0.42, game.realityBreakDistort.intensity + 0.06);
                 // Brief auto-enable of overlay so distortion displays even if setting is off
                 if (!game.settings) game.settings = {};
                 game.settings._rbAutoOverlay = 4; // frames to force on (shorter)
@@ -23850,8 +24606,8 @@ function offerPermanentAbilityChoice() {
             game.activeRealityFields.push(field);
             // Boost global distortion effect (cumulative but clamped)
             if (!game.realityBreakDistort) game.realityBreakDistort = { time:0, intensity:0 };
-            game.realityBreakDistort.time = Math.min(game.realityBreakDistort.time + 40, 160);
-            game.realityBreakDistort.intensity = Math.min(0.75, game.realityBreakDistort.intensity + 0.12);
+            game.realityBreakDistort.time = Math.min(game.realityBreakDistort.time + 36, 160);
+            game.realityBreakDistort.intensity = Math.min(0.45, game.realityBreakDistort.intensity + 0.09);
             const interval = setInterval(() => {
                 // chaotic visual sparks
                 if (Math.random() < 0.6) addParticle(x + (Math.random()-0.5)*160, y + (Math.random()-0.5)*160, '#99FFFF', 'spark');
@@ -23973,6 +24729,9 @@ function offerPermanentAbilityChoice() {
                 game.player.health -= finalDamage;
                 game.player.invulnerable = true;
                 game.player.invulnTime = 80;
+                game.player._invulnTimerMax = Math.max(80, game.player._invulnTimerMax || 0);
+                game.player._invulnSource = 'damage';
+                game.player._duckSpawnShieldUntil = null;
                 addScreenShake(4);
                 addParticle(game.player.x, game.player.y, '#FF4444', 'damage');
             }
@@ -30014,7 +30773,56 @@ function offerPermanentAbilityChoice() {
                 game.player.forceVisibleFrames--;
             }
             const forceShowPlayer = (game._bigQuackDefeated && !game.gameOver) || (game.player && game.player.forceVisibleFrames>0);
-            if (forceShowPlayer || (!game.player.invulnerable || Math.floor(Date.now() / 100) % 2)) {
+            const invulnerableNow = !!(game.player && game.player.invulnerable);
+            const isDamageBlink = invulnerableNow && game.player._invulnSource === 'damage';
+            if (game.player && (!invulnerableNow || isDamageBlink) && game.player._invulnTimerMax) {
+                game.player._invulnTimerMax = 0;
+                if (!isDamageBlink && game.player._invulnSource && game.player._invulnSource !== 'damage') game.player._invulnSource = null;
+            }
+            if (invulnerableNow && game.player && !isDamageBlink) {
+                const px = Math.round(game.player.x);
+                const py = Math.round(game.player.y);
+                const nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                const shieldUntil = game.player._duckSpawnShieldUntil || 0;
+                const spawnShieldActive = !!(shieldUntil && nowMs < shieldUntil);
+                const framesRemain = Math.max(0, Number(game.player.invulnTime) || 0);
+                const maxFrames = Math.max(framesRemain, Number(game.player._invulnTimerMax) || 0, 1);
+                const fade = Math.min(1, framesRemain / maxFrames);
+                const pulse = Math.sin(nowMs / 180) * 0.25;
+                const radius = 42 + fade * 26 + (spawnShieldActive ? 8 : 0) + pulse * 4;
+                const innerAlpha = Math.min(0.6, 0.35 + fade * 0.3);
+                const midAlpha = Math.max(0, innerAlpha * 0.55);
+                const ringAlpha = Math.min(0.5, 0.22 + fade * 0.25);
+                const innerColor = spawnShieldActive ? `rgba(140,246,255,${innerAlpha})` : `rgba(255,222,150,${innerAlpha})`;
+                const midColor = spawnShieldActive ? `rgba(90,200,255,${midAlpha})` : `rgba(255,190,120,${midAlpha})`;
+                const outerColor = spawnShieldActive ? 'rgba(20,70,110,0)' : 'rgba(120,60,10,0)';
+
+                ctx.save();
+                ctx.globalCompositeOperation = 'lighter';
+                const glow = ctx.createRadialGradient(px, py, radius * 0.35, px, py, radius);
+                glow.addColorStop(0, innerColor);
+                glow.addColorStop(0.55, midColor);
+                glow.addColorStop(1, outerColor);
+                ctx.fillStyle = glow;
+                ctx.beginPath();
+                ctx.arc(px, py, radius, 0, Math.PI*2);
+                ctx.fill();
+                ctx.restore();
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(px, py, radius * 0.95, 0, Math.PI*2);
+                ctx.strokeStyle = spawnShieldActive ? `rgba(160,245,255,${ringAlpha})` : `rgba(255,220,170,${ringAlpha})`;
+                ctx.lineWidth = 2.6;
+                ctx.shadowBlur = 16;
+                ctx.shadowColor = spawnShieldActive ? 'rgba(120,220,255,0.65)' : 'rgba(255,200,130,0.55)';
+                ctx.stroke();
+                ctx.restore();
+            }
+            if ((!invulnerableNow || isDamageBlink) && game.player && game.player._duckSpawnShieldUntil && (!isDuckAndCoverMode() || game.player._duckSpawnShieldUntil < (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()))) {
+                game.player._duckSpawnShieldUntil = null;
+            }
+            if (game.player && (forceShowPlayer || !isDamageBlink || Math.floor(Date.now() / 100) % 2)) {
                 const px = Math.round(game.player.x);
                 const py = Math.round(game.player.y);
                 const meta = game.player.spriteMeta;
@@ -30296,28 +31104,87 @@ function offerPermanentAbilityChoice() {
                 const octx = off.getContext('2d');
                 octx.clearRect(0,0,off.width,off.height);
                 octx.drawImage(canvas, 0, 0);
-                const slices = 12;
-                // Replace the main canvas content with the displaced slices (avoid drawing slices on top of
-                // the original scene which produced a doubled/ghosted image). Clear first, then draw slices.
+                const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                const fields = Array.isArray(game.activeRealityFields) ? game.activeRealityFields : [];
+                const baseIntensity = Math.max(0.05, Math.min(1, d.intensity * 1.1));
                 ctx.save();
                 ctx.globalCompositeOperation = 'source-over';
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                for (let i=0;i<slices;i++) {
-                    const sliceH = Math.ceil(canvas.height / slices);
-                    const sy = i * sliceH;
-                    const sh = Math.min(sliceH, canvas.height - sy);
-                    const offset = Math.sin((Date.now()/140)+(i*0.9)) * 7 * d.intensity + (Math.random()-0.5)*4*d.intensity;
-                    ctx.globalAlpha = 1.0;
-                    ctx.drawImage(off, 0, sy, canvas.width, sh, offset, sy, canvas.width, sh);
+                if (fields.length) {
+                    for (let i = 0; i < fields.length; i++) {
+                        const field = fields[i];
+                        if (!field || typeof field.x !== 'number' || typeof field.y !== 'number') continue;
+                        const radiusBase = typeof field.radius === 'number' ? field.radius : 200;
+                        const maxRadius = Math.min((Math.min(canvas.width, canvas.height) * 0.48), Math.max(60, radiusBase * (0.85 + baseIntensity * 0.35)));
+                        const radius = Math.max(48, Math.min(maxRadius, Math.min(off.width, off.height) / 2 - 2));
+                        const size = Math.round(radius * 2);
+                        if (size <= 0) continue;
+                        const sampleX = Math.max(0, Math.min(off.width - size, Math.round(field.x - radius)));
+                        const sampleY = Math.max(0, Math.min(off.height - size, Math.round(field.y - radius)));
+                        const wave = Math.sin((now / 210) + (i * 1.25));
+                        const wobble = Math.cos((now / 280) + (i * 1.4));
+                        const shiftX = wave * (4 + 6 * baseIntensity);
+                        const shiftY = wobble * (2 + 4 * baseIntensity);
+                        const destX = Math.round(field.x - radius + shiftX * 0.28);
+                        const destY = Math.round(field.y - radius + shiftY * 0.22);
+
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.arc(field.x, field.y, radius, 0, Math.PI * 2);
+                        ctx.clip();
+
+                        ctx.globalAlpha = Math.min(0.55, 0.28 + baseIntensity * 0.32);
+                        ctx.drawImage(off, sampleX, sampleY, size, size, destX, destY, size, size);
+
+                        const rippleAlpha = Math.min(0.26, 0.1 + baseIntensity * 0.22);
+                        if (rippleAlpha > 0.01) {
+                            ctx.globalAlpha = rippleAlpha;
+                            const ripple = ctx.createRadialGradient(field.x, field.y, radius * 0.2, field.x, field.y, radius);
+                            ripple.addColorStop(0, 'rgba(170, 245, 255, 0.35)');
+                            ripple.addColorStop(0.6, 'rgba(130, 205, 255, 0.18)');
+                            ripple.addColorStop(1, 'rgba(30, 40, 60, 0)');
+                            ctx.fillStyle = ripple;
+                            ctx.fillRect(field.x - radius, field.y - radius, radius * 2, radius * 2);
+                        }
+
+                        ctx.restore();
+                    }
+                } else {
+                    const shimmerAlpha = Math.min(0.16, 0.05 + baseIntensity * 0.12);
+                    if (shimmerAlpha > 0.01) {
+                        ctx.save();
+                        ctx.globalCompositeOperation = 'lighter';
+                        const bands = 10;
+                        const bandH = Math.ceil(canvas.height / bands);
+                        for (let i = 0; i < bands; i++) {
+                            const t = now / 260 + i * 0.9;
+                            const bandAlpha = shimmerAlpha * (0.45 + 0.55 * Math.sin(t));
+                            if (bandAlpha <= 0) continue;
+                            ctx.fillStyle = 'rgba(160, 220, 255,' + bandAlpha + ')';
+                            ctx.fillRect(0, i * bandH, canvas.width, bandH);
+                        }
+                        ctx.restore();
+                    }
                 }
                 ctx.restore();
-                // Chromatic radial fringe removed to avoid additional ghosting/double-image effects.
-                // Previous implementation applied a translucent radial color overlay here which
-                // some players found disorienting when combined with the slice displacement.
+                const fringeAlpha = Math.min(0.18, 0.06 + baseIntensity * 0.18);
+                if (fringeAlpha > 0.01) {
+                    ctx.save();
+                    ctx.globalCompositeOperation = 'screen';
+                    ctx.globalAlpha = fringeAlpha;
+                    const cx = canvas.width / 2;
+                    const cy = canvas.height / 2;
+                    const radius = Math.hypot(canvas.width, canvas.height) * 0.5;
+                    const grad = ctx.createRadialGradient(cx, cy, radius * 0.22, cx, cy, radius);
+                    grad.addColorStop(0, 'rgba(170,240,255,0.85)');
+                    grad.addColorStop(1, 'rgba(20,30,40,0)');
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.restore();
+                }
                 ctx.globalAlpha = 1;
                 // Decay timers
                 d.time--;
-                d.intensity *= 0.97; if (d.time<=0) d.intensity = 0;
+                d.intensity *= 0.93; if (d.time<=0) d.intensity = 0;
             }
 
             // Room cleared overlay
