@@ -1264,7 +1264,8 @@
                 SHADOWISH: 512,
                 TUMBLEWEED: 1024,
                 KICK_CAN: 2048,
-                IONIC: 4096
+                IONIC: 4096,
+                SIGMA3: 8192
             };
             let size = 0;
             function compute(meta) {
@@ -1284,6 +1285,7 @@
                 if (meta._isVoid || dmgType === 'void') bits |= META_FLAG.VOIDISH;
                 if (meta._isShadow || dmgType === 'shadow') bits |= META_FLAG.SHADOWISH;
                 if (dmgType === 'ion') bits |= META_FLAG.IONIC;
+                if (meta.sigma3) bits |= META_FLAG.SIGMA3;
                 return bits;
             }
             function setEntry(index, meta) {
@@ -1392,6 +1394,7 @@
             const flagIon = new Uint8Array(MAX);
             const flagTumbleweed = new Uint8Array(MAX);
             const flagKickCan = new Uint8Array(MAX);
+            const flagSigma3 = new Uint8Array(MAX);
             const HASH_KEY_NONE = -2147483648; // sentinel for "not hashed"
             const hashCellKeyByIndex = new Int32Array(MAX);
             hashCellKeyByIndex.fill(HASH_KEY_NONE);
@@ -1425,6 +1428,7 @@
                 flagVoid[index] = (bits & META_FLAG.VOIDISH) ? 1 : 0;
                 flagShadow[index] = (bits & META_FLAG.SHADOWISH) ? 1 : 0;
                 flagIon[index] = (bits & META_FLAG.IONIC) ? 1 : 0;
+                flagSigma3[index] = (bits & META_FLAG.SIGMA3) ? 1 : 0;
                 flagTumbleweed[index] = (bits & META_FLAG.TUMBLEWEED) ? 1 : 0;
                 flagKickCan[index] = (bits & META_FLAG.KICK_CAN) ? 1 : 0;
             }
@@ -1449,6 +1453,7 @@
                 flagIon.fill(0);
                 flagTumbleweed.fill(0);
                 flagKickCan.fill(0);
+                flagSigma3.fill(0);
             }
             clearParallelFlags();
             const _metaSet = metaStore.set.bind(metaStore);
@@ -1694,7 +1699,7 @@
                 const sineScale = tier === 0 ? 7.0 : tier === 1 ? 4.0 : (tier === 2 ? 2.0 : 0.0);
                 // Make Wacky Shot clearly visible; still disable at highest load (tier 3)
                 const wackyScale = tier === 0 ? 1.0 : tier === 1 ? 0.65 : (tier === 2 ? 0.35 : 0.0);
-                const ekgEnabled = tier < 2;
+                const ekgEnabled = tier < 1;
                 const spiralScale = tier < 2 ? 0.5 : (tier === 2 ? 0.25 : 0);
                 // Stronger homing: raise base scale significantly (still disabled at highest degradation tier)
                 const baseHomingScale = tier < 3 ? 1.6 : 0.0;
@@ -1707,6 +1712,7 @@
                     const isBeam = !!flagBeam[i];
                     const isOrbital = !!flagOrbital[i];
                     const isResonant = !!flagResonant[i];
+                    const isSigma3 = !!flagSigma3[i];
                     // Record last-frame position for movement-based logic that can't trust vx/vy due to additive patterns
                     if (meta) { meta._lastX = x[i]; meta._lastY = y[i]; }
                     // Note: Time Bomb visuals are handled in renderProjectiles();
@@ -1719,7 +1725,7 @@
                             lifeMax[i] = Math.max(lifeMax[i], 60000);
                         } else {
                             // SIGMA stage 3: detonate on expiry with a strong splash
-                            if (meta && meta.sigma3) {
+                            if (isSigma3) {
                                 const baseDmg = (meta.baseDamage || (damage && damage[i]) || (typeof calculateDamage==='function' && calculateDamage()) || 12);
                                 // Compute an explosion radius that matches the on-screen sigma3 sprite/aura
                                 let expR = meta._auraRadius;
@@ -1765,7 +1771,7 @@
                         if (meta._pierceFlash) { meta._pierceFlash--; if (meta._pierceFlash < 0) meta._pierceFlash = 0; }
                         if (meta._bounceFlash) { meta._bounceFlash--; if (meta._bounceFlash < 0) meta._bounceFlash = 0; }
                         // SIGMA stage 3 spinner: accumulate spin and keep stationary
-                        if (meta.sigma3) {
+                        if (isSigma3) {
                             meta._age = (meta._age||0) + 1;
                             meta._spin = (meta._spin||0) + (meta._spinRate||0.28);
                             // Hold position (in case something injected velocity)
@@ -1843,7 +1849,7 @@
                         }
                     }
                     // Sigma3 aura + sprite contact: visual radius is stable; hit radius is larger to ensure reliable contact
-                    if (meta && meta.sigma3) {
+                    if (isSigma3) {
                         // Visual radius ~ 10% of min logical dimension (width ~ 20% of screen's min side)
                         const vw = (typeof LOGICAL_W !== 'undefined' ? LOGICAL_W : (ctx && ctx.canvas && ctx.canvas.width) || 800);
                         const vh = (typeof LOGICAL_H !== 'undefined' ? LOGICAL_H : (ctx && ctx.canvas && ctx.canvas.height) || 600);
@@ -2039,6 +2045,9 @@
                     const f = flags[i];
                     // Replace small-range sin calls with table lookups. We map phases by scaling counters.
                     if (sineScale && (f & FLAG.SINE)) {
+                        if (tier >= 1 && ((game.frame + i) % 2 !== 0)) {
+                            // Skip sine calculation every other frame at tier 1+ to reduce load
+                        } else {
                         // Stronger sinusoidal motion perpendicular to current velocity for readability
                         const sp = Math.hypot(vx[i], vy[i]) || 0.0001;
                         const px = -vy[i]/sp, py = vx[i]/sp; // perpendicular unit vector
@@ -2070,7 +2079,11 @@
                             }
                         }
                     }
+                    }
                     if (wackyScale && (f & FLAG.WACKY)) {
+                        if (tier >= 1 && ((game.frame + i) % 2 !== 0)) {
+                            // Skip wacky calculation every other frame at tier 1+ to reduce load
+                        } else {
                         // Wacky: straight segments with discrete random direction snaps (no jitter)
                         const sp = Math.hypot(vx[i], vy[i]) || 0.0001;
                         const fx = vx[i]/sp, fy = vy[i]/sp; // forward unit (for relative pivots & cue)
@@ -2133,6 +2146,7 @@
                                 }
                             }
                         }
+                    }
                     }
                     // EKG path-relative oscillation (perpendicular to motion):
                     // - Subtle baseline jitter around centerline + occasional large spike outward on a locked side.
@@ -3549,55 +3563,6 @@
                                 game.screenShakeIntensity = Math.max(game.screenShakeIntensity || 0, 0.9);
                             }
                         }
-                        // Umbrella core split behavior
-                        if (meta && meta.umbrellaCore && !meta._umbDidSplit) {
-                            // Accumulate travel distance using current velocity magnitude
-                            const stepDist = Math.hypot(vx[i], vy[i]);
-                            meta._umbTravel += stepDist;
-                            meta._umbCoreAge = (meta._umbCoreAge||0)+1;
-                            const lowLife = life[i] <= 10;
-                            const forceSplit = (meta._umbCoreAge > 80) || stepDist < 0.5 || lowLife;
-                            if (meta._umbTravel >= (meta._umbSplitDistance || 160) || forceSplit) {
-                                meta._umbDidSplit = true;
-                                const base = meta.baseDamage || damage[i];
-                                let ang = Math.atan2(vy[i], vx[i]);
-                                if (!isFinite(ang) || (Math.abs(vx[i]) < 0.0001 && Math.abs(vy[i]) < 0.0001)) {
-                                    const ld = (game.player && game.player.lastDirection) || {x:1,y:0};
-                                    ang = Math.atan2(ld.y, ld.x);
-                                }
-                                const arcRadius = 140;
-                                const store = game.projectilesSoA && game.projectilesSoA.metaStore;
-                                for (let side=-1; side<=1; side+=2) {
-                                    const aIdx = game.spawnProjectile({ x:x[i], y:y[i], vx:0, vy:0, life:110, r: Math.max(5, radius[i]*0.9), damage: Math.max(1, Math.floor(base*0.65)) });
-                                    if (aIdx>=0 && store) {
-                                        store.set(aIdx, {
-                                            umbrellaArc:true,
-                                            _arcSide:side,
-                                            _arcOriginX:x[i],
-                                            _arcOriginY:y[i],
-                                            _arcBaseAngle: ang,
-                                            _arcProgress: 0,
-                                            _arcRadius: arcRadius,
-                                            _arcAngularSpan: Math.PI * 0.5,
-                                            _arcSpeed: 0.028,
-                                            _arcDone:false,
-                                            baseDamage: Math.max(1, Math.floor(base*0.65)),
-                                            sineWave: !!(flags[i] & FLAG.SINE),
-                                            wackyZigzag: !!(flags[i] & FLAG.WACKY),
-                                            ekgWave: !!(flags[i] & FLAG.EKG),
-                                            spiral: !!(flags[i] & FLAG.SPIRAL)
-                                        });
-                                    }
-                                }
-                                if (!(game.perf && game.perf.lowFx)) {
-                                    for (let p=0;p<18;p++) addParticle(x[i] + (Math.random()-0.5)*24, y[i] + (Math.random()-0.5)*24, '#FFDFAA','spark');
-                                    addParticle(x[i], y[i], '#FFAA55','ambient');
-                                    addParticle(x[i], y[i], '#FFE8CC','trail');
-                                }
-                                // Remove core after splitting
-                                life[i]=0; recycle(i); aIdx--; continue;
-                            }
-                        }
                         // Umbrella arc motion (advance along sweep). After 90° (half-arc), convert to tangent flight continuing past the player.
                         if (meta && meta.umbrellaArc && !meta._arcDone) {
                             meta._arcProgress += meta._arcSpeed;
@@ -3615,16 +3580,16 @@
                                 const speed = 5.2; // speed after arc
                                 vx[i] = tx * speed; vy[i] = ty * speed;
                                 // Place at arc endpoint, then proceed along tangent
-                                x[i] = originX + Math.cos(endAng) * meta._arcRadius;
-                                y[i] = originY + Math.sin(endAng) * meta._arcRadius;
+                                x[i] = meta._arcCenterX + Math.cos(endAng) * meta._arcRadius;
+                                y[i] = meta._arcCenterY + Math.sin(endAng) * meta._arcRadius;
                                 // Give it healthy life to pass the player and keep going
                                 life[i] = Math.max(life[i], 90); lifeMax[i] = Math.max(lifeMax[i], life[i]);
                                 // Clear arc markers so normal physics takes over
                                 meta.umbrellaArc = false; delete meta._arcDone; delete meta._arcProgress;
                             } else {
                                 const localAng = meta._arcBaseAngle + (meta._arcSide * (meta._arcProgress * sweep));
-                                x[i] = originX + Math.cos(localAng) * meta._arcRadius;
-                                y[i] = originY + Math.sin(localAng) * meta._arcRadius;
+                                x[i] = meta._arcCenterX + Math.cos(localAng) * meta._arcRadius;
+                                y[i] = meta._arcCenterY + Math.sin(localAng) * meta._arcRadius;
                             }
                         }
                         // Helix Pair motion: offset twin projectiles around forward axis with expanding/contracting radius
@@ -3664,7 +3629,7 @@
                                 meta._boomFx = vx[i]/sp; meta._boomFy = vy[i]/sp;
                                 meta._boomSide = (Math.random()<0.5?-1:1);
                                 meta._boomMaxLat = 90 + Math.random()*30;
-                                meta._boomOutboundDist = 180 + Math.random()*40;
+                                meta._boomOutboundDist = 400 + Math.random()*100;
                                 meta._boomTravel = 0; meta._boomReturn=false; meta._boomChained=false; meta._boomOriginX=x[i]; meta._boomOriginY=y[i]; meta._boomAge=0;
                                 // Pre-return cue state
                                 meta._boomPreCue = 0; // frames remaining to show pre-return ring/arrow
@@ -3680,7 +3645,7 @@
                                 if (radial > meta._boomOutboundDist*0.95) meta._boomReturn = true;
                             }
                             if (!meta._boomReturn && meta._boomTravel >= meta._boomOutboundDist) meta._boomReturn = true;
-                            if (!meta._boomReturn && meta._boomAge > 90) { meta._boomReturn = true; meta._boomForced = true; }
+                            if (!meta._boomReturn && meta._boomAge > 300) { meta._boomReturn = true; meta._boomForced = true; }
                             // Prime pre-return cue shortly before reaching outbound limit
                             if (!meta._boomReturn && !meta._boomPreWarned) {
                                 const frac = meta._boomTravel / Math.max(1, meta._boomOutboundDist);
@@ -3705,7 +3670,7 @@
                                 const dyp = (game.player?game.player.y:y[i]) - y[i];
                                 const dpl = Math.hypot(dxp,dyp)||1;
                                 const tFx = dxp/dpl, tFy = dyp/dpl;
-                                const blend = meta._boomForced ? 0.25 : 0.12;
+                                const blend = meta._boomForced ? 0.35 : 0.18;
                                 fxB = fxB*(1-blend) + tFx*blend; fyB = fyB*(1-blend) + tFy*blend;
                                 const nrm = Math.hypot(fxB,fyB)||1; fxB/=nrm; fyB/=nrm; meta._boomFx=fxB; meta._boomFy=fyB;
                                 meta._boomReturnSide = (typeof meta._boomReturnSide==='number')?meta._boomReturnSide: -meta._boomSide;
@@ -3719,8 +3684,8 @@
                             const side = meta._boomReturn ? meta._boomReturnSide : meta._boomSide;
                             meta._boomLat = latMag * side;
                             const lateralStrength = 0.12;
-                            vx[i] = fxB * speed * 0.97 + pxB * (meta._boomLat/ Math.max(1, meta._boomMaxLat)) * lateralStrength * speed;
-                            vy[i] = fyB * speed * 0.97 + pyB * (meta._boomLat/ Math.max(1, meta._boomMaxLat)) * lateralStrength * speed;
+                            vx[i] = fxB * speed + pxB * (meta._boomLat/ Math.max(1, meta._boomMaxLat)) * lateralStrength * speed;
+                            vy[i] = fyB * speed + pyB * (meta._boomLat/ Math.max(1, meta._boomMaxLat)) * lateralStrength * speed;
                             const curSp = Math.hypot(vx[i], vy[i]) || 0.01;
                             if (curSp < 2) { const boost = (meta._boomReturn?1.25:1.12); vx[i] = (vx[i]/curSp)*(curSp*boost+0.05); vy[i]=(vy[i]/curSp)*(curSp*boost+0.05); }
                             if (meta._boomReturn) { vx[i]*=1.012; vy[i]*=1.012; }
@@ -4021,6 +3986,7 @@
                     const isEnemy = !!flagEnemy[i];
                     const isBeam = !!flagBeam[i];
                     const isEnemyBeam = !!flagEnemyBeam[i];
+                    const isSigma3 = !!flagSigma3[i];
                     // Enemy bullets are drawn in a dedicated top-layer pass for visibility; skip here
                     // but allow enemy beams to be rendered in this pass so lasers stay visible.
                     // Void travel visuals: purple lensing aura + faint trailing ribbon
@@ -4039,7 +4005,7 @@
                         if (isVoid) {
                             const lowFx = !!(game.perf && game.perf.lowFx);
                             // Subtle lensing aura (drawn beneath bodies)
-                            if (!lowFx && !game.potatoMode) {
+                            if (!lowFx && !game.potatoMode && game.projectileDegradeTier < 1) {
                                 ctx.save();
                                 ctx.globalCompositeOperation = 'lighter';
                                 const rr = Math.max(10, r * 1.6);
@@ -4102,7 +4068,7 @@
                         if (isShadow && meta) {
                             const lowFx = !!(game.perf && game.perf.lowFx);
                             // Lensing aura (darker, slightly smaller than Void to differentiate)
-                            if (!lowFx && !game.potatoMode) {
+                            if (!lowFx && !game.potatoMode && game.projectileDegradeTier < 1) {
                                 ctx.save();
                                 ctx.globalCompositeOperation = 'lighter';
                                 const rr = Math.max(10, r * 1.45);
@@ -4343,11 +4309,11 @@
                         continue;
                     }
                     // SIGMA sprites rendering
-                    if (meta && (meta.sigma1 || meta.sigma2 || meta.sigma3)) {
+                    if (meta && (meta.sigma1 || meta.sigma2 || isSigma3)) {
                         const ang = Math.atan2(vy[i], vx[i]);
                         ctx.save();
                         ctx.translate(cx, cy);
-                        if (meta.sigma3) {
+                        if (isSigma3) {
                             // Spinner rotates in place; use meta._spin for rotation
                             const img = window._bulletImages && window._bulletImages.sigma3;
                             const rot = typeof meta._spin === 'number' ? meta._spin : 0;
@@ -4403,9 +4369,9 @@
                         if (!lowFx && !game.potatoMode) {
                             ctx.save();
                             ctx.globalCompositeOperation = 'lighter';
-                            const glowR = meta.sigma3 ? Math.max(20, (Math.min((ctx.canvas&&ctx.canvas.width)||800,(ctx.canvas&&ctx.canvas.height)||600) * 0.11)) : Math.max(12, r * 1.2);
+                            const glowR = isSigma3 ? Math.max(20, (Math.min((ctx.canvas&&ctx.canvas.width)||800,(ctx.canvas&&ctx.canvas.height)||600) * 0.11)) : Math.max(12, r * 1.2);
                             const g = ctx.createRadialGradient(cx, cy, glowR*0.25, cx, cy, glowR);
-                            g.addColorStop(0, meta.sigma3 ? 'rgba(180,210,255,0.22)' : 'rgba(200,230,255,0.18)');
+                            g.addColorStop(0, isSigma3 ? 'rgba(180,210,255,0.22)' : 'rgba(200,230,255,0.18)');
                             g.addColorStop(1, 'rgba(180,210,255,0)');
                             ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, glowR, 0, Math.PI*2); ctx.fill();
                             ctx.restore();
@@ -4414,7 +4380,8 @@
                     }
                     // EKG trail: leave a short trailing polyline to sell motion during spikes
                     if ((flags[i] & FLAG.EKG) || (meta && meta.ekgWave)) {
-                        if (meta) {
+                        if (game.projectileDegradeTier < 1) {
+                            if (meta) {
                             // Initialize or append to a small ring buffer of previous positions
                             const nowFrame = (game && game.frame) || 0;
                             if (!meta._ekgTrail) { meta._ekgTrail = []; meta._ekgTrailMax = 14; meta._ekgTrailLast = nowFrame; }
@@ -4460,6 +4427,7 @@
                                 }
                             }
                         }
+                    }
                     }
                     // Time Bomb: sprite + fuse glow
                     if (flagTimeBomb[i]) {
@@ -4565,7 +4533,7 @@
                         continue;
                     }
                     // Ion Cannon: initial release ring (first few frames after spawn)
-                    if (flagIon[i]) {
+                    if (flagIon[i] && game.projectileDegradeTier < 1) {
                         if (!meta) {
                             meta = ensureMeta(i);
                             if (!meta) {
@@ -15072,6 +15040,11 @@ function offerPermanentAbilityChoice() {
                 btnProg.style.cssText = 'padding:8px 12px;background:#1b1b1b;border:2px solid #755;color:#ffd7d7;border-radius:6px;cursor:pointer;text-align:left;';
                 btnProg.setAttribute('data-gp-focus','1');
                 const noteProg = document.createElement('div'); noteProg.textContent = 'Clears permanent abilities and progression.'; noteProg.style.cssText='color:#b99; font-size:11px; margin-top:3px;'; btnProg.appendChild(noteProg);
+                const btnPerm = document.createElement('button');
+                btnPerm.textContent = 'Reset Permanent Abilities Only';
+                btnPerm.style.cssText = 'padding:8px 12px;background:#1b1b1b;border:2px solid #575;color:#dfd;border-radius:6px;cursor:pointer;text-align:left;';
+                btnPerm.setAttribute('data-gp-focus','1');
+                const notePerm = document.createElement('div'); notePerm.textContent = 'Clears permanent abilities but keeps achievements and other progress.'; notePerm.style.cssText='color:#9b9; font-size:11px; margin-top:3px;'; btnPerm.appendChild(notePerm);
                 const btnBoth = document.createElement('button');
                 btnBoth.textContent = 'Reset Both';
                 btnBoth.style.cssText = 'padding:8px 12px;background:#1b1b1b;border:2px solid #577;color:#cff;border-radius:6px;cursor:pointer;text-align:left;';
@@ -15081,13 +15054,14 @@ function offerPermanentAbilityChoice() {
                 actions.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;margin-top:6px;';
                 const btnCancel = document.createElement('button'); btnCancel.textContent='Cancel'; btnCancel.style.cssText='padding:8px 12px;background:#222;border:2px solid #777;color:#ddd;border-radius:6px;cursor:pointer;'; btnCancel.setAttribute('data-gp-focus','1');
                 actions.appendChild(btnCancel);
-                list.appendChild(btnAch); list.appendChild(btnProg); list.appendChild(btnBoth);
+                list.appendChild(btnAch); list.appendChild(btnProg); list.appendChild(btnPerm); list.appendChild(btnBoth);
                 panel.appendChild(title); panel.appendChild(desc); panel.appendChild(list); panel.appendChild(actions);
                 overlay.appendChild(panel);
                 document.body.appendChild(overlay);
                 const close = ()=>{ try{ overlay.remove(); }catch(_){} };
                 btnAch.onclick = ()=>{ try { localStorage.removeItem('achievements_v1'); } catch(_) {} close(); location.reload(); };
                 btnProg.onclick = ()=>{ try { localStorage.removeItem('permanentAbilities'); localStorage.removeItem('seenAbilities_v1'); localStorage.removeItem(ENEMY_DOSSIER_STORAGE_KEY); } catch(_) {} try { if (game) { game._actIIUnlocked = false; game._actIIIUnlocked = false; } } catch(_){} try { if (localStorage && localStorage.removeItem) { localStorage.removeItem('actIIUnlocked'); localStorage.removeItem('actIIIUnlocked'); } } catch(_){} close(); location.reload(); };
+                btnPerm.onclick = ()=>{ try { localStorage.removeItem('permanentAbilities'); localStorage.removeItem('seenAbilities_v1'); } catch(_) {} close(); location.reload(); };
                 btnBoth.onclick = ()=>{ try { localStorage.removeItem('achievements_v1'); localStorage.removeItem('permanentAbilities'); localStorage.removeItem('seenAbilities_v1'); localStorage.removeItem(ENEMY_DOSSIER_STORAGE_KEY); } catch(_) {} try { if (game) { game._actIIUnlocked = false; game._actIIIUnlocked = false; } } catch(_){} try { if (localStorage && localStorage.removeItem) { localStorage.removeItem('actIIUnlocked'); localStorage.removeItem('actIIIUnlocked'); } } catch(_){} close(); location.reload(); };
                 btnCancel.onclick = ()=> close();
                 const esc = (e)=>{ if (e.key==='Escape') { e.preventDefault(); btnCancel.click(); window.removeEventListener('keydown', esc, true);} };
@@ -15096,7 +15070,7 @@ function offerPermanentAbilityChoice() {
                     game.uiNav = game.uiNav || {};
                     game.uiNav.container = overlay;
                     // Set initial focus to "Reset Progress Only" as a safe middle option
-                    game.uiNav.items = [btnCancel, btnAch, btnProg, btnBoth];
+                    game.uiNav.items = [btnCancel, btnAch, btnProg, btnPerm, btnBoth];
                     game.uiNav.index = 2;
                     applyGpFocus();
                 } catch(_) {}
@@ -17278,7 +17252,7 @@ function offerPermanentAbilityChoice() {
         }
 
         function attack() {
-            const effectiveAbilities = isDuckAndCoverMode() ? game.player.abilities.filter(a => !game.player.permanentAbilities.includes(a)) : game.player.abilities;
+            const effectiveAbilities = isDuckAndCoverMode() ? game.player.abilities.filter(a => !(game.player.permanentAbilities && game.player.permanentAbilities.includes(a))) : game.player.abilities;
             game.shotCounter++;
             // Play a minimal attack SFX (rate-limited) once per attack invocation (not per projectile)
             if (typeof playAttackSfx === 'function') playAttackSfx();
@@ -17604,12 +17578,12 @@ function offerPermanentAbilityChoice() {
                 if (chosenDamageType) meta.damageType = chosenDamageType;
                 // If player has Duck Dynasty ability, prefer randomized duck sprite visuals for these projectiles
                 try {
-                    // Only apply Duck Dynasty visuals to non-enemy/projectiles originating from the player
+                    // Only apply Duck Dynasty visuals to enemy projectiles
                     if (game.player && Array.isArray(game.player.abilities) && game.player.abilities.includes('Duck Dynasty')) {
                         const ps = game.projectilesSoA;
                         const flagEnemyArr = ps && ps.flagEnemy;
                         const isEnemyProj = flagEnemyArr ? !!flagEnemyArr[primaryIdx] : (!!(t && t.enemy) || (!!meta && meta.enemy));
-                        if (!isEnemyProj && !meta.spriteKey && !meta.goldTooth && !meta.laser) {
+                        if (isEnemyProj && !meta.spriteKey && !meta.goldTooth && !meta.laser) {
                             const n = 1 + Math.floor(Math.random() * 5);
                             meta.spriteKey = 'duck' + n;
                             // Internal flag used by renderer to vertically flip these duck sprites
@@ -17983,18 +17957,6 @@ function offerPermanentAbilityChoice() {
                     meta._popPuffs = Math.min(6, 2 + Math.floor((multi - 1) / 4));
                     meta._popBursts = Math.min(6, 2 + Math.floor((multi - 1) / 3));
                 }
-                // Umbrella Shot (SoA): designate first projectile as umbrella core
-                if (i === 0 && game.player.abilities.includes('Umbrella Shot')) {
-                    meta.umbrellaCore = true;
-                    meta._umbOriginX = game.player.x;
-                    meta._umbOriginY = game.player.y;
-                    meta._umbTravel = 0;
-                    meta._umbSplitDistance = 96;
-                    meta._umbDidSplit = false;
-                    meta._umbCoreAge = 0;
-                    // Ensure enough life to reach split distance
-                    const so = game.projectilesSoA; if (so.life[primaryIdx] < 120) { so.life[primaryIdx] = 120; so.lifeMax[primaryIdx] = 120; }
-                }
                 // Pulse Rifle (SoA): emit a short burst of 3 shots (primary + 2 quick companions)
                 if (game.player.abilities.some(a => ABILITIES[a] && ABILITIES[a].effect.energyType === 'pulse' && ABILITIES[a].effect.burstFire)) {
                     const so = game.projectilesSoA;
@@ -18131,18 +18093,41 @@ function offerPermanentAbilityChoice() {
                     const so = game.projectilesSoA; so.damage[primaryIdx] = meta.baseDamage;
                 }
 
-                // Umbrella Shot: designate the FIRST projectile of the attack as the umbrella core.
-                // It will travel a short distance then split into two arc projectiles that swing overhead and return.
-                if (i === 0 && game.player.abilities.includes('Umbrella Shot')) {
-                    meta.umbrellaCore = true;
-                    meta._umbOriginX = game.player.x;
-                    meta._umbOriginY = game.player.y;
-                    meta._umbTravel = 0;
-                    meta._umbSplitDistance = 180; // travel further before splitting
-                    meta._umbDidSplit = false;
-                    meta._umbCoreAge = 0;
-                    // Ensure sufficient lifetime in SoA array
-                    const so = game.projectilesSoA; if (so.life[primaryIdx] < 160) { so.life[primaryIdx] = 160; so.lifeMax[primaryIdx] = 160; }
+                // Umbrella Shot: spawn two additional arcing projectiles
+                console.log('Umbrella check:', game.player.abilities.some(a => ABILITIES[a] && ABILITIES[a].effect.umbrellaShot), 'abilities:', game.player.abilities, 'permanent:', game.player.permanentAbilities);
+                if ((game.player.abilities || []).concat(game.player.permanentAbilities || []).some(a => ABILITIES[a] && ABILITIES[a].effect.umbrellaShot)) {
+                    const base = meta.baseDamage || calculateDamage();
+                    let ang = angle;
+                    const arcRadius = 140;
+                    const store = game.projectilesSoA && game.projectilesSoA.metaStore;
+                    for (let side=-1; side<=1; side+=2) {
+                        const spawnX = game.player.x + Math.cos(angle) * 16;
+                        const spawnY = game.player.y + Math.sin(angle) * 16;
+                        const centerX = spawnX - arcRadius * Math.cos(ang);
+                        const centerY = spawnY - arcRadius * Math.sin(ang);
+                        const aIdx = game.spawnProjectile({ x: spawnX, y: spawnY, vx: 0, vy: 0, life:110, r: Math.max(5, Math.floor(size * 0.9)), damage: Math.max(1, Math.floor(base*0.65)) });
+                        if (aIdx>=0 && store) {
+                            store.set(aIdx, {
+                                umbrellaArc:true,
+                                _arcSide:side,
+                                _arcOriginX: spawnX,
+                                _arcOriginY: spawnY,
+                                _arcCenterX: centerX,
+                                _arcCenterY: centerY,
+                                _arcBaseAngle: ang,
+                                _arcProgress: 0,
+                                _arcRadius: arcRadius,
+                                _arcAngularSpan: Math.PI * 0.5,
+                                _arcSpeed: 0.028,
+                                _arcDone:false,
+                                baseDamage: Math.max(1, Math.floor(base*0.65)),
+                                sineWave: !!(projectile.sineWave),
+                                wackyZigzag: !!(projectile.wackyZigzag),
+                                ekgWave: !!(projectile.ekgWave),
+                                spiral: !!(projectile.spiral)
+                            });
+                        }
+                    }
                 }
 
                 // Laser Beam special-case: continuous beam energy weapon
@@ -23933,6 +23918,7 @@ function offerPermanentAbilityChoice() {
                     // Tag damage type so contact hits show with a consistent tint
                     damageType: 'void'
                 });
+                if (store && typeof store.syncFlags === 'function') store.syncFlags(idx);
                 // cue
                 if (!(game.perf && game.perf.lowFx)) addParticle(x, y, '#BBD7FF','ring');
             }
