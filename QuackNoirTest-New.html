@@ -1633,8 +1633,27 @@
                 // Clear any stale metadata associated with this index to avoid inheriting flags
                 // like timeBomb/smartExplosive/chainExplosion from a previous occupant.
                 try { metaStore.delete(idx); } catch(_) {}
-                x[idx] = t.x || 0; y[idx] = t.y || 0;
-                vx[idx] = t.vx || 0; vy[idx] = t.vy || 0;
+                // Defensive assignment: prefer provided finite values; fall back to player position, canvas center, or 0.
+                const _hasT = !!t;
+                const _playerX = (typeof game !== 'undefined' && game && game.player && typeof game.player.x === 'number' && isFinite(game.player.x)) ? game.player.x : null;
+                const _playerY = (typeof game !== 'undefined' && game && game.player && typeof game.player.y === 'number' && isFinite(game.player.y)) ? game.player.y : null;
+                const _canvasCenterX = (typeof canvas !== 'undefined' && canvas && typeof canvas.width === 'number') ? (canvas.width * 0.5) : 0;
+                const _canvasCenterY = (typeof canvas !== 'undefined' && canvas && typeof canvas.height === 'number') ? (canvas.height * 0.5) : 0;
+                const safeX = (_hasT && typeof t.x === 'number' && isFinite(t.x)) ? t.x : (_playerX !== null ? _playerX : _canvasCenterX || 0);
+                const safeY = (_hasT && typeof t.y === 'number' && isFinite(t.y)) ? t.y : (_playerY !== null ? _playerY : _canvasCenterY || 0);
+                x[idx] = safeX; y[idx] = safeY;
+                vx[idx] = (_hasT && typeof t.vx === 'number' && isFinite(t.vx)) ? t.vx : 0; vy[idx] = (_hasT && typeof t.vy === 'number' && isFinite(t.vy)) ? t.vy : 0;
+                // Limited logging to help trace invalid spawn inputs (throttle to avoid spam)
+                try {
+                    if (!_hasT || typeof t.x !== 'number' || !isFinite(t.x) || typeof t.y !== 'number' || !isFinite(t.y)) {
+                        game._spawnProjectileInvalidCoords = game._spawnProjectileInvalidCoords || 0;
+                        if (game._spawnProjectileInvalidCoords < 6) {
+                            game._spawnProjectileInvalidCoords++;
+                            try { console.warn('[spawnProjectile] non-finite/undefined spawn coords, using fallback', { idx, t }); } catch(_){}
+                            try { const st = (new Error()).stack || ''; console.warn(st.split('\n').slice(2,6).join('\n')); } catch(_){}
+                        }
+                    }
+                } catch(_){}
                 const r = t.r || t.radius || 3; radius[idx] = r > 255?255:r;
                 const lf = t.life || t.maxLife || 120; life[idx]=lf; lifeMax[idx]=lf;
                 damage[idx] = t.damage || 1;
@@ -3973,6 +3992,35 @@
                 if (metaStore && typeof metaStore.refreshActiveFlags === 'function') {
                     metaStore.refreshActiveFlags(activeList, activeCount);
                 }
+                // Defensive: install a single safe wrapper for createRadialGradient on this ctx
+                try {
+                    if (!ctx.__createRadialGradientSafeInstalled) {
+                        // Store original (native) method once
+                        try { ctx.__createRadialGradientOriginal = ctx.createRadialGradient; } catch (_) { ctx.__createRadialGradientOriginal = null; }
+                        const orig = ctx.__createRadialGradientOriginal;
+                        ctx.createRadialGradient = function(x0, y0, r0, x1, y1, r1) {
+                            try {
+                                const hadInvalid = !((typeof x0 === 'number' && isFinite(x0)) && (typeof y0 === 'number' && isFinite(y0)) && (typeof r0 === 'number' && isFinite(r0)) && (typeof x1 === 'number' && isFinite(x1)) && (typeof y1 === 'number' && isFinite(y1)) && (typeof r1 === 'number' && isFinite(r1)));
+                                if (hadInvalid) {
+                                    this.__createRadialGradientLogged = this.__createRadialGradientLogged || 0;
+                                    if (this.__createRadialGradientLogged < 8) {
+                                        this.__createRadialGradientLogged++;
+                                        try { console.warn('[SafeGrad] non-finite createRadialGradient args', { x0, y0, r0, x1, y1, r1 }); } catch(_){}
+                                        try { const st = (new Error()).stack || ''; console.warn(st.split('\n').slice(2,7).join('\n')); } catch(_){}
+                                    }
+                                }
+                            } catch(_){}
+                            const f = v => (typeof v === 'number' && isFinite(v)) ? v : 0;
+                            const rr0 = Math.max(0, f(r0));
+                            const rr1 = Math.max(0, f(r1));
+                            if (typeof orig === 'function') {
+                                return orig.call(this, f(x0), f(y0), rr0, f(x1), f(y1), rr1);
+                            }
+                            try { return CanvasRenderingContext2D.prototype.createRadialGradient.call(this, f(x0), f(y0), rr0, f(x1), f(y1), rr1); } catch (_) { throw _; }
+                        };
+                        ctx.__createRadialGradientSafeInstalled = true;
+                    }
+                } catch (_) {}
                 for (let aIdx=0; aIdx<activeCount; aIdx++){
                     const i = activeList[aIdx];
                     const r = radius[i];
@@ -9491,10 +9539,12 @@ function showRainbowAbilityPicker(onSelect) {
         }
         return d;
     }
-    function filterAndRender(){
+        function filterAndRender(){
         const q = (search.value||'').trim().toLowerCase();
         grid.innerHTML='';
         let keys = Object.keys(ABILITIES);
+        // Exclude problematic or disabled abilities from rainbow picker (do not offer Umbrella Shot)
+        keys = keys.filter(k => k !== 'Umbrella Shot');
         if (onlyNewChk.checked) keys = keys.filter(k => !game.player.abilities.includes(k));
         keys = keys.filter(k => {
             // Hide secret/unlocked-only abilities unless they have been discovered via their unlock path
@@ -13387,7 +13437,7 @@ function offerPermanentAbilityChoice() {
                     if ((dxs * dxs + dys * dys) < exclusionR2) continue;
                     if (isWall(x, y)) continue;
                     if (game.chests.some(ch => Math.hypot(ch.x - x, ch.y - y) < 64)) continue;
-                    const pool = Object.keys(ABILITIES).filter(a => !game.player.abilities.includes(a));
+                    const pool = Object.keys(ABILITIES).filter(a => !game.player.abilities.includes(a) && a !== 'Umbrella Shot');
                     let chosenAbility = null;
                     if (pool.length) {
                         const weighted = [];
@@ -13451,36 +13501,38 @@ function offerPermanentAbilityChoice() {
                 const waveScale = 1 + Math.max(0, waveNumber - 1) * 0.08;
                 const healthMult = (cfg && cfg.healthMult ? cfg.healthMult : 1) * waveScale;
                 const hp = Math.max(1, Math.floor((base.health || 40) * healthMult));
-                const enemyObj = {
-                    x,
-                    y,
-                    type: typeName,
-                    facing: base.ranged ? 'right' : 'down',
-                    health: hp,
-                    maxHealth: hp,
-                    speed: base.speed || 0.8,
-                    baseSpeed: base.speed || 0.8,
-                    damage: base.damage || 10,
-                    color: base.color || '#ffffff',
-                    size: base.size || 24,
-                    xp: base.xp || 20,
-                    ranged: !!base.ranged,
-                    rangedCooldown: base.ranged ? (base.rangedCooldown || 2000) : 0,
-                    armor: base.armor || 0,
-                    lastAttack: 0,
-                    poisoned: false, poisonTime: 0,
-                    slowed: false, slowTime: 0,
-                    burning: false, burnTime: 0,
-                    wunderScribble: false, wunderScribbleTime: 0,
-                    wunderScribbleInterval: 0, wunderScribbleTickDamage: 0,
-                    _wunderScribbleTick: 0,
-                    quackenSnared: false, quackenSnareTime: 0,
-                    _quackenStack: 0, _quackenTick: 0,
-                    _quackenBaseDamage: 0, _quackenDotScale: 0,
-                    _quackenRingCd: 0,
-                    elite: false,
-                    _duckWave: waveNumber
-                };
+                // Reuse enemy objects from a pool when available (Duck & Cover heavy spawn optimization)
+                game._enemyPool = game._enemyPool || [];
+                let enemyObj = null;
+                if (Array.isArray(game._enemyPool) && game._enemyPool.length > 0) {
+                    enemyObj = game._enemyPool.pop();
+                } else {
+                    enemyObj = {};
+                }
+                enemyObj.x = x;
+                enemyObj.y = y;
+                enemyObj.type = typeName;
+                enemyObj.facing = base.ranged ? 'right' : 'down';
+                enemyObj.health = hp;
+                enemyObj.maxHealth = hp;
+                enemyObj.speed = base.speed || 0.8;
+                enemyObj.baseSpeed = base.speed || 0.8;
+                enemyObj.damage = base.damage || 10;
+                enemyObj.color = base.color || '#ffffff';
+                enemyObj.size = base.size || 24;
+                enemyObj.xp = base.xp || 20;
+                enemyObj.ranged = !!base.ranged;
+                enemyObj.rangedCooldown = enemyObj.ranged ? (base.rangedCooldown || 2000) : 0;
+                enemyObj.armor = base.armor || 0;
+                enemyObj.lastAttack = 0;
+                enemyObj.poisoned = false; enemyObj.poisonTime = 0;
+                enemyObj.slowed = false; enemyObj.slowTime = 0;
+                enemyObj.burning = false; enemyObj.burnTime = 0;
+                enemyObj.wunderScribble = false; enemyObj.wunderScribbleTime = 0; enemyObj.wunderScribbleInterval = 0; enemyObj.wunderScribbleTickDamage = 0; enemyObj._wunderScribbleTick = 0;
+                enemyObj.quackenSnared = false; enemyObj.quackenSnareTime = 0;
+                enemyObj._quackenStack = 0; enemyObj._quackenTick = 0; enemyObj._quackenBaseDamage = 0; enemyObj._quackenDotScale = 0; enemyObj._quackenRingCd = 0;
+                enemyObj.elite = false;
+                enemyObj._duckWave = waveNumber;
                 const eliteChance = cfg && typeof cfg.eliteChance === 'number' ? cfg.eliteChance : 0;
                 if (eliteChance > 0 && Math.random() < eliteChance) {
                     enemyObj.elite = true;
@@ -13516,36 +13568,75 @@ function offerPermanentAbilityChoice() {
                 const meta = ENEMY_TYPES[t];
                 return meta && meta.boss && !meta.bossFinal && !meta.bossSecret;
             });
+            // Predeclare placed so it's always defined (guard against earlier scoping bugs)
             let placed = 0;
+            // If the configured enemyCount is large, enqueue spawns and process them in slices
+            const ENQUEUE_THRESHOLD = 24; // waves larger than this will be chunked to avoid freezes
             game._roomSpawnedEnemies = 0;
-            let fails = 0;
-            while (placed < cfg.enemyCount && fails < 10000) {
-                let category;
-                const rand = Math.random();
-                if (cfg.minibossPercent > 0 && rand < cfg.minibossPercent) {
-                    category = minibossTypes;
-                } else if (rand < cfg.minibossPercent + cfg.rangedPercent) {
-                    category = rangedTypes;
-                } else {
-                    category = nonRangedTypes;
+            if (cfg.enemyCount > ENQUEUE_THRESHOLD) {
+                // Build planned spawn list (deterministic-ish random selection similar to previous loop)
+                const planned = [];
+                let fails = 0;
+                for (let p = 0; p < cfg.enemyCount && fails < 10000; p++) {
+                    let category;
+                    const rand = Math.random();
+                    if (cfg.minibossPercent > 0 && rand < cfg.minibossPercent) {
+                        category = minibossTypes;
+                    } else if (rand < cfg.minibossPercent + cfg.rangedPercent) {
+                        category = rangedTypes;
+                    } else {
+                        category = nonRangedTypes;
+                    }
+                    if (category.length === 0) {
+                        category = cfg.types.filter(t => {
+                            const meta = ENEMY_TYPES[t];
+                            return meta && !meta.bossFinal && !meta.bossSecret;
+                        });
+                    }
+                    const typeName = category[Math.floor(Math.random() * category.length)];
+                    if (!typeName) { fails++; continue; }
+                    planned.push(typeName);
                 }
-                if (category.length === 0) {
-                    // Fallback to all types
-                    category = cfg.types.filter(t => {
-                        const meta = ENEMY_TYPES[t];
-                        return meta && !meta.bossFinal && !meta.bossSecret;
-                    });
+                if (planned.length === 0) planned.push('Thug');
+                // Enqueue and start worker
+                game._duckSpawnQueue = game._duckSpawnQueue || [];
+                game._duckSpawnQueue.push({ wave: waveNumber, cfg: cfg, list: planned });
+                game._duckWaveSpawning = true;
+                // Start worker if not already running
+                if (!game._duckSpawnWorkerRunning) processDuckSpawnQueueSlice();
+                // Return early; completion will set wave state when queue drains
+                return;
+            } else {
+                placed = 0;
+                let fails = 0;
+                while (placed < cfg.enemyCount && fails < 10000) {
+                    let category;
+                    const rand = Math.random();
+                    if (cfg.minibossPercent > 0 && rand < cfg.minibossPercent) {
+                        category = minibossTypes;
+                    } else if (rand < cfg.minibossPercent + cfg.rangedPercent) {
+                        category = rangedTypes;
+                    } else {
+                        category = nonRangedTypes;
+                    }
+                    if (category.length === 0) {
+                        // Fallback to all types
+                        category = cfg.types.filter(t => {
+                            const meta = ENEMY_TYPES[t];
+                            return meta && !meta.bossFinal && !meta.bossSecret;
+                        });
+                    }
+                    const typeName = category[Math.floor(Math.random() * category.length)];
+                    if (spawnDuckAndCoverEnemy(typeName, waveNumber, cfg)) {
+                        placed++;
+                    } else {
+                        fails++;
+                    }
                 }
-                const typeName = category[Math.floor(Math.random() * category.length)];
-                if (spawnDuckAndCoverEnemy(typeName, waveNumber, cfg)) {
-                    placed++;
-                } else {
-                    fails++;
+                if (placed === 0) {
+                    spawnDuckAndCoverEnemy('Thug', waveNumber, cfg);
+                    placed = 1;
                 }
-            }
-            if (placed === 0) {
-                spawnDuckAndCoverEnemy('Thug', waveNumber, cfg);
-                placed = 1;
             }
             game._duckWave = waveNumber;
             game.roomsCleared = Math.max(0, waveNumber - 1);
@@ -13568,6 +13659,81 @@ function offerPermanentAbilityChoice() {
             showDuckWaveBanner('Wave ' + waveNumber);
             updateUI();
             console.info('[DuckAndCover] Wave spawned', { wave: waveNumber, placed, cfg });
+        }
+
+        // Chunked spawn worker for Duck & Cover waves
+        function processDuckSpawnQueueSlice() {
+            if (!game._duckSpawnQueue || game._duckSpawnQueue.length === 0) {
+                game._duckSpawnWorkerRunning = false;
+                return;
+            }
+            game._duckSpawnWorkerRunning = true;
+            const item = game._duckSpawnQueue[0];
+            if (!item) { game._duckSpawnQueue.shift(); requestAnimationFrame(processDuckSpawnQueueSlice); return; }
+            const list = item.list;
+            const cfg = item.cfg;
+            const waveNumber = item.wave;
+            // adaptive slice size; keep default small to avoid hitches
+            const DEFAULT_SLICE = 8;
+            game._duckSpawnSlice = (game._duckSpawnSlice && typeof game._duckSpawnSlice === 'number') ? Math.max(2, Math.floor(game._duckSpawnSlice)) : DEFAULT_SLICE;
+            const slice = game._duckSpawnSlice;
+            let processed = 0;
+            const startMs = (performance && performance.now) ? performance.now() : Date.now();
+            while (processed < slice && list.length > 0) {
+                const typeName = list.shift();
+                try { spawnDuckAndCoverEnemy(typeName, waveNumber, cfg); } catch (e) { try { console.warn('[DuckSpawnWorker] spawn failed', e); } catch(_){} }
+                processed++;
+            }
+            const endMs = (performance && performance.now) ? performance.now() : Date.now();
+            const elapsed = endMs - startMs;
+            // Adjust slice adaptively based on time spent in this slice
+            try {
+                const BUDGET_MS = 6; // target maximum ms per slice
+                if (elapsed > BUDGET_MS && game._duckSpawnSlice > 2) {
+                    // shrink aggressively when over budget
+                    game._duckSpawnSlice = Math.max(2, Math.floor(game._duckSpawnSlice * 0.7));
+                } else if (elapsed < (BUDGET_MS * 0.45) && game._duckSpawnSlice < 64) {
+                    // gently grow when underutilized
+                    game._duckSpawnSlice = Math.min(64, game._duckSpawnSlice + 1);
+                }
+            } catch(_){}
+            // If this item's list is exhausted, finalize this wave
+            if (list.length === 0) {
+                // pop this queue item
+                game._duckSpawnQueue.shift();
+                // finalize wave: set wave state and grant spawn shield
+                try {
+                    game._duckWave = waveNumber;
+                    game.roomsCleared = Math.max(0, waveNumber - 1);
+                    game.roomCleared = false;
+                    game._roomClearedAt = null;
+                    game._duckPendingWave = null;
+                    game._duckNextWaveAt = null;
+                    game._duckWaveSpawning = false;
+                    game.roomStartTime = Date.now();
+                    if (game.player && isDuckAndCoverMode()) {
+                        const shieldFrames = 120;
+                        game.player.invulnerable = true;
+                        game.player.invulnTime = Math.max(game.player.invulnTime || 0, shieldFrames);
+                        game.player._invulnTimerMax = Math.max(game.player.invulnTime, shieldFrames, game.player._invulnTimerMax || 0);
+                        game.player._invulnSource = 'duckWave';
+                        game.player._duckSpawnShieldUntil = (performance && performance.now ? performance.now() : Date.now()) + 2000;
+                    } else if (game.player && !isDuckAndCoverMode()) {
+                        game.player._duckSpawnShieldUntil = null;
+                    }
+                    showDuckWaveBanner('Wave ' + waveNumber);
+                    updateUI();
+                    console.info('[DuckAndCover] Wave spawned (chunked)', { wave: waveNumber });
+                } catch (_) {}
+            }
+            // Continue processing next slice on next frame if work remains
+            if ((game._duckSpawnQueue && game._duckSpawnQueue.length > 0) || (list && list.length > 0)) {
+                requestAnimationFrame(processDuckSpawnQueueSlice);
+            } else {
+                // If there are more queued waves, continue
+                if (game._duckSpawnQueue && game._duckSpawnQueue.length > 0) requestAnimationFrame(processDuckSpawnQueueSlice);
+                else game._duckSpawnWorkerRunning = false;
+            }
         }
 
         function queueDuckAndCoverWave(waveNumber, delayMs) {
@@ -13610,6 +13776,15 @@ function offerPermanentAbilityChoice() {
         function generateRoom() {
             console.info('[generateRoom] START', { dungeon: game.dungeon, room: game.room });
             game.walls = [];
+            try {
+                if (isDuckAndCoverMode() && Array.isArray(game.enemies) && game.enemies.length) {
+                    game._enemyPool = game._enemyPool || [];
+                    for (let ei=0; ei<game.enemies.length; ei++) {
+                        const e = game.enemies[ei]; if (!e) continue;
+                        if (game._enemyPool.length < 2000) game._enemyPool.push(e);
+                    }
+                }
+            } catch(_){}
             game.enemies = [];
             game.chests = [];
             game.projectiles = [];
@@ -14451,65 +14626,71 @@ function offerPermanentAbilityChoice() {
         // Move an enemy along a vector in small steps, stopping before hitting walls.
         // dx,dy is the normalized direction vector; distance is how far to attempt to push.
         function pushEnemy(enemy, dx, dy, distance, step = 4) {
+            // Simple safe knockback/movement: step forward until wall hit, and apply knockback velocity for continued slide
             const steps = Math.max(1, Math.ceil(distance / step));
-            let moved = 0;
             for (let i = 0; i < steps; i++) {
                 const nx = enemy.x + dx * step;
                 const ny = enemy.y + dy * step;
-                // If the next step would be inside a wall, stop early
-                if (isWall(nx, ny, enemy.size/2)) break;
-                enemy.x = nx;
-                enemy.y = ny;
-                moved += step;
+                if (isWall(nx, ny, (enemy && enemy.size) ? enemy.size/2 : 12)) break;
+                enemy.x = nx; enemy.y = ny;
             }
-            // Failsafe clamp so enemies never leave playable bounds
-            const margin = 40;
-            enemy.x = Math.max(margin, Math.min(enemy.x, canvas.width - margin));
-            enemy.y = Math.max(margin, Math.min(enemy.y, canvas.height - margin));
-            return moved;
+            try {
+                const decay = 0.88;
+                const baseV0 = distance * (1 - decay);
+                const v0 = Math.min(28, baseV0);
+                enemy.kbVX = (enemy.kbVX || 0) + dx * v0;
+                enemy.kbVY = (enemy.kbVY || 0) + dy * v0;
+                enemy.kbFrames = Math.max(enemy.kbFrames || 0, Math.min(50, Math.floor(distance * 0.5)));
+                enemy._knockbacking = true;
+                enemy._kbDecay = decay;
+            } catch (_) {}
         }
 
-        // Unified knockback impulse application (velocity-based) replacing instantaneous pushEnemy usage for knockback effects.
-        // forceDist approximates desired travel distance; direction provided via normalized (dx,dy) or computed from sx,sy vector.
-        function applyKnockback(enemy, forceDist, sx, sy) {
+    // Smooth knockback: applies a velocity impulse for a sliding effect (less jarring than instant push)
+    function applySmoothKnockback(enemy, nx, ny, distance) {
+        try {
             if (!enemy) return;
-            // Derive direction from sx,sy
-            const mag = Math.hypot(sx, sy) || 1;
-            const dx = sx / mag; const dy = sy / mag;
-            // Parameters: decay & initial velocity mapping (reuse smooth knockback math but allow independent tuning)
-            const decay = 0.9; // slightly higher decay (slower) vs applySmoothKnockback for layered pushes
-            const v0 = Math.min(30, forceDist * (1 - decay));
-            enemy._kbDecay = decay;
-            enemy.kbVX = (enemy.kbVX || 0) + dx * v0;
-            enemy.kbVY = (enemy.kbVY || 0) + dy * v0;
-            // Extend kbFrames proportionally; layering multiple impulses increases duration modestly
-            const addFrames = Math.min(40, Math.floor(forceDist * 0.4));
-            enemy.kbFrames = Math.max(enemy.kbFrames || 0, addFrames);
+            const mag = Math.max(6, Math.min(80, Math.floor(distance * 0.6)));
+            enemy.kbVX = (enemy.kbVX || 0) + (nx || 0) * mag;
+            enemy.kbVY = (enemy.kbVY || 0) + (ny || 0) * mag;
+            enemy.kbFrames = Math.max(enemy.kbFrames || 0, Math.min(90, Math.floor(distance * 0.6)));
             enemy._knockbacking = true;
-        }
+            enemy._kbDecay = 0.92;
+        } catch (_) {}
+    }
 
-        // Smooth knockback: apply an initial velocity and let updateEnemies integrate it over several frames.
-        // distance roughly correlates with the total displacement we want. We translate that into an initial
-        // speed and decay factor. This avoids the "teleport" look of large instantaneous pushes (e.g., Wind Blade 120px).
-        function applySmoothKnockback(enemy, dx, dy, distance) {
-            // Normalize direction (defensive)
-            const mag = Math.hypot(dx, dy) || 1;
-            const ndx = dx / mag; const ndy = dy / mag;
-            // If enemy already has knockback velocity, blend (add) the new impulse.
-            const decay = 0.88; // stored for reference if we later want per-enemy tuning
-            enemy._kbDecay = decay;
-            // Convert desired travel distance into initial speed; geometric series sum S = v0 / (1-decay)
-            // => v0 ≈ distance * (1 - decay). We clamp to avoid absurd speeds on gigantic values.
-            const baseV0 = distance * (1 - decay); // e.g. distance 120, decay .88 -> ~14.4
-            const v0 = Math.min(28, baseV0);
-            enemy.kbVX = (enemy.kbVX || 0) + ndx * v0;
-            enemy.kbVY = (enemy.kbVY || 0) + ndy * v0;
-            // Duration in frames: allow enough frames for displacement. Use log threshold: v * decay^n < 0.25 => n ≈ log(0.25/v)/log(decay)
-            // Approximate with linear scale for simplicity.
-            enemy.kbFrames = Math.max(enemy.kbFrames || 0, Math.min(50, Math.floor(distance * 0.5))); // 120 -> 60 (capped 50)
-            // Flag so other movement AI can skip while sliding.
-            enemy._knockbacking = true;
-        }
+    // Flexible applyKnockback wrapper to support multiple historical call signatures:
+    // - applyKnockback(enemy, nx, ny, distance)  -> normalized vector + distance
+    // - applyKnockback(enemy, distance, dx, dy) -> distance + raw delta vector
+    // - applyKnockback(enemy, k, dx, dy)        -> where k is magnitude, dx/dy raw deltas
+    function applyKnockback(enemy, a, b, c) {
+        try {
+            if (!enemy) return;
+            const arg2 = a;
+            const arg3 = b;
+            const arg4 = c;
+            // Case A: normalized vector + distance (small magnitude components)
+            if (typeof arg2 === 'number' && typeof arg3 === 'number' && typeof arg4 === 'number' && Math.abs(arg2) <= 1.2 && Math.abs(arg3) <= 1.2 && arg4 > 0) {
+                const nx = arg2, ny = arg3, dist = arg4;
+                pushEnemy(enemy, nx, ny, dist);
+                return;
+            }
+            // Case B: magnitude + raw delta vector (common for explosions/meteors)
+            if (typeof arg2 === 'number' && typeof arg3 === 'number' && typeof arg4 === 'number') {
+                const k = arg2;
+                let dx = arg3, dy = arg4;
+                let len = Math.hypot(dx, dy) || 1;
+                const nx = dx / len, ny = dy / len;
+                pushEnemy(enemy, nx, ny, k);
+                return;
+            }
+            // Fallback: try to coerce any numbers and perform small push
+            if (typeof arg2 === 'number' && typeof arg3 === 'number') {
+                const nx = arg2, ny = arg3;
+                pushEnemy(enemy, nx, ny, 12);
+            }
+        } catch (_) {}
+    }
 
         // Returns true if any ability selection modal/overlay is currently visible
         function isAnyAbilityModalOpen() {
@@ -19819,7 +20000,23 @@ function offerPermanentAbilityChoice() {
                 }
             });
             
-            game.enemies = game.enemies.filter(enemy => enemy.health > 0);
+            if (isDuckAndCoverMode()) {
+                // Recycle dead enemy objects into pool to reduce allocations
+                game._enemyPool = game._enemyPool || [];
+                const survivors = [];
+                for (let ei = 0; ei < game.enemies.length; ei++) {
+                    const enemy = game.enemies[ei];
+                    if (enemy && enemy.health > 0) survivors.push(enemy);
+                    else {
+                        try {
+                            if (game._enemyPool.length < 2000) game._enemyPool.push(enemy || {});
+                        } catch(_){}
+                    }
+                }
+                game.enemies = survivors;
+            } else {
+                game.enemies = game.enemies.filter(enemy => enemy.health > 0);
+            }
             if (game && game._pendingRoomClearReview) {
                 try { if (typeof checkRoomComplete === 'function') checkRoomComplete(); } catch(_){ }
                 try { game._pendingRoomClearReview = false; } catch(_){ }
@@ -23253,9 +23450,10 @@ function offerPermanentAbilityChoice() {
             const pdx = enemy.x - proj.x;
             const pdy = enemy.y - proj.y;
             const pd = Math.hypot(pdx, pdy) || 1;
+            // Only apply knockback when explicitly specified by the projectile or specific weapon types.
+            // Avoid a large default knockback for ordinary shots (previously caused noticeable pushes).
             let kbDist = proj.knockbackDistance || 0;
             if (!kbDist && proj.weaponType === 'hammer') kbDist = 40; // hammer baseline
-            if (!kbDist) kbDist = 28; // default fallback
             // Earth Spike / Magma derived impacts: always use smooth knockback (less jarring)
             // proj._hasEarth is precomputed earlier (includes Magma combo). We slightly reduce raw distance
             // so the slide duration feels physical instead of a huge displacement burst.
@@ -25416,7 +25614,7 @@ function offerPermanentAbilityChoice() {
                 }
             }
             if (!newAbility) {
-                const pool = Object.keys(ABILITIES).filter(a => isAbilityOfferable(a));
+                    const pool = Object.keys(ABILITIES).filter(a => isAbilityOfferable(a) && a !== 'Umbrella Shot');
                 if (pool.length > 0) newAbility = pool[Math.floor(Math.random()*pool.length)];
             }
                 if (newAbility) {
@@ -25879,6 +26077,16 @@ function offerPermanentAbilityChoice() {
             }
 
             // Hard purge of any lingering entities from previous run (defensive in case a reference was kept elsewhere)
+            // Recycle previous enemies into pool if Duck & Cover to reduce allocations
+            try {
+                if (isDuckAndCoverMode() && Array.isArray(game.enemies) && game.enemies.length) {
+                    game._enemyPool = game._enemyPool || [];
+                    for (let ei=0; ei<game.enemies.length; ei++) {
+                        const e = game.enemies[ei]; if (!e) continue;
+                        if (game._enemyPool.length < 2000) game._enemyPool.push(e);
+                    }
+                }
+            } catch(_){}
             game.enemies = [];
             game.projectiles = [];
             game.particles = [];
@@ -30629,13 +30837,14 @@ function offerPermanentAbilityChoice() {
                     }
                 }
                 // Umbrella arc rendering (semi-transparent canopy segment)
-                if (proj.umbrellaArc) {
+                if (meta && meta.umbrellaArc) {
                     ctx.save();
-                    ctx.translate(proj.x, proj.y);
+                    ctx.translate(cx, cy);
                     // Draw a curved segment implying part of an overhead umbrella path.
-                    const r = (proj.size||6) * 1.55;
+                    const baseSize = (meta && (meta.size || meta._visualSize)) || radius[i] || 6;
+                    const r = (baseSize) * 1.55;
                     const sweep = Math.PI * 0.7; // segment width
-                    const start = (Date.now()/520 + (proj._arcSide||1)*0.3) % (Math.PI*2);
+                    const start = (Date.now()/520 + ((meta && meta._arcSide) || 1) * 0.3) % (Math.PI*2);
                     ctx.lineWidth = 2.3;
                     // canopy gradient (brighter center to pop visually)
                     const grad = ctx.createRadialGradient(0,0,r*0.10,0,0,r);
@@ -30645,7 +30854,7 @@ function offerPermanentAbilityChoice() {
                     ctx.strokeStyle = '#FFEDBB';
                     ctx.fillStyle = grad;
                     ctx.beginPath();
-                    ctx.arc(0,0,r,start,start+sweep, proj._arcSide===-1);
+                    ctx.arc(0,0,r,start,start+sweep, (meta && meta._arcSide)===-1);
                     ctx.lineTo(0,0);
                     ctx.closePath();
                     ctx.fill();
@@ -30656,19 +30865,19 @@ function offerPermanentAbilityChoice() {
                     ctx.strokeStyle = 'rgba(255,230,180,0.45)';
                     ctx.lineWidth = 1.1;
                     ctx.beginPath();
-                    ctx.arc(0,0,r*0.92,start,start+sweep, proj._arcSide===-1);
+                    ctx.arc(0,0,r*0.92,start,start+sweep, (meta && meta._arcSide)===-1);
                     ctx.stroke();
                     ctx.restore();
                     // Core node (slightly larger)
                     ctx.fillStyle = '#FFEBCF';
-                    ctx.beginPath(); ctx.arc(0,0,Math.max(3,(proj.size||6)*0.62),0,Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(0,0,Math.max(3,(baseSize)*0.62),0,Math.PI*2); ctx.fill();
                     // motion shimmer dots
                     if (Math.random()<0.25) {
                         ctx.fillStyle = 'rgba(255,240,210,0.8)';
                         ctx.beginPath(); ctx.arc(Math.cos(start+sweep*0.5)*r*0.55, Math.sin(start+sweep*0.5)*r*0.55, r*0.07, 0, Math.PI*2); ctx.fill();
                     }
                     ctx.restore();
-                    if (Math.random()<0.14) addParticle(proj.x + (Math.random()-0.5)*10, proj.y + (Math.random()-0.5)*10, '#FFE5B8','spark');
+                    if (Math.random()<0.14) addParticle(cx + (Math.random()-0.5)*10, cy + (Math.random()-0.5)*10, '#FFE5B8','spark');
                     return;
                 }
                 // Diarrhea ability rear clone color override
