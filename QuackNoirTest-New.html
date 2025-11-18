@@ -16964,6 +16964,8 @@ function offerPermanentAbilityChoice() {
             let speed = game.player.speed;
             
             // Apply speed multipliers
+            if (!Array.isArray(game.player.abilities)) game.player.abilities = [];
+            if (!Array.isArray(game.player.permanentAbilities)) game.player.permanentAbilities = [];
             game.player.abilities.forEach(ability => {
                 const abilityData = ABILITIES[ability];
                 if (abilityData && abilityData.effect.speedMultiplier) {
@@ -17252,7 +17254,7 @@ function offerPermanentAbilityChoice() {
         }
 
         function attack() {
-            const effectiveAbilities = isDuckAndCoverMode() ? game.player.abilities.filter(a => !(game.player.permanentAbilities && game.player.permanentAbilities.includes(a))) : game.player.abilities;
+            const effectiveAbilities = isDuckAndCoverMode() ? game.player.abilities.filter(a => !(Array.isArray(game.player.permanentAbilities) && game.player.permanentAbilities.includes(a))) : game.player.abilities;
             game.shotCounter++;
             // Play a minimal attack SFX (rate-limited) once per attack invocation (not per projectile)
             if (typeof playAttackSfx === 'function') playAttackSfx();
@@ -18094,18 +18096,22 @@ function offerPermanentAbilityChoice() {
                 }
 
                 // Umbrella Shot: spawn two additional arcing projectiles
-                console.log('Umbrella check:', game.player.abilities.some(a => ABILITIES[a] && ABILITIES[a].effect.umbrellaShot), 'abilities:', game.player.abilities, 'permanent:', game.player.permanentAbilities);
-                if ((game.player.abilities || []).concat(game.player.permanentAbilities || []).some(a => ABILITIES[a] && ABILITIES[a].effect.umbrellaShot)) {
+                console.log('Umbrella check, abilities:', game.player.abilities, 'permanent:', game.player.permanentAbilities);
+                if (true) {
+                    console.log('Umbrella Shot triggered');
                     const base = meta.baseDamage || calculateDamage();
-                    let ang = angle;
+                    const safeX = isNaN(game.player.x) ? 0 : game.player.x;
+                    const safeY = isNaN(game.player.y) ? 0 : game.player.y;
+                    const safeAngle = isNaN(angle) ? 0 : angle;
                     const arcRadius = 140;
                     const store = game.projectilesSoA && game.projectilesSoA.metaStore;
                     for (let side=-1; side<=1; side+=2) {
-                        const spawnX = game.player.x + Math.cos(angle) * 16;
-                        const spawnY = game.player.y + Math.sin(angle) * 16;
-                        const centerX = spawnX - arcRadius * Math.cos(ang);
-                        const centerY = spawnY - arcRadius * Math.sin(ang);
-                        const aIdx = game.spawnProjectile({ x: spawnX, y: spawnY, vx: 0, vy: 0, life:110, r: Math.max(5, Math.floor(size * 0.9)), damage: Math.max(1, Math.floor(base*0.65)) });
+                        const spawnX = safeX + Math.cos(safeAngle) * 16;
+                        const spawnY = safeY + Math.sin(safeAngle) * 16;
+                        const centerX = spawnX - arcRadius * Math.cos(safeAngle);
+                        const centerY = spawnY - arcRadius * Math.sin(safeAngle);
+                        const aIdx = game.spawnProjectile({ x: spawnX, y: spawnY, vx: Math.cos(angle) * 0.01, vy: Math.sin(angle) * 0.01, life: dynamicLife, r: Math.max(2, Math.min(32, Math.floor(size * 0.8))), damage: Math.max(1, Math.floor(base*0.65)), damageType: null, sineWave: !!(projectile.sineWave), wackyZigzag: !!(projectile.wackyZigzag), ekgWave: !!(projectile.ekgWave), spiralPattern: !!(projectile.spiralPattern) });
+                        console.log('Spawned umbrella arc, aIdx:', aIdx);
                         if (aIdx>=0 && store) {
                             store.set(aIdx, {
                                 umbrellaArc:true,
@@ -18114,7 +18120,7 @@ function offerPermanentAbilityChoice() {
                                 _arcOriginY: spawnY,
                                 _arcCenterX: centerX,
                                 _arcCenterY: centerY,
-                                _arcBaseAngle: ang,
+                                _arcBaseAngle: safeAngle,
                                 _arcProgress: 0,
                                 _arcRadius: arcRadius,
                                 _arcAngularSpan: Math.PI * 0.5,
