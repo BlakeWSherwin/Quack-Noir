@@ -4,6 +4,50 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Quack Noir Test</title>
+    <!-- Favicon: ensure browsers can find the site's icon -->
+    <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+    <link rel="shortcut icon" href="assets/favicon.ico">
+    <!-- Optional PNG fallback for better quality on some devices -->
+    <link rel="icon" type="image/png" href="assets/favicon.png">
+    <script>
+    // Runtime favicon probe: try a few candidate paths and set the first that loads.
+    (function(){
+        try {
+            const candidates = ['assets/favicon.ico','./assets/favicon.ico','/assets/favicon.ico','assets/favicon.png','./assets/favicon.png','/assets/favicon.png'];
+            function setIcon(href){
+                try {
+                    let el = document.querySelector('link[rel~="icon"]');
+                    if (!el) { el = document.createElement('link'); el.rel = 'icon'; document.head.appendChild(el); }
+                    el.type = href.toLowerCase().endsWith('.png') ? 'image/png' : 'image/x-icon';
+                    el.href = href;
+                    console.info('[favicon] set', href);
+                } catch(e){ console.warn('[favicon] set failed', e); }
+            }
+            function probe(href, timeoutMs=2000){
+                return new Promise((resolve)=>{
+                    try {
+                        const img = new Image();
+                        let done = false;
+                        const finish = (ok)=>{ if (done) return; done = true; try { resolve(ok); } catch(_){} };
+                        img.onload = ()=> finish(true);
+                        img.onerror = ()=> finish(false);
+                        img.src = href + '?_=' + Date.now();
+                        setTimeout(()=> finish(false), timeoutMs);
+                    } catch(e) { resolve(false); }
+                });
+            }
+            (async function(){
+                for (const c of candidates) {
+                    try {
+                        const ok = await probe(c);
+                        if (ok) { setIcon(c); return; }
+                    } catch(_){}
+                }
+                console.warn('[favicon] none of the candidate paths loaded; verify file location and server/static routes');
+            })();
+        } catch(e) { console.warn('[favicon] runtime probe failed', e); }
+    })();
+    </script>
     <style>
         #bossBadge {
             display:inline-block;
@@ -635,6 +679,34 @@
                                 attach();
                             }
                         }
+                    }
+                } catch(_){ }
+                // If Phaser BulletScene is already active, ensure the texture is registered
+                try {
+                    const sc = window.__PHASER_BULLET_SCENE__;
+                    if (sc && sc.isReady && quackenTentacleImg && (quackenTentacleImg.complete || quackenTentacleImg.naturalWidth || quackenTentacleImg.width)) {
+                        try { if (!sc.textures.exists || !sc.textures.exists('quackenTentacle')) { try { sc.textures.addImage('quackenTentacle', quackenTentacleImg); } catch(_){} } } catch(_){ }
+                        // Update any Phaser sprites that were waiting for this key
+                        try {
+                            const map = (game && game._projSpriteByIndex) ? game._projSpriteByIndex : null;
+                            if (map && typeof map.forEach === 'function') {
+                                map.forEach((s, idx) => {
+                                    try {
+                                        if (!s) return;
+                                        if (s._pendingKey === 'quackenTentacle') {
+                                            try { s.setTexture && s.setTexture('quackenTentacle'); } catch(_){ }
+                                            try {
+                                                const desiredR = (game && game.projectilesSoA && game.projectilesSoA.radius && typeof idx === 'number') ? game.projectilesSoA.radius[idx] : null;
+                                                if (desiredR != null && isFinite(desiredR) && desiredR > 0) {
+                                                    try { s.setDisplaySize(desiredR*2, desiredR*2); } catch(_){ }
+                                                }
+                                            } catch(_){ }
+                                            try { s._pendingKey = null; window._PHASER_DEBUG_COUNTS.pending = Math.max(0, (window._PHASER_DEBUG_COUNTS.pending||0)-1); } catch(_){ }
+                                        }
+                                    } catch(_){ }
+                                });
+                            }
+                        } catch(_){ }
                     }
                 } catch(_){ }
             };
@@ -1458,6 +1530,12 @@
                 activeIndex[i] = 0;
             }
             let activeCount = 0;
+            // Instrumentation + defensive reuse
+            // Timestamps (ms since epoch or perf.now()) when a slot was spawned; 0 = free
+            const spawnStamp = new Float64Array(MAX);
+            let totalSpawnAttempts = 0;
+            let spawnFailedCount = 0;
+            let peakActive = 0;
             let metaStore;
             if (game._projMeta && game._projMeta._isProjectileMetaStore && game._projMeta.flags && game._projMeta.flags.length === MAX) {
                 metaStore = game._projMeta;
@@ -1473,51 +1551,76 @@
                     metaStore.set = function(index, meta) {
                         const res = _origMetaSet(index, meta);
                         try {
-                            if (game && game._projSpriteByIndex && typeof game._projSpriteByIndex.get === 'function') {
-                                const sprite = game._projSpriteByIndex.get(index);
-                                if (sprite && meta) {
-                                    const key = meta.spriteKey || meta.sprite || meta.petalImg || (meta.goldTooth? 'goldtooth' : null);
+                            // If a sprite exists but meta no longer defines a visual key, destroy it
+                            try {
+                                const sprite = (game && game._projSpriteByIndex && typeof game._projSpriteByIndex.get === 'function') ? game._projSpriteByIndex.get(index) : null;
+                                const hasVisual = meta && (meta.spriteKey || meta.sprite || meta.petalImg || meta.goldTooth || meta.laser);
+                                if (sprite && !hasVisual) {
+                                    try { if (sprite._pendingKey) window._PHASER_DEBUG_COUNTS.pending = Math.max(0, (window._PHASER_DEBUG_COUNTS.pending||0)-1); } catch(_){}
+                                    try { if (typeof sprite.destroy === 'function') sprite.destroy(); } catch(_){ }
+                                    try { window._PHASER_DEBUG_COUNTS.destroyed = (window._PHASER_DEBUG_COUNTS.destroyed||0) + 1; } catch(_){}
+                                    try { game._projSpriteByIndex.delete(index); } catch(_){}
+                                }
+                            } catch(_){}
+                            // If sprite exists and meta provides a visual, update its texture and display size
+                            try {
+                                const sprite2 = (game && game._projSpriteByIndex && typeof game._projSpriteByIndex.get === 'function') ? game._projSpriteByIndex.get(index) : null;
+                                if (sprite2 && meta) {
+                                    const key = meta.spriteKey || meta.sprite || meta.petalImg || (meta.goldTooth? 'goldtooth' : null) || (meta.laser? 'swanlaser' : null);
                                     if (key) {
-                                        try { sprite.setTexture && sprite.setTexture(key); } catch(_){}
-                                        // Recompute display size to match SoA radius after texture change
+                                        try { sprite2.setTexture && sprite2.setTexture(key); } catch(_){ }
                                         try {
                                             const desiredR = (game && game.projectilesSoA && game.projectilesSoA.radius && typeof game.projectilesSoA.radius[index] === 'number') ? game.projectilesSoA.radius[index] : null;
                                             if (desiredR != null && isFinite(desiredR) && desiredR > 0) {
-                                                try { sprite.setDisplaySize(desiredR*2, desiredR*2); } catch(_){}
+                                                try { sprite2.setDisplaySize(desiredR*2, desiredR*2); } catch(_){ }
                                             }
-                                        } catch(_){}
+                                        } catch(_){ }
                                     }
                                 }
-                            }
-                        } catch(_){}
+                            } catch(_){}
+                        } catch(_){ }
                         // If no sprite exists yet but meta provides a visual key, create one now (deferred visuals)
                         try {
                             if ((!game || !game._projSpriteByIndex || !game._projSpriteByIndex.get(index)) && meta) {
-                                const key = meta.spriteKey || meta.sprite || meta.petalImg || (meta.goldTooth? 'goldtooth' : null);
+                                const key = meta.spriteKey || meta.sprite || meta.petalImg || (meta.goldTooth? 'goldtooth' : null) || (meta.laser? 'swanlaser' : null);
                                 const sc = window.__PHASER_BULLET_SCENE__;
+                                const cfg = window._PHASER_CONFIG || {};
                                 if (key && sc && sc.isReady && game && game.projectilesSoA) {
                                     try {
+                                        // enforce allocation caps similar to spawn path
+                                        try {
+                                            const map = game._projSpriteByIndex || new Map();
+                                            const cur = (map && map.size) ? map.size : 0;
+                                            const max = cfg.SPRITE_MAX || 600;
+                                            const whitelist = cfg.WHITELIST || [];
+                                            if (cur >= max && whitelist.indexOf(key) === -1) {
+                                                if (cfg.DEBUG) try { console.debug('[PhaserDebug] meta create skipped due to cap', key, index); } catch(_){}
+                                                return res;
+                                            }
+                                        } catch(_){}
                                         const px = game.projectilesSoA.x[index] || 0;
                                         const py = game.projectilesSoA.y[index] || 0;
                                         // If texture not present yet, use 'plain' and mark pendingKey
                                         let useKey = key;
                                         try { if (!(sc.textures && sc.textures.exists && sc.textures.exists(key))) useKey = 'plain'; } catch(_) { useKey = 'plain'; }
                                         let sprite = sc.add.image(px, py, useKey);
-                                        try { sprite._pendingKey = (useKey === key) ? null : key; } catch(_){}
+                                        try { sprite._pendingKey = (useKey === key) ? null : key; } catch(_){ }
                                         sc.bulletPool.add(sprite);
-                                        try { sprite.setOrigin && sprite.setOrigin(0.5,0.5); } catch(_){}
-                                        try { sprite.setDepth && sprite.setDepth(1200); } catch(_){}
+                                        try { sprite.setOrigin && sprite.setOrigin(0.5,0.5); } catch(_){ }
+                                        try { sprite.setDepth && sprite.setDepth(1200); } catch(_){ }
                                         const desiredR = (game && game.projectilesSoA && game.projectilesSoA.radius && typeof game.projectilesSoA.radius[index] === 'number') ? game.projectilesSoA.radius[index] : null;
                                         if (desiredR != null && isFinite(desiredR) && desiredR > 0) {
-                                            try { sprite.setDisplaySize(desiredR*2, desiredR*2); } catch(_){}
+                                            try { sprite.setDisplaySize(desiredR*2, desiredR*2); } catch(_){ }
                                         }
                                         sprite._projIdx = index;
                                         game._projSpriteByIndex = game._projSpriteByIndex || new Map();
                                         game._projSpriteByIndex.set(index, sprite);
-                                    } catch(_){}
+                                        try { window._PHASER_DEBUG_COUNTS.created = (window._PHASER_DEBUG_COUNTS.created||0) + 1; } catch(_){}
+                                        try { if (sprite._pendingKey) window._PHASER_DEBUG_COUNTS.pending = (window._PHASER_DEBUG_COUNTS.pending||0) + 1; } catch(_){}
+                                    } catch(_){ }
                                 }
                             }
-                        } catch(_){}
+                        } catch(_){ }
                         return res;
                     };
                     // also mirror back to game._projMeta reference
@@ -1618,6 +1721,19 @@
                 flagResonant,flagPetal,flagVoid,flagShadow,flagIon,flagTumbleweed,flagKickCan
             };
             game.projectilePool = { max: MAX, active:()=>activeCount, free:()=>freeTop };
+            // Export diagnostics and stats for debugging
+            try {
+                game.projectilePool.getStats = function(){
+                    return {
+                        MAX: MAX,
+                        activeCount: activeCount,
+                        freeTop: freeTop,
+                        totalSpawnAttempts: (typeof totalSpawnAttempts === 'number' ? totalSpawnAttempts : 0),
+                        spawnFailedCount: (typeof spawnFailedCount === 'number' ? spawnFailedCount : 0),
+                        peakActive: (typeof peakActive === 'number' ? peakActive : activeCount)
+                    };
+                };
+            } catch(_){}
             function ensureMeta(idx) {
                 let meta = metaList[idx];
                 if (!meta) {
@@ -1632,11 +1748,24 @@
                     // Destroy any Phaser-managed sprites that mirror SoA indices
                     if (game && game._projSpriteByIndex && typeof game._projSpriteByIndex.forEach === 'function') {
                         try {
+                            const sc = window.__PHASER_BULLET_SCENE__;
                             game._projSpriteByIndex.forEach((sprite, idx) => {
-                                try { if (sprite && typeof sprite.destroy === 'function') sprite.destroy(); } catch(_){}
+                                try {
+                                    if (sprite) {
+                                        try { if (sprite._pendingKey) window._PHASER_DEBUG_COUNTS.pending = Math.max(0, (window._PHASER_DEBUG_COUNTS.pending||0)-1); } catch(_){}
+                                        try { if (sprite && typeof sprite.destroy === 'function') sprite.destroy(); } catch(_){ }
+                                        try { window._PHASER_DEBUG_COUNTS.destroyed = (window._PHASER_DEBUG_COUNTS.destroyed||0) + 1; } catch(_){}
+                                    }
+                                } catch(_){ }
                             });
-                        } catch(_){}
-                        try { game._projSpriteByIndex.clear(); } catch(_){}
+                        } catch(_){ }
+                        try { game._projSpriteByIndex.clear(); } catch(_){ }
+                        try {
+                            const sc = window.__PHASER_BULLET_SCENE__;
+                            if (sc && sc.bulletPool && typeof sc.bulletPool.clear === 'function') {
+                                try { sc.bulletPool.clear(true); } catch(_){}
+                            }
+                        } catch(_){ }
                     }
                 } catch(_){ }
                 // Also clear legacy object-mode projectiles so they don't persist between rooms
@@ -1649,6 +1778,7 @@
                     hashCellKeyByIndex[i] = HASH_KEY_NONE;
                 }
                 freeTop = MAX; activeCount = 0;
+                try { totalSpawnAttempts = 0; spawnFailedCount = 0; peakActive = 0; } catch(_){}
                 // Clear meta if present
                 if (game._projMeta && game._projMeta.clear) game._projMeta.clear();
                 if (game._spatial && game._spatial.buckets) {
@@ -1658,25 +1788,75 @@
             };
             // Spawn using template
             let _lastPoolWarnTime = 0;
+            // Per-frame spawn protection (global and per-ability)
+            let _lastSpawnFrameSeen = -1;
+            let _spawnCountThisFrame = 0;
+            // Tunable global cap (adjust based on your performance tests)
+            const _MAX_SPAWN_PER_FRAME = 180;
+            // Per-ability caps (keys should match `t.sourceAbility` or `t.source` provided by callers)
+            let _abilitySpawnCounts = Object.create(null);
+            let _abilityLastFrame = -1;
+            const _ABILITY_CAPS = {
+                // Example defaults (tune these):
+                'Cascade Burst': 40,
+                'Veering Fan': 30
+            };
             function spawnProjectile(t){
+                // Per-frame global spawn cap (fast guard against storms)
+                try {
+                    const curFrame = (game && typeof game.frame === 'number') ? game.frame : -1;
+                    if (curFrame !== _lastSpawnFrameSeen) {
+                        _lastSpawnFrameSeen = curFrame;
+                        _spawnCountThisFrame = 0;
+                        _abilitySpawnCounts = Object.create(null);
+                        _abilityLastFrame = curFrame;
+                    }
+                    _spawnCountThisFrame++;
+                    if (_spawnCountThisFrame > _MAX_SPAWN_PER_FRAME) {
+                        try { spawnFailedCount++; } catch(_){}
+                        // Throttle console spam
+                        try { if ((_spawnCountThisFrame - _MAX_SPAWN_PER_FRAME) === 1) console.warn('[ProjectilePool] spawn denied - per-frame global cap reached', { cap: _MAX_SPAWN_PER_FRAME }); } catch(_){ }
+                        return -1;
+                    }
+                    // Per-ability cap (if caller supplied a source identifier)
+                    try {
+                        const abilityKey = (t && (t.sourceAbility || t.source)) ? String(t.sourceAbility || t.source).trim() : null;
+                        if (abilityKey) {
+                            // Initialize per-frame map if frame advanced
+                            if (_abilityLastFrame !== curFrame) { _abilitySpawnCounts = Object.create(null); _abilityLastFrame = curFrame; }
+                            _abilitySpawnCounts[abilityKey] = (_abilitySpawnCounts[abilityKey] || 0) + 1;
+                            const cap = (_ABILITY_CAPS && _ABILITY_CAPS[abilityKey]) ? _ABILITY_CAPS[abilityKey] : null;
+                            if (cap && _abilitySpawnCounts[abilityKey] > cap) {
+                                try { spawnFailedCount++; } catch(_){}
+                                try { if ((_abilitySpawnCounts[abilityKey] - cap) === 1) console.warn('[ProjectilePool] spawn denied - per-ability cap reached', { ability: abilityKey, cap }); } catch(_){ }
+                                return -1;
+                            }
+                        }
+                    } catch(_){}
+                } catch(_){}
+                totalSpawnAttempts++;
                 if (freeTop === 0) {
                     const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
                     if (now - _lastPoolWarnTime > 2000) {
                         _lastPoolWarnTime = now;
                         try {
                             const sample = [];
+                            let totIndestructible = 0, totStuck = 0, totLongLife = 0;
                             for (let j=0;j<MAX && sample.length<12;j++) {
                                 if (alive[j]) {
                                     const m = metaList[j];
                                     const indestructible = !!flagIndestructible[j];
                                     const stuckMeta = !!(m && (m._stuck || m.stuck));
-                                    // mark obviously long-lived entries
-                                    if ((life[j]||0) > 60000 || indestructible || stuckMeta) {
+                                    const isLong = ((life[j]||0) > 60000);
+                                    if (isLong || indestructible || stuckMeta) {
                                         sample.push({ i:j, life: life[j], meta: m, indestructible });
                                     }
+                                    if (indestructible) totIndestructible++;
+                                    if (stuckMeta) totStuck++;
+                                    if (isLong) totLongLife++;
                                 }
                             }
-                            console.warn('[ProjectilePool] SPAWN FAILED - pool exhausted', { MAX, activeCount, freeTop, sampleCount: sample.length });
+                            console.warn('[ProjectilePool] SPAWN FAILED - pool exhausted', { MAX, activeCount, freeTop, sampleCount: sample.length, indestructible: totIndestructible, stuck: totStuck, longLife: totLongLife });
                         } catch(e) { try { console.warn('[ProjectilePool] spawn failure diagnostic threw', e); } catch(_){} }
                     }
                     // Attempt a scavenger pass: try to free obviously stale projectiles (off-screen or extremely long-lived)
@@ -1726,12 +1906,36 @@
                         }
                     }
                 } catch(e) { try { console.warn('[ProjectilePool] emergency purge failed', e); } catch(_){} }
-                if (freeTop === 0) return -1;
+                // If still exhausted, attempt forced recycle of the oldest non-indestructible slot as a last resort
+                if (freeTop === 0) {
+                    try {
+                        let oldestIdx = -1;
+                        let oldestTs = Infinity;
+                        for (let j=0;j<MAX;j++) {
+                            if (!alive[j]) continue;
+                            const indestructible = !!flagIndestructible[j];
+                            const m = metaList[j];
+                            const stuckMeta = !!(m && (m._stuck || m.stuck));
+                            if (indestructible || stuckMeta) continue;
+                            const ts = spawnStamp[j] || 0;
+                            if (ts && ts < oldestTs) { oldestTs = ts; oldestIdx = j; }
+                        }
+                        if (oldestIdx >= 0) {
+                            try { recycle(oldestIdx); } catch(_){}
+                            try { console.info('[ProjectilePool] forced recycle of oldest slot', oldestIdx, 'freed at', oldestTs); } catch(_){}
+                        }
+                    } catch(_){}
+                }
+                if (freeTop === 0) {
+                    spawnFailedCount++;
+                    return -1;
+                }
                 const idx = freeStack[--freeTop];
                 alive[idx] = 1;
                 activeIndex[idx] = activeCount;
                 activeList[activeCount] = idx;
                 activeCount++;
+                try { peakActive = Math.max(peakActive, activeCount); } catch(_){}
                 // Lightweight diagnostic: sample call stacks when pool is critically low so we can
                 // identify which code paths are allocating many projectiles at once. Throttle to
                 // avoid excessive overhead.
@@ -1757,6 +1961,8 @@
                 // Clear any stale metadata associated with this index to avoid inheriting flags
                 // like timeBomb/smartExplosive/chainExplosion from a previous occupant.
                 try { metaStore.delete(idx); } catch(_) {}
+                // record spawn timestamp for recycling heuristics
+                try { spawnStamp[idx] = (typeof performance !== 'undefined') ? performance.now() : Date.now(); } catch(_){}
                 // Defensive assignment: prefer provided finite values; fall back to player position, canvas center, or 0.
                 const _hasT = !!t;
                 const _playerX = (typeof game !== 'undefined' && game && game.player && typeof game.player.x === 'number' && isFinite(game.player.x)) ? game.player.x : null;
@@ -1800,9 +2006,13 @@
                     if (game && game._projSpriteByIndex && game._projSpriteByIndex.has && game._projSpriteByIndex.has(idx)) {
                         try {
                             const s = game._projSpriteByIndex.get(idx);
-                            if (s && typeof s.destroy === 'function') s.destroy();
-                        } catch(_){}
-                        try { game._projSpriteByIndex.delete(idx); } catch(_){}
+                            if (s) {
+                                try { if (s._pendingKey) window._PHASER_DEBUG_COUNTS.pending = Math.max(0, (window._PHASER_DEBUG_COUNTS.pending||0)-1); } catch(_){}
+                                try { if (s && typeof s.destroy === 'function') s.destroy(); } catch(_){ }
+                                try { window._PHASER_DEBUG_COUNTS.destroyed = (window._PHASER_DEBUG_COUNTS.destroyed||0) + 1; } catch(_){}
+                            }
+                        } catch(_){ }
+                        try { game._projSpriteByIndex.delete(idx); } catch(_){ }
                     }
                 } catch(_){}
                 removeFromSpatialBucket(idx);
@@ -1819,6 +2029,7 @@
                 activeIndex[idx] = 0;
                 activeCount = Math.max(0, activeCount - 1);
                 freeStack[freeTop++] = idx;
+                try { spawnStamp[idx] = 0; } catch(_){}
                 // Also drop any metadata for this slot so future spawns start clean
                 try { metaStore.delete(idx); } catch(_) {}
             }
@@ -1846,6 +2057,12 @@
                 let tier = 0;
                 if (activeNow >= 2500) tier = 3; else if (activeNow >= 1500) tier = 2; else if (activeNow >= 800) tier = 1;
                 game.projectileDegradeTier = tier;
+                // Update a lightweight overlay if present
+                try {
+                    if (window._projPoolOverlay && typeof window._projPoolOverlay.update === 'function') {
+                        window._projPoolOverlay.update();
+                    }
+                } catch(_){}
                 // Make Sine Wave much more visible and wild
                 // tier 0: extreme; tier 1: very strong; tier 2: strong; tier 3: disabled
                 const sineScale = tier === 0 ? 7.0 : tier === 1 ? 4.0 : (tier === 2 ? 2.0 : 0.0);
@@ -14787,6 +15004,48 @@ function offerPermanentAbilityChoice() {
             });
         }
 
+        // If an entity is found inside a wall, try to nudge it out safely.
+        // Strategy: step back along knockback vector (kbVX/kbVY) if present, else step away from room center.
+        function resolveWallOverlap(enemy, maxSteps = 16, stepSize = 2) {
+            try {
+                if (!enemy) return false;
+                const r = (enemy.size || 16) / 2;
+                if (!isWall(enemy.x, enemy.y, r)) return false;
+                // Determine fallback direction: prefer opposite of current knockback velocity
+                let dx = 0, dy = 0;
+                if (typeof enemy.kbVX === 'number' && typeof enemy.kbVY === 'number' && (Math.abs(enemy.kbVX) > 0.001 || Math.abs(enemy.kbVY) > 0.001)) {
+                    const len = Math.hypot(enemy.kbVX, enemy.kbVY) || 1;
+                    dx = -enemy.kbVX / len; dy = -enemy.kbVY / len;
+                } else if (game && game.player) {
+                    // push away from player so enemies aren't shoved into the player's space
+                    const px = (game.player.x || 0), py = (game.player.y || 0);
+                    const ddx = enemy.x - px, ddy = enemy.y - py;
+                    const l = Math.hypot(ddx, ddy) || 1; dx = ddx / l; dy = ddy / l;
+                } else {
+                    // fallback: push toward screen center
+                    const cx = (typeof LOGICAL_W !== 'undefined') ? LOGICAL_W/2 : (canvas && canvas.width ? canvas.width/2 : 320);
+                    const cy = (typeof LOGICAL_H !== 'undefined') ? LOGICAL_H/2 : (canvas && canvas.height ? canvas.height/2 : 240);
+                    const ddx = enemy.x - cx, ddy = enemy.y - cy; const l = Math.hypot(ddx, ddy) || 1; dx = ddx / l; dy = ddy / l;
+                }
+                // Try stepping until free
+                for (let s = 0; s < maxSteps; s++) {
+                    const nx = enemy.x + dx * stepSize;
+                    const ny = enemy.y + dy * stepSize;
+                    if (!isWall(nx, ny, r)) {
+                        enemy.x = nx; enemy.y = ny;
+                        // damp knockback so we don't re-enter immediately
+                        if (enemy.kbVX) enemy.kbVX *= 0.25;
+                        if (enemy.kbVY) enemy.kbVY *= 0.25;
+                        return true;
+                    }
+                    enemy.x = nx; enemy.y = ny;
+                }
+                // As last resort, zero velocities to stop further tunneling
+                enemy.kbVX = 0; enemy.kbVY = 0; enemy.kbFrames = 0; enemy._knockbacking = false;
+                return true;
+            } catch (_) { return false; }
+        }
+
         // Move an enemy along a vector in small steps, stopping before hitting walls.
         // dx,dy is the normalized direction vector; distance is how far to attempt to push.
         function pushEnemy(enemy, dx, dy, distance, step = 4) {
@@ -19161,7 +19420,11 @@ function offerPermanentAbilityChoice() {
                     if (!isWall(nx, ny, enemy.size/2)) {
                         enemy.x = nx; enemy.y = ny;
                     } else {
-                        enemy.kbFrames = 0; enemy.kbVX = 0; enemy.kbVY = 0; enemy._knockbacking = false;
+                        // If collision detected, try to resolve overlap (nudge outside). If unresolved, zero knockback.
+                        const resolved = resolveWallOverlap(enemy);
+                        if (!resolved) {
+                            enemy.kbFrames = 0; enemy.kbVX = 0; enemy.kbVY = 0; enemy._knockbacking = false;
+                        }
                     }
                     // Apply decay
                     const decay = enemy._kbDecay || 0.88;
@@ -20312,6 +20575,43 @@ function offerPermanentAbilityChoice() {
                 }
             });
         })();
+        // Small DOM overlay for projectile pool stats. Non-invasive; can be removed.
+        (function createProjectilePoolOverlay(){
+            try {
+                const el = document.createElement('div');
+                el.id = 'projPoolOverlay';
+                el.style.position = 'fixed';
+                el.style.right = '8px';
+                el.style.top = '8px';
+                el.style.zIndex = 10000;
+                el.style.padding = '6px 8px';
+                el.style.background = 'rgba(0,0,0,0.6)';
+                el.style.color = '#bfefff';
+                el.style.fontFamily = 'monospace';
+                el.style.fontSize = '12px';
+                el.style.border = '1px solid rgba(120,160,200,0.2)';
+                el.style.borderRadius = '6px';
+                el.style.pointerEvents = 'none';
+                el.innerText = 'ProjectilePool: initializing...';
+                document.body.appendChild(el);
+                window._projPoolOverlay = {
+                    el,
+                    update() {
+                        try {
+                            const stats = (game && game.projectilePool && typeof game.projectilePool.getStats === 'function') ? game.projectilePool.getStats() : null;
+                            const fps = (game && game.perf && typeof game.perf.fps === 'number') ? Math.round(game.perf.fps) : Math.round((1000 / Math.max(1, (window._lastRafDelta||16))) || 60);
+                            if (!stats) {
+                                this.el.innerText = `ProjectilePool: inactive | FPS: ${fps}`;
+                                return;
+                            }
+                            this.el.innerText = `Pool: ${stats.activeCount}/${stats.MAX} free:${stats.freeTop}\nspawns:${stats.totalSpawnAttempts} fails:${stats.spawnFailedCount} peak:${stats.peakActive} | FPS:${fps}`;
+                        } catch(_){}
+                    }
+                };
+                // Update periodically as a backup (every 250ms)
+                setInterval(()=>{ try { if (window._projPoolOverlay) window._projPoolOverlay.update(); } catch(_){} }, 250);
+            } catch(e) { console.warn('[projOverlay] init failed', e); }
+        })();
 
         // Legacy projectile update retained for reference (now superseded by SoA: game.updateProjectilesSoA)
         function updateProjectiles() {
@@ -21285,7 +21585,7 @@ function offerPermanentAbilityChoice() {
                             proj._cascTimer = 14; // reset
                             const ang = Math.atan2(proj.vy, proj.vx);
                             const parts = 3;
-                            for (let k=0;k<parts;k++) {
+                                for (let k=0;k<parts;k++) {
                                 const off = (k - (parts-1)/2)*0.08;
                                 game.spawnProjectile({
                                     x: proj.x + Math.cos(ang)*8,
@@ -21297,7 +21597,8 @@ function offerPermanentAbilityChoice() {
                                     enemy:false,
                                     damage: Math.max(1, Math.floor((proj.baseDamage||calculateDamage())*0.32)),
                                     baseDamage: Math.max(1, Math.floor((proj.baseDamage||calculateDamage())*0.32)),
-                                    cascadeChild:true,
+                                        cascadeChild:true,
+                                        sourceAbility: 'Cascade Burst',
                                     _initialFx: Math.cos(ang+off), _initialFy: Math.sin(ang+off)
                                 });
                             }
@@ -21623,7 +21924,7 @@ function offerPermanentAbilityChoice() {
                             proj.size = Math.max(2, proj.size * 0.75);
                             proj._centerVeer = true;
                             // Generate side projectiles in symmetrical pairs with easing spread
-                            for (let i=0;i<sideCount;i++) {
+                                for (let i=0;i<sideCount;i++) {
                                 const t = (i/(sideCount-1)) * 2 - 1; // -1 .. 1
                                 // Ease towards extremes (quadratic) so inner shots cluster near center
                                 const eased = t * Math.abs(t); // stronger near edges
@@ -21638,6 +21939,7 @@ function offerPermanentAbilityChoice() {
                                     size: Math.max(2, proj.size * 0.60), enemy:false,
                                     damage: Math.max(1, Math.floor(base * 0.45)), baseDamage: Math.max(1, Math.floor(base * 0.45)),
                                     veerChild:true,
+                                    sourceAbility: 'Veering Fan',
                                     _initialFx: Math.cos(ang + offset), _initialFy: Math.sin(ang + offset)
                                 });
                             }
@@ -24235,7 +24537,6 @@ function offerPermanentAbilityChoice() {
                 quackenSnareFrames: (cfg && typeof cfg.quackenSnareFrames === 'number') ? cfg.quackenSnareFrames : 220,
                 quackenDotScale: (cfg && typeof cfg.quackenDotScale === 'number') ? cfg.quackenDotScale : 0.24,
                 hitMultipleTimes: true,
-                spriteKey: 'quackenTentacle',
                 _tentacleStage: 'extend',
                 _tentacleAge: 0,
                 _tentacleSeed: (cfg && typeof cfg.seed === 'number') ? cfg.seed : Math.random() * Math.PI * 2,
@@ -32877,9 +33178,19 @@ function offerPermanentAbilityChoice() {
             <script>
             (function(){
                 try {
-                    // Prepare mapping container for Phaser sprites
+                    // Prepare mapping container for Phaser sprites and configuration
                     if (!game) window.game = window.game || {};
                     game._projSpriteByIndex = game._projSpriteByIndex || new Map();
+                    // Default Phaser bullet config (can be tuned at runtime)
+                    window._PHASER_CONFIG = window._PHASER_CONFIG || {
+                        SPRITE_MAX: 600,
+                        WHITELIST: ['goldtooth','wunderdoodle','swanlaser','plain','duck1','duck2','duck3','duck4','duck5'],
+                        BATCH_THRESHOLD: 800,
+                        BATCH_SIZE: 120,
+                        DEBUG: false
+                    };
+                    // Lightweight telemetry counters
+                    window._PHASER_DEBUG_COUNTS = window._PHASER_DEBUG_COUNTS || { created:0, destroyed:0, pending:0 };
 
                     class BulletScene extends Phaser.Scene {
                         constructor(){ super({ key: 'BulletScene' }); this.isReady = false; }
@@ -32894,49 +33205,47 @@ function offerPermanentAbilityChoice() {
                                 try {
                                     const imgs = window._bulletImages || {};
                                     Object.keys(imgs).forEach(k => {
-                                        const img = imgs[k];
-                                        // If already loaded, add to Phaser cache immediately
-                                        if (img && img.complete && (img.naturalWidth || img.width)) {
-                                            try { this.textures.addImage(k, img); } catch(_){ }
-                                        }
-                                        // If not yet loaded, attach a one-time load handler to add the texture
-                                        if (img && !img.complete && !img._phaserLoadHooked) {
-                                            try {
-                                                img._phaserLoadHooked = true;
-                                                img.addEventListener('load', (ev) => {
-                                                    try {
-                                                        const srcImg = (ev && ev.target) ? ev.target : img;
-                                                        if (!srcImg) return;
-                                                        try { if (!this.textures.exists || !this.textures.exists(k)) { try { this.textures.addImage(k, srcImg); } catch(_){} } } catch(_){}
-                                                        // Update any pooled sprites waiting for this texture
+                                            const img = imgs[k];
+                                            // If already loaded, add to Phaser cache immediately
+                                            if (img && img.complete && (img.naturalWidth || img.width)) {
+                                                try { this.textures.addImage(k, img); } catch(_){ }
+                                            }
+                                            // If not yet loaded, attach a one-time load handler to add the texture
+                                            if (img && !img.complete && !img._phaserLoadHooked) {
+                                                try {
+                                                    img._phaserLoadHooked = true;
+                                                    img.addEventListener('load', (ev) => {
                                                         try {
-                                                            const children = this.bulletPool && this.bulletPool.getChildren ? this.bulletPool.getChildren() : [];
-                                                            for (let ci = 0; ci < children.length; ci++) {
-                                                                const s = children[ci];
-                                                                if (!s) continue;
-                                                                try {
-                                                                    if (s._pendingKey === k) {
-                                                                        try { s.setTexture && s.setTexture(k); } catch(_){}
-                                                                        // Recompute display size from SoA radius if available
+                                                            const srcImg = (ev && ev.target) ? ev.target : img;
+                                                            if (!srcImg) return;
+                                                            try { if (!this.textures.exists || !this.textures.exists(k)) { try { this.textures.addImage(k, srcImg); } catch(_){} } } catch(_){}
+                                                            // Update any mapped sprites waiting for this texture by scanning the map (cheap)
+                                                            try {
+                                                                const map = (game && game._projSpriteByIndex) ? game._projSpriteByIndex : null;
+                                                                if (map && typeof map.forEach === 'function') {
+                                                                    map.forEach((s, idx) => {
                                                                         try {
-                                                                            const idx = s._projIdx;
-                                                                            const desiredR = (game && game.projectilesSoA && game.projectilesSoA.radius && typeof idx === 'number') ? game.projectilesSoA.radius[idx] : null;
-                                                                            if (desiredR != null && isFinite(desiredR) && desiredR > 0) {
-                                                                                try { s.setDisplaySize(desiredR*2, desiredR*2); } catch(_){}
+                                                                            if (!s) return;
+                                                                            if (s._pendingKey === k) {
+                                                                                try { s.setTexture && s.setTexture(k); } catch(_){}
+                                                                                try {
+                                                                                    const desiredR = (game && game.projectilesSoA && game.projectilesSoA.radius && typeof idx === 'number') ? game.projectilesSoA.radius[idx] : null;
+                                                                                    if (desiredR != null && isFinite(desiredR) && desiredR > 0) {
+                                                                                        try { s.setDisplaySize(desiredR*2, desiredR*2); } catch(_){}
+                                                                                    }
+                                                                                } catch(_){}
+                                                                                try { s._pendingKey = null; window._PHASER_DEBUG_COUNTS.pending = Math.max(0, (window._PHASER_DEBUG_COUNTS.pending||0)-1); } catch(_){}
                                                                             }
                                                                         } catch(_){}
-                                                                        try { s._pendingKey = null; } catch(_){}
-                                                                    }
-                                                                } catch(_){}
-                                                            }
+                                                                    });
+                                                                }
+                                                            } catch(_){}
                                                         } catch(_){}
-                                                    } catch(_){}
-                                                }, { once: true });
-                                            } catch(_){}
-                                        }
-                                    });
+                                                    }, { once: true });
+                                                } catch(_){}
+                                            }
+                                        });
                                 } catch(_){ }
-                                } catch(_){}
                                 this.isReady = true;
                                 window.__PHASER_BULLET_SCENE__ = this;
                             } catch(e) { console.warn('[BulletScene] create error', e); }
@@ -33000,7 +33309,20 @@ function offerPermanentAbilityChoice() {
                             const sc = window.__PHASER_BULLET_SCENE__;
                             try { if (typeof console !== 'undefined') console.debug('[PhaserDebug] register idx=', idx, 'sceneReady=', !!(sc && sc.isReady), 't=', t); } catch(_){}
                             if (!sc || !sc.isReady) return;
+                            const cfg = window._PHASER_CONFIG || {};
                             const key = (t && (t.spriteKey || t.sprite || t.key)) || 'plain';
+                            // enforce allocation limits and prefer whitelist when under pressure
+                            try {
+                                const map = game && game._projSpriteByIndex ? game._projSpriteByIndex : new Map();
+                                const cur = (map && map.size) ? map.size : 0;
+                                const max = cfg.SPRITE_MAX || 600;
+                                const whitelist = cfg.WHITELIST || [];
+                                if (cur >= max && whitelist.indexOf(key) === -1) {
+                                    // Too many Phaser sprites; skip creating a dedicated sprite for this projectile
+                                    if (cfg.DEBUG) try { console.debug('[PhaserDebug] sprite cap reached, skipping create for', key, idx); } catch(_){}
+                                    return;
+                                }
+                            } catch(_){}
                             // try to find a dead sprite in pool
                             let sprite = null;
                             const children = sc.bulletPool.getChildren ? sc.bulletPool.getChildren() : [];
@@ -33017,6 +33339,8 @@ function offerPermanentAbilityChoice() {
                                 // store pending desired key so onload handler can update later
                                 try { sprite._pendingKey = (useKey === key) ? null : key; } catch(_){}
                                 sc.bulletPool.add(sprite);
+                                try { window._PHASER_DEBUG_COUNTS.created = (window._PHASER_DEBUG_COUNTS.created||0) + 1; } catch(_){}
+                                try { if (sprite._pendingKey) window._PHASER_DEBUG_COUNTS.pending = (window._PHASER_DEBUG_COUNTS.pending||0) + 1; } catch(_){}
                             } else {
                                 try {
                                     // If texture exists, set it; otherwise keep current and mark pending
@@ -33025,6 +33349,7 @@ function offerPermanentAbilityChoice() {
                                         sprite._pendingKey = null;
                                     } else {
                                         sprite._pendingKey = key;
+                                        try { window._PHASER_DEBUG_COUNTS.pending = (window._PHASER_DEBUG_COUNTS.pending||0) + 1; } catch(_){}
                                     }
                                 } catch(_){}
                                 sprite.setActive(true); sprite.setVisible(true);
@@ -33069,25 +33394,37 @@ function offerPermanentAbilityChoice() {
                     window._phaserSyncProjectiles = function(){
                         try {
                             if (!game || !game.projectilesSoA || !game._projSpriteByIndex) return;
-                            const map = game._projSpriteByIndex;
-                            for (const [idx, sprite] of map) {
-                                if (!sprite || !sprite.active) continue;
-                                const xs = game.projectilesSoA.x[idx]; const ys = game.projectilesSoA.y[idx];
-                                if (typeof xs === 'number') sprite.x = xs;
-                                if (typeof ys === 'number') sprite.y = ys;
-                                const vx = game.projectilesSoA.vx[idx] || 0; const vy = game.projectilesSoA.vy[idx] || 0;
-                                const a = Math.atan2(vy, vx);
-                                if (isFinite(a)) sprite.rotation = a;
-                                // If sprite was created with a pending key, and texture is now available, apply it
-                                try {
-                                    const sc = window.__PHASER_BULLET_SCENE__;
-                                    if (sprite._pendingKey && sc && sc.textures && sc.textures.exists && sc.textures.exists(sprite._pendingKey)) {
-                                        try { sprite.setTexture && sprite.setTexture(sprite._pendingKey); } catch(_){}
-                                        try { const desiredR = (game && game.projectilesSoA && game.projectilesSoA.radius && typeof game.projectilesSoA.radius[idx] === 'number') ? game.projectilesSoA.radius[idx] : null; if (desiredR != null && isFinite(desiredR) && desiredR > 0) sprite.setDisplaySize(desiredR*2, desiredR*2); } catch(_){}
-                                        try { sprite._pendingKey = null; } catch(_){}
-                                    }
-                                } catch(_){}
-                            }
+                                            const map = game._projSpriteByIndex;
+                                            const cfg = window._PHASER_CONFIG || {};
+                                            const mapSize = map.size || 0;
+                                            const batchThreshold = cfg.BATCH_THRESHOLD || 800;
+                                            const batchSize = cfg.BATCH_SIZE || 120;
+                                            let updated = 0;
+                                            for (const [idx, sprite] of map) {
+                                                // Batched updates when map grows large
+                                                if (mapSize > batchThreshold && updated >= batchSize) break;
+                                                if (!sprite || !sprite.active) {
+                                                    // remove stale map entries
+                                                    try { map.delete(idx); } catch(_){}
+                                                    continue;
+                                                }
+                                                updated++;
+                                                const xs = game.projectilesSoA.x[idx]; const ys = game.projectilesSoA.y[idx];
+                                                if (typeof xs === 'number') sprite.x = xs;
+                                                if (typeof ys === 'number') sprite.y = ys;
+                                                const vx = game.projectilesSoA.vx[idx] || 0; const vy = game.projectilesSoA.vy[idx] || 0;
+                                                const a = Math.atan2(vy, vx);
+                                                if (isFinite(a)) sprite.rotation = a;
+                                                // If sprite was created with a pending key, and texture is now available, apply it
+                                                try {
+                                                    const sc = window.__PHASER_BULLET_SCENE__;
+                                                    if (sprite._pendingKey && sc && sc.textures && sc.textures.exists && sc.textures.exists(sprite._pendingKey)) {
+                                                        try { sprite.setTexture && sprite.setTexture(sprite._pendingKey); } catch(_){ }
+                                                        try { const desiredR = (game && game.projectilesSoA && game.projectilesSoA.radius && typeof game.projectilesSoA.radius[idx] === 'number') ? game.projectilesSoA.radius[idx] : null; if (desiredR != null && isFinite(desiredR) && desiredR > 0) sprite.setDisplaySize(desiredR*2, desiredR*2); } catch(_){ }
+                                                        try { sprite._pendingKey = null; window._PHASER_DEBUG_COUNTS.pending = Math.max(0, (window._PHASER_DEBUG_COUNTS.pending||0)-1); } catch(_){ }
+                                                    }
+                                                } catch(_){ }
+                                            }
                         } catch(e) {}
                     };
 
