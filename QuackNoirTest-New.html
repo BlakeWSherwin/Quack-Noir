@@ -108,6 +108,7 @@
         /* Reduce top margin on minimap to reclaim vertical space */
         .minimap { margin-top: 4px; }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
 </head>
 <body>
     <div id="launchCurtain"></div>
@@ -674,7 +675,59 @@
                                 var tooClose = (dxs*dxs + dys*dys) < exclusionR2;
                             } while ((tooClose || isWall(tx, ty, 18)) && attempts < 80);
                             if (attempts < 80) {
+                                    // Attach onload listeners for images that load after scene creation
+                                    try {
+                                        Object.keys(imgs).forEach(k => {
+                                            const img = imgs[k];
+                                            if (img && !img.complete) {
+                                                try {
+                                                    img.addEventListener('load', (ev) => {
+                                                        try {
+                                                            const loadedImg = ev && ev.target ? ev.target : img;
+                                                            if (loadedImg && (loadedImg.naturalWidth || loadedImg.width)) {
+                                                                try { this.textures.addImage(k, loadedImg); } catch(_){}
+                                                                // Update any sprites that were waiting for this key
+                                                                try {
+                                                                    if (game && game._projSpriteByIndex) {
+                                                                        for (const [idx, sp] of game._projSpriteByIndex) {
+                                                                            try {
+                                                                                // Prefer pendingKey on the sprite (set when created), fall back to meta desire
+                                                                                const pending = sp && sp._pendingKey;
+                                                                                if (pending === k) {
+                                                                                    try { sp.setTexture && sp.setTexture(k); } catch(_){}
+                                                                                    try {
+                                                                                        const desiredR = (game && game.projectilesSoA && game.projectilesSoA.radius && typeof game.projectilesSoA.radius[idx] === 'number') ? game.projectilesSoA.radius[idx] : null;
+                                                                                        if (desiredR != null && isFinite(desiredR) && desiredR > 0) sp.setDisplaySize(desiredR*2, desiredR*2);
+                                                                                    } catch(_){}
+                                                                                    try { sp._pendingKey = null; } catch(_){}
+                                                                                } else {
+                                                                                    // also check meta-store request
+                                                                                    try {
+                                                                                        const m = (game.projectilesSoA && game.projectilesSoA.metaStore) ? game.projectilesSoA.metaStore.get(idx) : null;
+                                                                                        const wantKey = m && (m.spriteKey || m.sprite || m.petalImg || (m.goldTooth? 'goldtooth' : null));
+                                                                                        if (wantKey === k) {
+                                                                                            try { sp.setTexture && sp.setTexture(k); } catch(_){}
+                                                                                            try {
+                                                                                                const desiredR = (game && game.projectilesSoA && game.projectilesSoA.radius && typeof game.projectilesSoA.radius[idx] === 'number') ? game.projectilesSoA.radius[idx] : null;
+                                                                                                if (desiredR != null && isFinite(desiredR) && desiredR > 0) sp.setDisplaySize(desiredR*2, desiredR*2);
+                                                                                            } catch(_){}
+                                                                                            try { sp._pendingKey = null; } catch(_){}
+                                                                                        }
+                                                                                    } catch(_){}
+                                                                                }
+                                                                            } catch(_){}
+                                                                        }
+                                                                    }
+                                                                } catch(_){}
+                                                            }
+                                                        } catch(_){}
+                                                    }, { once: true });
+                                                } catch(_){}
+                                            }
+                                        });
+                                    } catch(_){}
                                 const baseDmg = Math.max(6, Math.floor((typeof calculateDamage === 'function' ? calculateDamage() : 22) * 0.70));
+                                
                                 const idx = game.spawnProjectile({
                                     x: tx, y: ty,
                                     vx: (Math.random()*2-1) * 0.25,
@@ -1413,6 +1466,64 @@
                 metaStore = createProjectileMetaStore(MAX, prior);
             }
             game._projMeta = metaStore;
+            // Hook metaStore.set so when code later assigns visual keys we update Phaser sprites
+            try {
+                if (metaStore && typeof metaStore.set === 'function') {
+                    const _origMetaSet = metaStore.set.bind(metaStore);
+                    metaStore.set = function(index, meta) {
+                        const res = _origMetaSet(index, meta);
+                        try {
+                            if (game && game._projSpriteByIndex && typeof game._projSpriteByIndex.get === 'function') {
+                                const sprite = game._projSpriteByIndex.get(index);
+                                if (sprite && meta) {
+                                    const key = meta.spriteKey || meta.sprite || meta.petalImg || (meta.goldTooth? 'goldtooth' : null);
+                                    if (key) {
+                                        try { sprite.setTexture && sprite.setTexture(key); } catch(_){}
+                                        // Recompute display size to match SoA radius after texture change
+                                        try {
+                                            const desiredR = (game && game.projectilesSoA && game.projectilesSoA.radius && typeof game.projectilesSoA.radius[index] === 'number') ? game.projectilesSoA.radius[index] : null;
+                                            if (desiredR != null && isFinite(desiredR) && desiredR > 0) {
+                                                try { sprite.setDisplaySize(desiredR*2, desiredR*2); } catch(_){}
+                                            }
+                                        } catch(_){}
+                                    }
+                                }
+                            }
+                        } catch(_){}
+                        // If no sprite exists yet but meta provides a visual key, create one now (deferred visuals)
+                        try {
+                            if ((!game || !game._projSpriteByIndex || !game._projSpriteByIndex.get(index)) && meta) {
+                                const key = meta.spriteKey || meta.sprite || meta.petalImg || (meta.goldTooth? 'goldtooth' : null);
+                                const sc = window.__PHASER_BULLET_SCENE__;
+                                if (key && sc && sc.isReady && game && game.projectilesSoA) {
+                                    try {
+                                        const px = game.projectilesSoA.x[index] || 0;
+                                        const py = game.projectilesSoA.y[index] || 0;
+                                        // If texture not present yet, use 'plain' and mark pendingKey
+                                        let useKey = key;
+                                        try { if (!(sc.textures && sc.textures.exists && sc.textures.exists(key))) useKey = 'plain'; } catch(_) { useKey = 'plain'; }
+                                        let sprite = sc.add.image(px, py, useKey);
+                                        try { sprite._pendingKey = (useKey === key) ? null : key; } catch(_){}
+                                        sc.bulletPool.add(sprite);
+                                        try { sprite.setOrigin && sprite.setOrigin(0.5,0.5); } catch(_){}
+                                        try { sprite.setDepth && sprite.setDepth(1200); } catch(_){}
+                                        const desiredR = (game && game.projectilesSoA && game.projectilesSoA.radius && typeof game.projectilesSoA.radius[index] === 'number') ? game.projectilesSoA.radius[index] : null;
+                                        if (desiredR != null && isFinite(desiredR) && desiredR > 0) {
+                                            try { sprite.setDisplaySize(desiredR*2, desiredR*2); } catch(_){}
+                                        }
+                                        sprite._projIdx = index;
+                                        game._projSpriteByIndex = game._projSpriteByIndex || new Map();
+                                        game._projSpriteByIndex.set(index, sprite);
+                                    } catch(_){}
+                                }
+                            }
+                        } catch(_){}
+                        return res;
+                    };
+                    // also mirror back to game._projMeta reference
+                    game._projMeta = metaStore;
+                }
+            } catch(_) {}
             const metaFlags = metaStore.flags;
             const metaList = metaStore.list;
             const META_FLAG = metaStore.FLAG;
@@ -1517,6 +1628,19 @@
             }
             // Provide a pool reset hook so room transitions/full resets can cleanly clear all indices
             game.resetProjectilePool = function(){
+                try {
+                    // Destroy any Phaser-managed sprites that mirror SoA indices
+                    if (game && game._projSpriteByIndex && typeof game._projSpriteByIndex.forEach === 'function') {
+                        try {
+                            game._projSpriteByIndex.forEach((sprite, idx) => {
+                                try { if (sprite && typeof sprite.destroy === 'function') sprite.destroy(); } catch(_){}
+                            });
+                        } catch(_){}
+                        try { game._projSpriteByIndex.clear(); } catch(_){}
+                    }
+                } catch(_){ }
+                // Also clear legacy object-mode projectiles so they don't persist between rooms
+                try { if (Array.isArray(game.projectiles)) game.projectiles.length = 0; } catch(_){}
                 for (let i=0;i<MAX;i++) {
                     alive[i] = 0;
                     freeStack[i] = i;
@@ -1672,6 +1796,15 @@
             }
             function recycle(idx){
                 if (!alive[idx]) return;
+                try {
+                    if (game && game._projSpriteByIndex && game._projSpriteByIndex.has && game._projSpriteByIndex.has(idx)) {
+                        try {
+                            const s = game._projSpriteByIndex.get(idx);
+                            if (s && typeof s.destroy === 'function') s.destroy();
+                        } catch(_){}
+                        try { game._projSpriteByIndex.delete(idx); } catch(_){}
+                    }
+                } catch(_){}
                 removeFromSpatialBucket(idx);
                 alive[idx] = 0;
                 // Remove from dense active list by swapping with the tail
@@ -3262,14 +3395,18 @@
                             }
                         }
                         if (meta && meta.lissajousPattern && !isBeam) {
-                            if (!meta._lissaInit) {
-                                meta._lissaInit = true;
+                                    if (!meta._lissaInit) {
+                                        meta._lissaInit = true;
+                                        try { if (typeof console !== 'undefined') console.debug('[LissaDebug] SoA meta _lissaInit idx=', i, 'meta=', meta); } catch(_){}
                                 const sp = Math.hypot(vx[i], vy[i]) || 0.0001;
                                 // Forward and perpendicular basis derived from current velocity
+                                meta._lFx = vx[i] / sp; meta._lFy = vy[i] / sp;
                                 meta._lPx = -meta._lFy; meta._lPy = meta._lFx;
                                 meta._lT = 0;
                                 // Amplitudes (scaled for clarity) and frequency pairs (intensified)
                                 const widen = 2.05;
+                                // Ensure both base amplitudes are defined to avoid NaN propagation
+                                meta._lBaseA = (24 + Math.random()*10) * widen;
                                 meta._lBaseB = (16 + Math.random()*6) * (widen * 0.85);
                                 meta._lA = meta._lBaseA; meta._lB = meta._lBaseB;
                                 meta._lFreqA = 0.16; meta._lFreqB = 0.32;
@@ -3334,6 +3471,7 @@
                             const lateralScale = 0.34 * lissScale; const forwardScale = 0.18 * lissScale;
                             x[i] += (rPxX * ddx * lateralScale + rFxX * ddy * forwardScale) * pulseScale;
                             y[i] += (rPxY * ddx * lateralScale + rFxY * ddy * forwardScale) * pulseScale;
+                            try { if (typeof console !== 'undefined' && (meta._lT % 160 === 0)) console.debug('[LissaDebug] SoA lissajous update idx=', i, 't=', meta._lT); } catch(_){}
                         }
                         // Pendulum pattern (SoA): heavy initial swing with decay and final forward boost
                         if (meta && meta.pendulumPattern && !meta._pendDone && !isBeam && !isEnemy) {
@@ -4023,6 +4161,8 @@
                 } catch (_) {}
                 for (let aIdx=0; aIdx<activeCount; aIdx++){
                     const i = activeList[aIdx];
+                    // If a Phaser sprite has been created for this projectile index, skip canvas rendering
+                    try { if (game && game._projSpriteByIndex && game._projSpriteByIndex.has && game._projSpriteByIndex.has(i)) { continue; } } catch(_){}
                     const r = radius[i];
                     const cx = x[i]; const cy = y[i];
                     const cIndex = colorIdx[i];
@@ -5794,16 +5934,16 @@
                 }
                 ctx.restore();
             }
-            // Legacy compatibility proxy removed: direct object iteration deprecated.
-            // Provide defensive getter that logs once (optional) to help catch stale uses.
-            let _projWarned = false;
-            Object.defineProperty(game, 'projectiles', {
-                get(){
-                    if (!_projWarned) { _projWarned = true; console.warn('[SoA] game.projectiles proxy removed – migrate logic to SoA arrays or metadata.'); }
-                    return [];
-                },
-                set(v){}
-            });
+            // Legacy compatibility: provide an actual `game.projectiles` array so object-mode
+            // projectile logic (eg. Lissajous pattern) continues to work. New code should prefer
+            // `game.projectilesSoA`, but some abilities still use object-mode proj objects.
+            try {
+                if (!Array.isArray(game.projectiles)) {
+                    game.projectiles = [];
+                    try { console.info('[Compat] enabled legacy game.projectiles array for object-mode projectiles'); } catch(_){}
+                }
+            } catch(_) { try { game.projectiles = []; } catch(_){} }
+            game._markProjectilesDirty = ()=>{};
             game._markProjectilesDirty = ()=>{};
             game.spawnProjectile = (t)=>{
                 const idx = spawnProjectile(t);
@@ -5883,9 +6023,33 @@
                     try { gooseSprite.image.src = 'assets/geese/goldengoose-sheet.png'; } catch(_){ }
                 }
 
+                try {
+                    if (idx >= 0 && typeof window._phaserRegisterProjectile === 'function') {
+                        try { window._phaserRegisterProjectile(idx, t); } catch(_) { /* swallow phaser registration errors */ }
+                    }
+                } catch(_) {}
+                try {
+                    // DEBUG: log Lissajous-related spawns for troubleshooting
+                    if (typeof console !== 'undefined') {
+                        const isLissa = !!(t && (t.lissajousPattern || t.lissajous));
+                        if (isLissa) console.debug('[SpawnDebug] Lissajous spawn idx=', idx, 't=', t);
+                        if (idx < 0) console.debug('[SpawnDebug] spawn failed idx=', idx, 'params=', t);
+                    }
+                } catch(_) {}
                 return idx;
             };
-            game.recycleProjectile = (objOrIndex)=>{ const idx = (typeof objOrIndex === 'number')? objOrIndex : objOrIndex._i; recycle(idx); game._markProjectilesDirty(); };
+            game.recycleProjectile = (objOrIndex)=>{
+                const idx = (typeof objOrIndex === 'number')? objOrIndex : objOrIndex._i;
+                try {
+                    if (game && game._projSpriteByIndex && game._projSpriteByIndex.has(idx)) {
+                        const s = game._projSpriteByIndex.get(idx);
+                        try { if (s && typeof s.destroy === 'function') s.destroy(); } catch(_){}
+                        try { game._projSpriteByIndex.delete(idx); } catch(_){}
+                    }
+                } catch(_){}
+                recycle(idx);
+                game._markProjectilesDirty();
+            };
             game.updateProjectilesSoA = updateProjectiles;
             game.renderProjectilesSoA = renderProjectiles;
             game.renderEnemyProjectilesTop = renderEnemyProjectilesTop;
@@ -18047,6 +18211,11 @@ function offerPermanentAbilityChoice() {
                 // Extended pattern/meta flags
                 const abilityFlagNames = ['lissajousPattern','pendulumPattern','sawWave','phaseEcho','resonantPulseCore','pivotPattern','convergePair','fragmentWake','spiralBloom','harmonicSplit','temporalDrift','veeringFan','echoBloom','bloomRing','cascadeBurst','helixPair'];
                 abilityFlagNames.forEach(fn=>{ meta[fn] = game.player.abilities.some(a => ABILITIES[a] && ABILITIES[a].effect[fn]); });
+                try {
+                    if (typeof console !== 'undefined' && meta && meta.lissajousPattern) {
+                        console.debug('[SpawnDebug] meta.lissajousPattern assigned primaryIdx=', primaryIdx, 'meta=', meta);
+                    }
+                } catch(_){}
                 meta._initialFx = Math.cos(angle); meta._initialFy = Math.sin(angle);
                 // Quantum spawn muzzle cue
                 if (game.player.abilities.some(a => ABILITIES[a] && ABILITIES[a].effect.quantum) && !(game.perf && game.perf.lowFx)) {
@@ -32702,7 +32871,230 @@ function offerPermanentAbilityChoice() {
 
                         drawForced();
                     }catch(e){ console.warn('gg overlay install failed', e); }
-                })();
+                    })();
+            </script>
+
+            <script>
+            (function(){
+                try {
+                    // Prepare mapping container for Phaser sprites
+                    if (!game) window.game = window.game || {};
+                    game._projSpriteByIndex = game._projSpriteByIndex || new Map();
+
+                    class BulletScene extends Phaser.Scene {
+                        constructor(){ super({ key: 'BulletScene' }); this.isReady = false; }
+                        preload() {
+                            // not using loader heavily; textures will be injected from preloaded Image elements when available
+                        }
+                        create() {
+                            try {
+                                // Pool managed as a plain Group of Images
+                                this.bulletPool = this.add.group({ runChildUpdate: false });
+                                // Import existing Image objects as textures when available
+                                try {
+                                    const imgs = window._bulletImages || {};
+                                    Object.keys(imgs).forEach(k => {
+                                        const img = imgs[k];
+                                        // If already loaded, add to Phaser cache immediately
+                                        if (img && img.complete && (img.naturalWidth || img.width)) {
+                                            try { this.textures.addImage(k, img); } catch(_){ }
+                                        }
+                                        // If not yet loaded, attach a one-time load handler to add the texture
+                                        if (img && !img.complete && !img._phaserLoadHooked) {
+                                            try {
+                                                img._phaserLoadHooked = true;
+                                                img.addEventListener('load', (ev) => {
+                                                    try {
+                                                        const srcImg = (ev && ev.target) ? ev.target : img;
+                                                        if (!srcImg) return;
+                                                        try { if (!this.textures.exists || !this.textures.exists(k)) { try { this.textures.addImage(k, srcImg); } catch(_){} } } catch(_){}
+                                                        // Update any pooled sprites waiting for this texture
+                                                        try {
+                                                            const children = this.bulletPool && this.bulletPool.getChildren ? this.bulletPool.getChildren() : [];
+                                                            for (let ci = 0; ci < children.length; ci++) {
+                                                                const s = children[ci];
+                                                                if (!s) continue;
+                                                                try {
+                                                                    if (s._pendingKey === k) {
+                                                                        try { s.setTexture && s.setTexture(k); } catch(_){}
+                                                                        // Recompute display size from SoA radius if available
+                                                                        try {
+                                                                            const idx = s._projIdx;
+                                                                            const desiredR = (game && game.projectilesSoA && game.projectilesSoA.radius && typeof idx === 'number') ? game.projectilesSoA.radius[idx] : null;
+                                                                            if (desiredR != null && isFinite(desiredR) && desiredR > 0) {
+                                                                                try { s.setDisplaySize(desiredR*2, desiredR*2); } catch(_){}
+                                                                            }
+                                                                        } catch(_){}
+                                                                        try { s._pendingKey = null; } catch(_){}
+                                                                    }
+                                                                } catch(_){}
+                                                            }
+                                                        } catch(_){}
+                                                    } catch(_){}
+                                                }, { once: true });
+                                            } catch(_){}
+                                        }
+                                    });
+                                } catch(_){ }
+                                } catch(_){}
+                                this.isReady = true;
+                                window.__PHASER_BULLET_SCENE__ = this;
+                            } catch(e) { console.warn('[BulletScene] create error', e); }
+                        }
+                    }
+
+                    function startPhaserOnce(){
+                        if (window.__PHASER_GAME__ || typeof Phaser === 'undefined') return;
+                        try {
+                            const cfg = {
+                                type: Phaser.AUTO,
+                                width: (typeof LOGICAL_W === 'number') ? LOGICAL_W : 800,
+                                height: (typeof LOGICAL_H === 'number') ? LOGICAL_H : 600,
+                                parent: 'gameContainer',
+                                transparent: true,
+                                physics: { default: 'arcade', arcade: { gravity: { y: 0 }, debug: false } },
+                                scene: [ BulletScene ],
+                                banner: false
+                            };
+                            window.__PHASER_GAME__ = new Phaser.Game(cfg);
+                            // After a short delay, ensure Phaser canvas overlays the game canvas and doesn't capture input
+                            setTimeout(()=>{
+                                try {
+                                    const phCanv = Array.from(document.querySelectorAll('#gameContainer > canvas')).find(c=>c && c.id !== 'gameCanvas');
+                                    if (phCanv) {
+                                        phCanv.style.position = 'absolute';
+                                        phCanv.style.left = '0'; phCanv.style.top = '0';
+                                        phCanv.style.pointerEvents = 'none';
+                                        phCanv.style.zIndex = 999; phCanv.id = 'phaserBulletCanvas';
+                                        // copy transform from main canvas so scaling/layout match
+                                        try { const main = document.getElementById('gameCanvas'); if (main) { phCanv.style.transform = main.style.transform || ''; phCanv.style.transformOrigin = main.style.transformOrigin || 'top left'; phCanv.style.width = main.style.width || phCanv.style.width; phCanv.style.height = main.style.height || phCanv.style.height; } } catch(_){}
+                                    }
+                                } catch(_){}
+                                // Also keep transform in sync on resize
+                                try {
+                                    const sync = ()=>{
+                                        try {
+                                            const main = document.getElementById('gameCanvas');
+                                            const ph = document.getElementById('phaserBulletCanvas');
+                                            if (main && ph) {
+                                                ph.style.transform = main.style.transform || '';
+                                                ph.style.transformOrigin = main.style.transformOrigin || 'top left';
+                                                ph.style.width = main.style.width || ph.style.width;
+                                                ph.style.height = main.style.height || ph.style.height;
+                                            }
+                                        } catch(_){}
+                                    };
+                                    window.addEventListener('resize', sync);
+                                    // also initial sync attempt
+                                    setTimeout(sync, 160);
+                                } catch(_){}
+                            }, 120);
+                        } catch(e) { console.warn('[Phaser] init failed', e); }
+                    }
+
+                    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startPhaserOnce, { once: true }); else startPhaserOnce();
+
+                    // Called after SoA alloc to create / reuse a Phaser sprite and map it to SoA index
+                    window._phaserRegisterProjectile = function(idx, t){
+                        try {
+                            const sc = window.__PHASER_BULLET_SCENE__;
+                            try { if (typeof console !== 'undefined') console.debug('[PhaserDebug] register idx=', idx, 'sceneReady=', !!(sc && sc.isReady), 't=', t); } catch(_){}
+                            if (!sc || !sc.isReady) return;
+                            const key = (t && (t.spriteKey || t.sprite || t.key)) || 'plain';
+                            // try to find a dead sprite in pool
+                            let sprite = null;
+                            const children = sc.bulletPool.getChildren ? sc.bulletPool.getChildren() : [];
+                            for (let i=0;i<children.length;i++){ const c = children[i]; if (!c.active) { sprite = c; break; } }
+                            if (!sprite) {
+                                // If the desired texture isn't yet in Phaser, fallback to 'plain' and mark pending
+                                let useKey = key;
+                                try {
+                                    if (!(sc.textures && sc.textures.exists && sc.textures.exists(key))) {
+                                        useKey = 'plain';
+                                    }
+                                } catch(_) { useKey = 'plain'; }
+                                try { sprite = sc.add.image(0,0, useKey); } catch(e){ sprite = sc.add.image(0,0); }
+                                // store pending desired key so onload handler can update later
+                                try { sprite._pendingKey = (useKey === key) ? null : key; } catch(_){}
+                                sc.bulletPool.add(sprite);
+                            } else {
+                                try {
+                                    // If texture exists, set it; otherwise keep current and mark pending
+                                    if (key && sc.textures && sc.textures.exists && sc.textures.exists(key)) {
+                                        try { sprite.setTexture && sprite.setTexture(key); } catch(_){}
+                                        sprite._pendingKey = null;
+                                    } else {
+                                        sprite._pendingKey = key;
+                                    }
+                                } catch(_){}
+                                sprite.setActive(true); sprite.setVisible(true);
+                            }
+                            const px = (game && game.projectilesSoA && game.projectilesSoA.x) ? game.projectilesSoA.x[idx] : (t && t.x) || 0;
+                            const py = (game && game.projectilesSoA && game.projectilesSoA.y) ? game.projectilesSoA.y[idx] : (t && t.y) || 0;
+                            sprite.x = px; sprite.y = py;
+                            const vx = (game && game.projectilesSoA && game.projectilesSoA.vx) ? game.projectilesSoA.vx[idx] : (t && t.vx) || 0;
+                            const vy = (game && game.projectilesSoA && game.projectilesSoA.vy) ? game.projectilesSoA.vy[idx] : (t && t.vy) || 0;
+                            const ang = Math.atan2(vy || 0, vx || 0) || 0; sprite.rotation = ang;
+                            // Normalize origin and depth for consistent rendering
+                            try { sprite.setOrigin && sprite.setOrigin(0.5, 0.5); } catch(_){}
+                            try { sprite.setDepth && sprite.setDepth(1200); } catch(_){}
+                            // Determine desired size from SoA radius (logical pixels)
+                            let desiredR = 0;
+                            try {
+                                desiredR = (game && game.projectilesSoA && game.projectilesSoA.radius && typeof game.projectilesSoA.radius[idx] === 'number') ? game.projectilesSoA.radius[idx] : (t && (t.r || t.radius)) || 6;
+                                if (!isFinite(desiredR) || desiredR <= 0) desiredR = 6;
+                            } catch(_) { desiredR = (t && (t.r || t.radius)) || 6; }
+                            // Apply uniform scaling preserving texture aspect ratio when possible
+                            try {
+                                const texImg = (sprite.texture && sprite.texture.getSourceImage) ? sprite.texture.getSourceImage() : null;
+                                const texW = (texImg && (texImg.naturalWidth || texImg.width)) ? (texImg.naturalWidth || texImg.width) : (sprite.width || 0);
+                                if (texW > 0) {
+                                    // Slightly enlarge the default (plain) bullet for readability
+                                    let dr = desiredR;
+                                    try { if (key === 'plain') dr = Math.ceil(desiredR * 1.22); } catch(_){}
+                                    const scale = (dr * 2) / texW;
+                                    if (isFinite(scale) && scale > 0) sprite.setScale(scale);
+                                    else sprite.setDisplaySize(dr*2, dr*2);
+                                } else {
+                                    try { sprite.setDisplaySize(desiredR*2, desiredR*2); } catch(_){ }
+                                }
+                            } catch(_) { try { sprite.setDisplaySize(desiredR*2, desiredR*2); } catch(_){} }
+                            sprite._projIdx = idx;
+                            game._projSpriteByIndex = game._projSpriteByIndex || new Map();
+                            game._projSpriteByIndex.set(idx, sprite);
+                        } catch(e) { /* swallow registration errors to avoid breaking game logic */ }
+                    };
+
+                    // Per-frame sync: copy SoA positions into Phaser sprites. Runs via rAF loop to stay in sync with browser frames.
+                    window._phaserSyncProjectiles = function(){
+                        try {
+                            if (!game || !game.projectilesSoA || !game._projSpriteByIndex) return;
+                            const map = game._projSpriteByIndex;
+                            for (const [idx, sprite] of map) {
+                                if (!sprite || !sprite.active) continue;
+                                const xs = game.projectilesSoA.x[idx]; const ys = game.projectilesSoA.y[idx];
+                                if (typeof xs === 'number') sprite.x = xs;
+                                if (typeof ys === 'number') sprite.y = ys;
+                                const vx = game.projectilesSoA.vx[idx] || 0; const vy = game.projectilesSoA.vy[idx] || 0;
+                                const a = Math.atan2(vy, vx);
+                                if (isFinite(a)) sprite.rotation = a;
+                                // If sprite was created with a pending key, and texture is now available, apply it
+                                try {
+                                    const sc = window.__PHASER_BULLET_SCENE__;
+                                    if (sprite._pendingKey && sc && sc.textures && sc.textures.exists && sc.textures.exists(sprite._pendingKey)) {
+                                        try { sprite.setTexture && sprite.setTexture(sprite._pendingKey); } catch(_){}
+                                        try { const desiredR = (game && game.projectilesSoA && game.projectilesSoA.radius && typeof game.projectilesSoA.radius[idx] === 'number') ? game.projectilesSoA.radius[idx] : null; if (desiredR != null && isFinite(desiredR) && desiredR > 0) sprite.setDisplaySize(desiredR*2, desiredR*2); } catch(_){}
+                                        try { sprite._pendingKey = null; } catch(_){}
+                                    }
+                                } catch(_){}
+                            }
+                        } catch(e) {}
+                    };
+
+                    (function frameTick(){ window.requestAnimationFrame(function(){ try{ window._phaserSyncProjectiles(); }catch(_){} frameTick(); }); })();
+
+                } catch(e) { console.warn('[Phaser-Bullets] bootstrap error', e); }
+            })();
             </script>
         </body>
         </html>
