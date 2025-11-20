@@ -296,6 +296,30 @@
                 try { window._safeUnlockActIII_flushing = false; } catch(_){ }
             };
         }
+        if (typeof window.safeUnlockActIV !== 'function') {
+            window._unlockActIVQueue = window._unlockActIVQueue || [];
+            window._safeUnlockActIV_flushing = false;
+            window.safeUnlockActIV = function(source){
+                try {
+                    if (typeof window.unlockActIV === 'function' && window._safeUnlockActIV_flushing === false) {
+                        try { window.unlockActIV(source); return; } catch(e) { /* fallthrough to queue */ }
+                    }
+                } catch(_){ }
+                try { window._unlockActIVQueue.push(source || 'queued'); } catch(_){ }
+            };
+            window._flushUnlockActIVQueue = function(){
+                try {
+                    if (!window._unlockActIVQueue || window._unlockActIVQueue.length === 0) return;
+                    if (window._safeUnlockActIV_flushing) return;
+                    window._safeUnlockActIV_flushing = true;
+                    const q = window._unlockActIVQueue.slice(); window._unlockActIVQueue.length = 0;
+                    for (let i=0;i<q.length;i++){
+                        try { if (typeof window.unlockActIV === 'function') window.unlockActIV(q[i]); } catch(e) { try { console.warn('[safeUnlockIV] queued unlock failed', e); } catch(_){} }
+                    }
+                } catch(_){ }
+                try { window._safeUnlockActIV_flushing = false; } catch(_){ }
+            };
+        }
         if (typeof window.unlockDuckAndCover !== 'function') {
             window.unlockDuckAndCover = function(source){
                 try { if (!window.game) window.game = {}; } catch(_){ }
@@ -1139,14 +1163,15 @@
                             'assets/streets/gooseghetto/goosestreet10.jpeg',
                             'assets/streets/gooseghetto/goosestreet11.jpeg'
                         ];
-                    } else {
+                    } else if (act === 'III') {
                         // If Act III is selected, use the FUTURE list (if provided), otherwise restore default list
-                        if (act === 'III') {
-                            try { b.list = (window.FUTURE_STREET_BG_PATHS && Array.isArray(window.FUTURE_STREET_BG_PATHS)) ? window.FUTURE_STREET_BG_PATHS.slice() : STREET_BG_PATHS.slice(); } catch(_){ b.list = STREET_BG_PATHS.slice(); }
-                        } else {
-                            // Restore default list if not Act II or Act III
-                            b.list = STREET_BG_PATHS.slice();
-                        }
+                        try { b.list = (window.FUTURE_STREET_BG_PATHS && Array.isArray(window.FUTURE_STREET_BG_PATHS)) ? window.FUTURE_STREET_BG_PATHS.slice() : STREET_BG_PATHS.slice(); } catch(_){ b.list = STREET_BG_PATHS.slice(); }
+                    } else if (act === 'IV') {
+                        // If Act IV is selected, use the ELDRITCH list (if provided), otherwise restore default list
+                        try { b.list = (window.ELDRITCH_STREET_BG_PATHS && Array.isArray(window.ELDRITCH_STREET_BG_PATHS)) ? window.ELDRITCH_STREET_BG_PATHS.slice() : STREET_BG_PATHS.slice(); } catch(_){ b.list = STREET_BG_PATHS.slice(); }
+                    } else {
+                        // Restore default list if not Act II, III, or IV
+                        b.list = STREET_BG_PATHS.slice();
                     }
                     // Reset cache/preload promise so preload can re-run for new list
                     try { b._preloadPromise = null; } catch(_){}
@@ -7329,6 +7354,7 @@ function ensureBackgroundMusic() {
             // Prefer act-specific theme when an act is selected (Act II uses GooseGhetto)
             let src = 'assets/audio/QuackshotChronicles.mp3';
             try { if (game && game._selectedAct && String(game._selectedAct) === 'II') src = 'assets/audio/GooseGhetto.mp3'; } catch(_){}
+            try { if (game && game._selectedAct && String(game._selectedAct) === 'IV') src = 'assets/audio/eldritch1.mp3'; } catch(_){}
             // initializing bgMusic with chosen source
             const m = new Audio(src);
             m.loop = true; m.volume = 0.55; game.bgMusic = m;
@@ -7345,6 +7371,23 @@ function ensureBackgroundMusic() {
                         // swapping existing bgMusic to GooseGhetto due to selectedAct=II
                         try { if (game.bgMusic) { game._prevMusicSrc = game.bgMusic.src; try { game.bgMusic.pause(); } catch(_){} } } catch(_){}
                         game.bgMusic = new Audio('assets/audio/GooseGhetto.mp3');
+                        game.bgMusic.loop = true; game.bgMusic.volume = 0.55;
+                        applyMusicPreference();
+                        try { game.bgMusic.play().catch(()=>{}); } catch(_){}
+                        try { game._actMusicSet = true; } catch(_){}
+                    }
+                } catch(_){}
+            }
+        } catch(_){}
+        // If the player has selected Act IV but an earlier default track was created, swap it now.
+        try {
+            if (game && game._selectedAct && String(game._selectedAct) === 'IV') {
+                try {
+                    const cur = game.bgMusic && game.bgMusic.src ? String(game.bgMusic.src) : '';
+                    if (!cur.includes('eldritch1')) {
+                        // swapping existing bgMusic to eldritch1 due to selectedAct=IV
+                        try { if (game.bgMusic) { game._prevMusicSrc = game.bgMusic.src; try { game.bgMusic.pause(); } catch(_){} } } catch(_){}
+                        game.bgMusic = new Audio('assets/audio/eldritch1.mp3');
                         game.bgMusic.loop = true; game.bgMusic.volume = 0.55;
                         applyMusicPreference();
                         try { game.bgMusic.play().catch(()=>{}); } catch(_){}
@@ -7806,6 +7849,147 @@ function toggleCosmeticParticles() {
 }
 
 // --- Act transition overlay + preload utility (global scope) ---
+function showActICutscene(){
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.id = 'actICutsceneOverlay';
+        Object.assign(overlay.style, {
+            position: 'fixed', inset: '0', background: '#000', display:'flex', alignItems:'center', justifyContent:'center',
+            zIndex: 10050, opacity: '1'
+        });
+        const img = document.createElement('img');
+        img.src = 'assets/story/act1-1.png';
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = '100%';
+        img.style.objectFit = 'contain';
+        overlay.appendChild(img);
+        document.body.appendChild(overlay);
+        
+        let step = 1;
+        function nextStep() {
+            if (step === 1) {
+                img.src = 'assets/story/act1-2.png';
+                step = 2;
+            } else {
+                overlay.remove();
+                resolve();
+            }
+        }
+        
+        function handleInput(ev) {
+            if (ev.type === 'keydown' && (ev.code === 'Space' || ev.key === ' ' || ev.key === 'Enter')) {
+                ev.preventDefault();
+                nextStep();
+            } else if (ev.type === 'click') {
+                nextStep();
+            }
+        }
+        
+        window.addEventListener('keydown', handleInput, true);
+        overlay.addEventListener('click', handleInput);
+        
+        // Store for cleanup
+        overlay._cleanup = () => {
+            window.removeEventListener('keydown', handleInput, true);
+            overlay.removeEventListener('click', handleInput);
+        };
+    });
+}
+
+function showActIICutscene(){
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.id = 'actIICutsceneOverlay';
+        Object.assign(overlay.style, {
+            position: 'fixed', inset: '0', background: '#000', display:'flex', alignItems:'center', justifyContent:'center',
+            zIndex: 10050, opacity: '1'
+        });
+        const img = document.createElement('img');
+        img.src = 'assets/story/act2-1.png';
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = '100%';
+        img.style.objectFit = 'contain';
+        overlay.appendChild(img);
+        document.body.appendChild(overlay);
+        
+        let step = 1;
+        function nextStep() {
+            if (step === 1) {
+                img.src = 'assets/story/act2-2.png';
+                step = 2;
+            } else {
+                overlay.remove();
+                resolve();
+            }
+        }
+        
+        function handleInput(ev) {
+            if (ev.type === 'keydown' && (ev.code === 'Space' || ev.key === ' ' || ev.key === 'Enter')) {
+                ev.preventDefault();
+                nextStep();
+            } else if (ev.type === 'click') {
+                nextStep();
+            }
+        }
+        
+        window.addEventListener('keydown', handleInput, true);
+        overlay.addEventListener('click', handleInput);
+        
+        // Store for cleanup
+        overlay._cleanup = () => {
+            window.removeEventListener('keydown', handleInput, true);
+            overlay.removeEventListener('click', handleInput);
+        };
+    });
+}
+
+function showActIIICutscene(){
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.id = 'actIIICutsceneOverlay';
+        Object.assign(overlay.style, {
+            position: 'fixed', inset: '0', background: '#000', display:'flex', alignItems:'center', justifyContent:'center',
+            zIndex: 10050, opacity: '1'
+        });
+        const img = document.createElement('img');
+        img.src = 'assets/story/act3-1.png';
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = '100%';
+        img.style.objectFit = 'contain';
+        overlay.appendChild(img);
+        document.body.appendChild(overlay);
+        
+        let step = 1;
+        function nextStep() {
+            if (step === 1) {
+                img.src = 'assets/story/act3-2.png';
+                step = 2;
+            } else {
+                overlay.remove();
+                resolve();
+            }
+        }
+        
+        function handleInput(ev) {
+            if (ev.type === 'keydown' && (ev.code === 'Space' || ev.key === ' ' || ev.key === 'Enter')) {
+                ev.preventDefault();
+                nextStep();
+            } else if (ev.type === 'click') {
+                nextStep();
+            }
+        }
+        
+        window.addEventListener('keydown', handleInput, true);
+        overlay.addEventListener('click', handleInput);
+        
+        // Store for cleanup
+        overlay._cleanup = () => {
+            window.removeEventListener('keydown', handleInput, true);
+            overlay.removeEventListener('click', handleInput);
+        };
+    });
+}
+
 function _createActTransitionOverlay(){
     if (document.getElementById('actTransitionOverlay')) { try { console.info('[ActTransition] overlay already exists'); } catch(_){}; return document.getElementById('actTransitionOverlay'); }
     const ov = document.createElement('div'); ov.id = 'actTransitionOverlay';
@@ -7894,42 +8078,109 @@ function showActTransition(actId, options){
     options = options || {};
     const minMs = typeof options.minMs === 'number' ? options.minMs : 2000;
     const preloadTimeout = typeof options.preloadTimeout === 'number' ? options.preloadTimeout : 1800;
-    try { const ov = _createActTransitionOverlay(); const txt = document.getElementById('actTransitionOverlayText');
-    const label = (''+actId) === 'I' ? 'New Quack City' : ((''+actId) === 'II' ? 'Goose Ghetto' : ((''+actId) === 'III' ? 'Wunderswans Domain' : ((''+actId) === 'DuckAndCover' ? 'Duck and Cover' : (''+actId))));
-        if (txt) txt.textContent = label;
-        try { console.info('[ActTransition] show', actId, label); } catch(_){ }
-        ov.style.pointerEvents = 'auto'; ov.style.opacity = '1';
-        try { console.info('[ActTransition] overlay set visible — element present?', !!ov, 'text=', (txt?txt.textContent:null)); } catch(_){ }
-        const start = Date.now();
-        const tasks = [
-            preloadActSprites(actId, preloadTimeout),
-            new Promise(r=>setTimeout(r, minMs))
-        ];
-        if (String(actId) === 'DuckAndCover' && typeof preloadBackgroundList === 'function') {
-            try {
-                const duckBgPromise = preloadBackgroundList(['assets/streets/waves/lot1.png']);
-                if (duckBgPromise && typeof duckBgPromise.then === 'function') {
-                    const bgTimeout = Math.max(600, preloadTimeout || 1800);
-                    const guard = new Promise(resolve => setTimeout(resolve, bgTimeout));
-                    tasks.push(Promise.race([duckBgPromise.catch(()=>null), guard]));
-                }
-            } catch(_){ }
-        }
-        return Promise.all(tasks).then(()=>{
-            // ensure minimum display time passed
-            const passed = Date.now() - start; const remain = Math.max(0, 120 - (Date.now()-start));
-            setTimeout(()=>{ try { ov.style.opacity = '0'; ov.style.pointerEvents = 'none'; try { console.info('[ActTransition] hide overlay'); } catch(_){} } catch(_){}; setTimeout(()=>{ try{ if (ov && ov.parentElement) {} }catch(_){} },240); }, remain);
-        }).catch(()=>{ try{ ov.style.opacity='0'; ov.style.pointerEvents='none'; }catch(_){} });
-    } catch(e) { return Promise.resolve(); }
+    if (actId === 'I') {
+        return showActICutscene().then(() => {
+            // proceed with normal transition
+            const ov = _createActTransitionOverlay(); const txt = document.getElementById('actTransitionOverlayText');
+            const label = 'New Quack City';
+            if (txt) txt.textContent = label;
+            try { console.info('[ActTransition] show', actId, label); } catch(_){ }
+            ov.style.pointerEvents = 'auto'; ov.style.opacity = '1';
+            try { console.info('[ActTransition] overlay set visible — element present?', !!ov, 'text=', (txt?txt.textContent:null)); } catch(_){ }
+            const start = Date.now();
+            const tasks = [
+                preloadActSprites(actId, preloadTimeout),
+                new Promise(r=>setTimeout(r, minMs))
+            ];
+            return Promise.all(tasks).then(()=>{
+                // ensure minimum display time passed
+                const passed = Date.now() - start; const remain = Math.max(0, 120 - (Date.now()-start));
+                setTimeout(()=>{ try { ov.style.opacity = '0'; ov.style.pointerEvents = 'none'; try { console.info('[ActTransition] hide overlay'); } catch(_){} } catch(_){}; setTimeout(()=>{ try{ if (ov && ov.parentElement) {} }catch(_){} },240); }, remain);
+            }).catch(()=>{ try{ ov.style.opacity='0'; ov.style.pointerEvents='none'; }catch(_){} });
+        });
+    }
+
+    else if (actId === 'II') {
+        return showActIICutscene().then(() => {
+            // proceed with normal transition
+            const ov = _createActTransitionOverlay(); const txt = document.getElementById('actTransitionOverlayText');
+            const label = 'Goose Ghetto';
+            if (txt) txt.textContent = label;
+            try { console.info('[ActTransition] show', actId, label); } catch(_){ }
+            ov.style.pointerEvents = 'auto'; ov.style.opacity = '1';
+            try { console.info('[ActTransition] overlay set visible — element present?', !!ov, 'text=', (txt?txt.textContent:null)); } catch(_){ }
+            const start = Date.now();
+            const tasks = [
+                preloadActSprites(actId, preloadTimeout),
+                new Promise(r=>setTimeout(r, minMs))
+            ];
+            return Promise.all(tasks).then(()=>{
+                // ensure minimum display time passed
+                const passed = Date.now() - start; const remain = Math.max(0, 120 - (Date.now()-start));
+                setTimeout(()=>{ try { ov.style.opacity = '0'; ov.style.pointerEvents = 'none'; try { console.info('[ActTransition] hide overlay'); } catch(_){} } catch(_){}; setTimeout(()=>{ try{ if (ov && ov.parentElement) {} }catch(_){} },240); }, remain);
+            }).catch(()=>{ try{ ov.style.opacity='0'; ov.style.pointerEvents='none'; }catch(_){} });
+        });
+    }
+
+    else if (actId === 'III') {
+        return showActIIICutscene().then(() => {
+            // proceed with normal transition
+            const ov = _createActTransitionOverlay(); const txt = document.getElementById('actTransitionOverlayText');
+            const label = 'Wunderswan\'s Domain';
+            if (txt) txt.textContent = label;
+            try { console.info('[ActTransition] show', actId, label); } catch(_){ }
+            ov.style.pointerEvents = 'auto'; ov.style.opacity = '1';
+            try { console.info('[ActTransition] overlay set visible — element present?', !!ov, 'text=', (txt?txt.textContent:null)); } catch(_){ }
+            const start = Date.now();
+            const tasks = [
+                preloadActSprites(actId, preloadTimeout),
+                new Promise(r=>setTimeout(r, minMs))
+            ];
+            return Promise.all(tasks).then(()=>{
+                // ensure minimum display time passed
+                const passed = Date.now() - start; const remain = Math.max(0, 120 - (Date.now()-start));
+                setTimeout(()=>{ try { ov.style.opacity = '0'; ov.style.pointerEvents = 'none'; try { console.info('[ActTransition] hide overlay'); } catch(_){} } catch(_){}; setTimeout(()=>{ try{ if (ov && ov.parentElement) {} }catch(_){} },240); }, remain);
+            }).catch(()=>{ try{ ov.style.opacity='0'; ov.style.pointerEvents='none'; }catch(_){} });
+        });
+    } else {
+        try { const ov = _createActTransitionOverlay(); const txt = document.getElementById('actTransitionOverlayText');
+        const label = (''+actId) === 'I' ? 'New Quack City' : ((''+actId) === 'II' ? 'Goose Ghetto' : ((''+actId) === 'III' ? 'Wunderswan\'s Domain' : ((''+actId) === 'IV' ? 'Marsh of the Unfathomallard' : ((''+actId) === 'DuckAndCover' ? 'Duck and Cover' : (''+actId)))));
+            if (txt) txt.textContent = label;
+            try { console.info('[ActTransition] show', actId, label); } catch(_){ }
+            ov.style.pointerEvents = 'auto'; ov.style.opacity = '1';
+            try { console.info('[ActTransition] overlay set visible — element present?', !!ov, 'text=', (txt?txt.textContent:null)); } catch(_){ }
+            const start = Date.now();
+            const tasks = [
+                preloadActSprites(actId, preloadTimeout),
+                new Promise(r=>setTimeout(r, minMs))
+            ];
+            if (String(actId) === 'DuckAndCover' && typeof preloadBackgroundList === 'function') {
+                try {
+                    const duckBgPromise = preloadBackgroundList(['assets/streets/waves/lot1.png']);
+                    if (duckBgPromise && typeof duckBgPromise.then === 'function') {
+                        const bgTimeout = Math.max(600, preloadTimeout || 1800);
+                        const guard = new Promise(resolve => setTimeout(resolve, bgTimeout));
+                        tasks.push(Promise.race([duckBgPromise.catch(()=>null), guard]));
+                    }
+                } catch(_){ }
+            }
+            return Promise.all(tasks).then(()=>{
+                // ensure minimum display time passed
+                const passed = Date.now() - start; const remain = Math.max(0, 120 - (Date.now()-start));
+                setTimeout(()=>{ try { ov.style.opacity = '0'; ov.style.pointerEvents = 'none'; try { console.info('[ActTransition] hide overlay'); } catch(_){} } catch(_){}; setTimeout(()=>{ try{ if (ov && ov.parentElement) {} }catch(_){} },240); }, remain);
+            }).catch(()=>{ try{ ov.style.opacity='0'; ov.style.pointerEvents='none'; }catch(_){} });
+        } catch(e) { return Promise.resolve(); }
+    }
 }
 
 const ENEMY_DOSSIER_STORAGE_KEY = 'enemyDossier_v1';
 const ENEMY_DOSSIER_VERSION = 1;
-const ENEMY_DOSSIER_ACT_ORDER = ['I','II','III','Secret'];
+const ENEMY_DOSSIER_ACT_ORDER = ['I','II','III','IV','Secret'];
 const ENEMY_DOSSIER_ACT_LABELS = {
     'I': 'Act I — New Quack City',
     'II': 'Act II — Goose Ghetto',
     'III': 'Act III — Wunderswan\'s Domain',
+    'IV': 'Act IV — Marsh of the Unfathomallard',
     'Secret': 'Classified Encounters'
 };
 
@@ -8587,16 +8838,27 @@ function showTitleScreen() {
     const actItems = [];
 
         // Evaluate unlocked state from runtime flags or persisted progress
-        let actIIUnlocked = false; let actIIIUnlocked = false;
+        let actIIUnlocked = false; let actIIIUnlocked = false; let actIVUnlocked = false;
     try { actIIUnlocked = !!(game && game._actIIUnlocked) || (localStorage && localStorage.getItem && localStorage.getItem('actIIUnlocked') === '1'); } catch(_) { actIIUnlocked = !!(game && game._actIIUnlocked); }
     try { actIIIUnlocked = !!(game && game._actIIIUnlocked) || (localStorage && localStorage.getItem && localStorage.getItem('actIIIUnlocked') === '1'); } catch(_) { actIIIUnlocked = !!(game && game._actIIIUnlocked); }
+    try { actIVUnlocked = !!(game && game._actIVUnlocked) || (localStorage && localStorage.getItem && localStorage.getItem('actIVUnlocked') === '1'); } catch(_) { actIVUnlocked = !!(game && game._actIVUnlocked); }
+    // Fallback: if Quacken was defeated but Act IV not unlocked, unlock it now
+    try {
+        if (!actIVUnlocked && ((game && game._quackenDefeated) || (localStorage && localStorage.getItem && localStorage.getItem('quackenDefeated') === '1'))) {
+            actIVUnlocked = true;
+            try { localStorage.setItem('actIVUnlocked', '1'); } catch(_){ }
+            try { if (game) game._actIVUnlocked = true; } catch(_){ }
+            console.info('[Fallback] Act IV unlocked due to previous Quacken defeat');
+        }
+    } catch(_){ }
     let duckUnlocked = false;
     try { duckUnlocked = !!(game && game._duckAndCoverUnlocked) || (localStorage && localStorage.getItem && localStorage.getItem('duckAndCoverUnlocked') === '1'); } catch(_) { duckUnlocked = !!(game && game._duckAndCoverUnlocked); }
 
         let acts = [ 
-            { id: 'I', label: 'Act I', locked: false }, 
-            { id: 'II', label: 'Act II', locked: !actIIUnlocked, lockReason: 'Find and defeat the Golden Goose' }, 
-            { id: 'III', label: 'Act III', locked: !actIIIUnlocked, lockReason: 'Survive the Wunderswan' },
+            { id: 'I', label: 'Act I: New Quack City', locked: false }, 
+            { id: 'II', label: 'Act II: Goose Ghetto', locked: !actIIUnlocked, lockReason: 'Find and defeat the Golden Goose' }, 
+            { id: 'III', label: 'Act III: Wunderswan\'s domain', locked: !actIIIUnlocked, lockReason: 'Survive the Wunderswan' },
+            { id: 'IV', label: 'Act IV: Marsh of the Unfathomallard', locked: !actIVUnlocked, lockReason: 'Defeat The Quacken' },
             { id: 'DuckAndCover', label: 'Duck and Cover', locked: !duckUnlocked, lockReason: 'Complete Act III to unlock' }
         ];
     const items = [];
@@ -8738,10 +9000,24 @@ function showTitleScreen() {
                 'assets/streets/future/future9.jpeg',
                 'assets/streets/future/future10.jpeg'
             ];
+            const eldritchList = [
+                'assets/streets/eldritch/eldritch1.png',
+                'assets/streets/eldritch/eldritch2.png',
+                'assets/streets/eldritch/eldritch3.png',
+                'assets/streets/eldritch/eldritch4.png',
+                'assets/streets/eldritch/eldritch5.png',
+                'assets/streets/eldritch/eldritch6.png',
+                'assets/streets/eldritch/eldritch7.png',
+                'assets/streets/eldritch/eldritch8.png',
+                'assets/streets/eldritch/eldritch9.png'
+            ];
             // Expose the Act III background list globally so other systems (applyActBackgrounds, preload, etc.) can use it
             try { window.FUTURE_STREET_BG_PATHS = Array.isArray(futureList) ? futureList.slice() : []; } catch(_){ }
+            // Expose the Act IV background list globally
+            try { window.ELDRITCH_STREET_BG_PATHS = Array.isArray(eldritchList) ? eldritchList.slice() : []; } catch(_){ }
             function startGoosePreload(){ try { if (!window._goosePreloadPromise) window._goosePreloadPromise = preloadBackgroundList(gooseList); } catch(_){} }
             function startFuturePreload(){ try { if (!window._futurePreloadPromise) window._futurePreloadPromise = preloadBackgroundList(window.FUTURE_STREET_BG_PATHS || futureList); } catch(_){} }
+            function startEldritchPreload(){ try { if (!window._eldritchPreloadPromise) window._eldritchPreloadPromise = preloadBackgroundList(window.ELDRITCH_STREET_BG_PATHS || eldritchList); } catch(_){} }
             const actIIItem = items[1];
             if (actIIItem) {
                 try { actIIItem.tabIndex = 0; } catch(_){}
@@ -8754,6 +9030,13 @@ function showTitleScreen() {
                 // If unlocked, kick preload immediately; otherwise, preload when user hovers the locked item
                 if (!acts[2].locked) startFuturePreload();
                 else { actIIIItem.addEventListener('mouseenter', startFuturePreload, { passive:true }); actIIIItem.addEventListener('focus', startFuturePreload, { passive:true }); }
+            }
+            const actIVItem = items[3];
+            if (actIVItem) {
+                try { actIVItem.tabIndex = 0; } catch(_){ }
+                // If unlocked, kick preload immediately; otherwise, preload when user hovers the locked item
+                if (!acts[3].locked) startEldritchPreload();
+                else { actIVItem.addEventListener('mouseenter', startEldritchPreload, { passive:true }); actIVItem.addEventListener('focus', startEldritchPreload, { passive:true }); }
             }
         } catch(_){}
 
@@ -8996,6 +9279,57 @@ function showTitleScreen() {
 
     try { window.unlockActIII = unlockActIII; } catch(_){ }
     try { if (typeof window._flushUnlockActIIIQueue === 'function') window._flushUnlockActIIIQueue(); } catch(_){ }
+
+    // Centralized Act IV unlock handler — use this to ensure runtime flag, persistence, and UI refresh occur together.
+    function unlockActIV(source) {
+        try { if (!game) window.game = window.game || {}; } catch(_){}
+        try { game._actIVUnlocked = true; } catch(_){}
+        try { if (localStorage && localStorage.setItem) localStorage.setItem('actIVUnlocked', '1'); } catch(_){}
+        try {
+            try { if (localStorage && localStorage.setItem) localStorage.setItem('lastUnlockEvent', JSON.stringify({ ts: Date.now(), source: source || 'unknown' })); } catch(_){ }
+            // Record an explicit persistent event so it can be inspected after spam
+            // Briefly suppress noisy console.info flood so the unlock log is visible in console
+            try {
+                if (!console._origInfo) console._origInfo = console.info;
+                console._silencedUntil = Math.max(console._silencedUntil || 0, Date.now() + 1600);
+                console.info = function(){ if (Date.now() < (console._silencedUntil||0)) return; try { return console._origInfo.apply(console, arguments); } catch(e){} };
+            } catch(_){}
+            // Visible developer log
+            try { if (typeof devLog === 'function') devLog('[Progress] Act IV unlocked (' + (source||'unknown') + ')'); } catch(_){}
+            try { console.info('[Progress] Act IV unlocked', source || 'unknown'); } catch(_){}
+        } catch(_){}
+        // If act menu is open, refresh it so the unlocked state shows immediately
+        try {
+            const menu = document.getElementById('titleActMenu');
+            if (menu && typeof menu._refresh === 'function') menu._refresh();
+        } catch(_){ }
+        // Show toast (with fallback) to ensure player sees the unlock regardless of overlay state
+        try {
+            const toastMsg = 'Act IV unlocked!';
+            try { if (typeof showToast === 'function') showToast(toastMsg); } catch(_){ }
+            try {
+                const now = Date.now();
+                try { window._last_toast_shown_ts = window._last_toast_shown_ts || 0; } catch(_){ }
+                if (!window._last_toast_shown_ts || (now - window._last_toast_shown_ts) > 2800) {
+                    setTimeout(()=>{
+                        try {
+                            if (!window._qn_toast_el && !document.getElementById('qn_toast')) {
+                                const fel = document.createElement('div');
+                                fel.id = 'qn_toast_fallback';
+                                fel.textContent = toastMsg;
+                                fel.style.cssText = 'position:fixed;left:50%;top:14px;transform:translateX(-50%);padding:10px 16px;background:rgba(24,24,28,0.98);color:#ffd;border-radius:8px;border:1px solid rgba(255,255,255,0.06);z-index:45000;font-family:Courier New,monospace;font-size:14px;box-shadow:0 8px 30px rgba(0,0,0,0.6);';
+                                try { document.body.appendChild(fel); } catch(_){ }
+                                setTimeout(()=>{ try { fel.style.opacity='0'; fel.remove(); } catch(_){} }, 2200);
+                            }
+                        } catch(_){ }
+                    }, 60);
+                    try { window._last_toast_shown_ts = now; } catch(_){ }
+                }
+            } catch(_){ }
+        } catch(_){ }
+    }
+
+    try { window.unlockActIV = unlockActIV; } catch(_){ }
 
     function unlockDuckAndCover(source) {
         let alreadyUnlocked = false;
@@ -14416,6 +14750,18 @@ function offerPermanentAbilityChoice() {
                     if (!themeWeightedPool.length) {
                         for (let c=0;c<12;c++) themeWeightedPool.push('Cardi Beak');
                     }
+                } else if (String(game._selectedAct) === 'IV') {
+                    // For Act IV, only allow enemies explicitly marked for Act IV (none yet, so no enemies spawn)
+                    themeWeightedPool = themeWeightedPool.filter(function(t) {
+                        try {
+                            const meta = ENEMY_TYPES[t];
+                            if (!meta) return false;
+                            // Only allow entries explicitly marked for Act IV
+                            if (!meta.hasOwnProperty('act')) return false;
+                            return String(meta.act) === 'IV';
+                        } catch(_) { return false; }
+                    });
+                    // No fallback for Act IV yet, as enemies will be added later
                 }
             } catch(_) {}
             if (!themeWeightedPool.length) themeWeightedPool = enemyTypesAll.slice();
@@ -14622,7 +14968,8 @@ function offerPermanentAbilityChoice() {
                         try {
                             if (!game._bossMusicPlaying) {
                                 if (game.bgMusic) { game._prevMusicSrc = game.bgMusic.src; try { game.bgMusic.pause(); } catch(e) {} }
-                                game.bgMusic = new Audio('assets/audio/PixelShowdown.mp3');
+                                const bossMusicSrc = (String(game._selectedAct) === 'IV') ? 'assets/audio/eldritchboss.mp3' : 'assets/audio/PixelShowdown.mp3';
+                                game.bgMusic = new Audio(bossMusicSrc);
                                 game.bgMusic.loop = true;
                                 applyMusicPreference();
                                 updateAudioButtons();
@@ -20204,6 +20551,7 @@ function offerPermanentAbilityChoice() {
                 // Final boss defeat check
                 if (enemy.type === 'The Big Quack') {
                     game._bigQuackDefeated = true;
+                    try { if (localStorage && localStorage.setItem) localStorage.setItem('quackenDefeated', '1'); } catch(_){ }
                     console.info('[Endgame] The Big Quack defeated. Preparing ending overlay.');
                     // Swap to ending music (play cleansing theme regardless of previous track)
                     try {
@@ -20297,6 +20645,10 @@ function offerPermanentAbilityChoice() {
                         }
                         try { if (window._bulletImages && typeof window._bulletImages.loadQuackenTentacle === 'function') window._bulletImages.loadQuackenTentacle(); } catch(_){ }
                         try { if (typeof unlock === 'function') unlock('releaseTheQuacken'); } catch(_){ }
+                        // Unlock Act IV on first Quacken defeat
+                        try { game._quackenDefeated = true; } catch(_){ }
+                        try { if (typeof localStorage !== 'undefined' && localStorage && typeof localStorage.setItem === 'function') localStorage.setItem('quackenDefeated', '1'); } catch(_){ }
+                        try { safeUnlockActIV('The Quacken defeat'); } catch(_){ }
                         // Only show the toast when this is the first recorded defeat (persisted);
                         // do not show on subsequent defeats in future runs.
                         const toastNeeded = firstDefeat;
@@ -26440,7 +26792,6 @@ function offerPermanentAbilityChoice() {
                         }
                         game._bossMusicPlaying = false;
                     } catch(e) {}
-                        game._bigQuackDefeated = false;
                     game._quackenToastShownRun = false;
                     game._finalAbilityOffered = false;
                     game._victorySequenceShown = false; // reset victory guard
@@ -26593,7 +26944,6 @@ function offerPermanentAbilityChoice() {
             // Ensure no lingering pause or overlays hide player
             game.gameOver = false;
             game.paused = false;
-            game._bigQuackDefeated = false; // already set above, reinforce
 
             // Ensure all projectiles and metadata are cleared before starting a new run
             if (typeof game.resetProjectilePool === 'function') game.resetProjectilePool();
