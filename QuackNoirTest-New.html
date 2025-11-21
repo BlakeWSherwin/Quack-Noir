@@ -1322,7 +1322,7 @@
             _seenAbilitiesLoaded: false,
             _initComplete: false,
             _returningToTitle: false,
-            _titleMusicSuppressed: false,
+            _titleMusicSuppressed: true,
             // User-adjustable runtime settings / visual toggles
             settings: { realityBreakOverlay: false },
             // Unified input state (keyboard/touch/gamepad)
@@ -5741,18 +5741,12 @@
                             ctx.imageSmoothingEnabled = true;
                             ctx.drawImage(img, -drawW/2, -drawH/2, drawW, drawH);
                         } else {
-                            // Fallback: elongated brown ellipse with lighter scoring lines
-                            const stretch = Math.max(1.0, Math.min(2.0, r * 0.18 + 1.2));
-                            const rx = Math.max(6, r * stretch);
-                            const ry = Math.max(4, r * 0.6);
-                            ctx.fillStyle = '#9C6B3E';
-                            ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI*2); ctx.fill();
-                            ctx.strokeStyle = '#D9B384'; ctx.lineWidth = Math.max(1, r*0.1);
-                            ctx.beginPath();
-                            ctx.moveTo(-rx*0.6, -ry*0.2); ctx.lineTo(rx*0.6, ry*0.2);
-                            ctx.moveTo(-rx*0.6, 0); ctx.lineTo(rx*0.6, 0);
-                            ctx.moveTo(-rx*0.6, ry*0.2); ctx.lineTo(rx*0.6, -ry*0.2);
-                            ctx.stroke();
+                            // Fallback: bright green rectangle to test if this code is reached
+                            ctx.fillStyle = '#00FF00';
+                            ctx.fillRect(-15, -8, 30, 16);
+                            ctx.strokeStyle = '#FFFFFF';
+                            ctx.lineWidth = 2;
+                            ctx.strokeRect(-15, -8, 30, 16);
                         }
                         ctx.restore();
                         // Crumb trail: subtle dust puffs with warm bread color
@@ -6421,6 +6415,8 @@
         if (to && to.parentElement) try { to.parentElement.removeChild(to); } catch(e) {}
         // Apply act-specific background choices (Act selection may set game._selectedAct)
         try { if (typeof applyActBackgrounds === 'function') applyActBackgrounds(); } catch(_){}
+        // Apply act-specific music when starting the game
+        try { if (game._selectedAct) ensureActMusic(game._selectedAct); } catch(_){}
         if (!game._initComplete) {
             if (typeof init === 'function') init();
             try { game._initComplete = true; } catch(_){ }
@@ -6447,7 +6443,7 @@ function loadSelectedAct() {
             game._selectedAct = v;
             // Apply act-specific visuals & music now that act is known
             try { applyActBackgrounds(); } catch(_){}
-            try { ensureActMusic(game._selectedAct); } catch(_){}
+            // Removed ensureActMusic call to prevent auto-starting act music on page refresh
         }
     } catch(_) {}
 }
@@ -7351,51 +7347,15 @@ function ensureBackgroundMusic() {
             }
         } catch(_){ }
         if (!game.bgMusic) {
-            // Prefer act-specific theme when an act is selected (Act II uses GooseGhetto)
+            // Always initialize with default music; act-specific switching handled by ensureActMusic
             let src = 'assets/audio/QuackshotChronicles.mp3';
-            try { if (game && game._selectedAct && String(game._selectedAct) === 'II') src = 'assets/audio/GooseGhetto.mp3'; } catch(_){}
-            try { if (game && game._selectedAct && String(game._selectedAct) === 'IV') src = 'assets/audio/eldritch1.mp3'; } catch(_){}
-            // initializing bgMusic with chosen source
+            // initializing bgMusic with default source
             const m = new Audio(src);
             m.loop = true; m.volume = 0.55; game.bgMusic = m;
         }
         if (game.bgMusic.paused) {
             game.bgMusic.play().catch(()=>{});
         }
-        // If the player has selected Act II but an earlier default track was created, swap it now.
-        try {
-            if (game && game._selectedAct && String(game._selectedAct) === 'II') {
-                try {
-                    const cur = game.bgMusic && game.bgMusic.src ? String(game.bgMusic.src) : '';
-                    if (!cur.includes('GooseGhetto')) {
-                        // swapping existing bgMusic to GooseGhetto due to selectedAct=II
-                        try { if (game.bgMusic) { game._prevMusicSrc = game.bgMusic.src; try { game.bgMusic.pause(); } catch(_){} } } catch(_){}
-                        game.bgMusic = new Audio('assets/audio/GooseGhetto.mp3');
-                        game.bgMusic.loop = true; game.bgMusic.volume = 0.55;
-                        applyMusicPreference();
-                        try { game.bgMusic.play().catch(()=>{}); } catch(_){}
-                        try { game._actMusicSet = true; } catch(_){}
-                    }
-                } catch(_){}
-            }
-        } catch(_){}
-        // If the player has selected Act IV but an earlier default track was created, swap it now.
-        try {
-            if (game && game._selectedAct && String(game._selectedAct) === 'IV') {
-                try {
-                    const cur = game.bgMusic && game.bgMusic.src ? String(game.bgMusic.src) : '';
-                    if (!cur.includes('eldritch1')) {
-                        // swapping existing bgMusic to eldritch1 due to selectedAct=IV
-                        try { if (game.bgMusic) { game._prevMusicSrc = game.bgMusic.src; try { game.bgMusic.pause(); } catch(_){} } } catch(_){}
-                        game.bgMusic = new Audio('assets/audio/eldritch1.mp3');
-                        game.bgMusic.loop = true; game.bgMusic.volume = 0.55;
-                        applyMusicPreference();
-                        try { game.bgMusic.play().catch(()=>{}); } catch(_){}
-                        try { game._actMusicSet = true; } catch(_){}
-                    }
-                } catch(_){}
-            }
-        } catch(_){}
     } catch(e) {}
 }
 // Manual Low FX toggle: press 'L' to toggle, Shift+L to re-enable auto mode
@@ -8076,8 +8036,135 @@ function preloadActSprites(actId, timeoutMs){
 
 function showActTransition(actId, options){
     options = options || {};
+    // Special Act IV intro cutscene: show two images sequentially on fire button presses
+    function showActIVCutscene(){
+        return new Promise((resolve)=>{
+            try {
+                // Create full-screen overlay
+                const overlay = document.createElement('div');
+                overlay.id = 'act4IntroOverlay';
+                Object.assign(overlay.style, {
+                    position: 'fixed', inset: '0', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'rgba(0,0,0,1)', zIndex: 60000, cursor: 'pointer'
+                });
+                // Image element
+                const img = document.createElement('img');
+                img.src = 'assets/story/act4-1.png';
+                img.alt = 'Act IV';
+                Object.assign(img.style, {
+                    maxWidth: '94vw', maxHeight: '94vh', objectFit: 'contain', imageRendering: 'pixelated',
+                    boxShadow: '0 12px 40px rgba(0,0,0,0.8)', borderRadius: '6px'
+                });
+                overlay.appendChild(img);
+                document.body.appendChild(overlay);
+
+                let step = 1;
+
+                function cleanup(){
+                    try { overlay.removeEventListener('pointerup', onPointer); } catch(_){ }
+                    try { document.removeEventListener('keyup', onKeyUp, true); } catch(_){ }
+                    try { if (overlay && overlay.parentElement) overlay.parentElement.removeChild(overlay); } catch(_){ }
+                    resolve();
+                }
+
+                function proceed(){
+                    try {
+                        if (step === 1) {
+                            step = 2;
+                            // Swap to second image
+                            img.src = 'assets/story/act4-2.png';
+                        } else {
+                            cleanup();
+                        }
+                    } catch(_) { cleanup(); }
+                }
+
+                // Suppress input that may have initiated the transition (avoid immediately consuming the same press)
+                const shownAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                const SUPPRESS_MS = 180; // ignore inputs within this window
+
+                function onKeyUp(e){
+                    try {
+                        if (((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) < (shownAt + SUPPRESS_MS)) return;
+                        const k = e && (e.key || e.keyCode);
+                        if (k === ' ' || k === 'Spacebar' || k === 'Enter' || k === 32 || k === 13) {
+                            try { e.preventDefault(); } catch(_){ }
+                            proceed();
+                        }
+                    } catch(_){ }
+                }
+
+                function onPointer(ev){
+                    try {
+                        if (((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) < (shownAt + SUPPRESS_MS)) return;
+                        // prevent focus/drag side-effects
+                        try { if (ev && typeof ev.preventDefault === 'function') ev.preventDefault(); } catch(_){}
+                        proceed();
+                    } catch(_){ }
+                }
+
+                // Support pointer-up and keyboard-up (space/enter), with brief suppression
+                overlay.addEventListener('pointerup', onPointer);
+                document.addEventListener('keyup', onKeyUp, true);
+
+                // Basic gamepad support: poll for any button press on connected gamepads
+                let gpPollId = null;
+                function pollGamepads(){
+                    try {
+                        const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                        if (now >= (shownAt + SUPPRESS_MS)) {
+                            const gps = (navigator.getGamepads && navigator.getGamepads()) || [];
+                            for (let i=0;i<gps.length;i++){
+                                const g = gps[i];
+                                if (!g || !g.buttons) continue;
+                                for (let b=0;b<g.buttons.length;b++){
+                                    try {
+                                        const btn = g.buttons[b];
+                                        if (btn && btn.pressed) { try { proceed(); } catch(_){}; return; }
+                                    } catch(_){}
+                                }
+                            }
+                        }
+                    } catch(_){}
+                    try { gpPollId = requestAnimationFrame(pollGamepads); } catch(_) { gpPollId = setTimeout(pollGamepads, 120); }
+                }
+                try { pollGamepads(); } catch(_){}
+
+                // If images fail to load or user doesn't interact, add a small timeout fallback to proceed automatically
+                try {
+                    const t1 = setTimeout(()=>{ if (step === 1) { step = 2; img.src = 'assets/story/act4-2.png'; } }, 12000);
+                    const t2 = setTimeout(()=>{ cleanup(); }, 26000);
+                    // Clear timeouts on cleanup
+                    const origCleanup = cleanup;
+                    cleanup = function(){ try{ clearTimeout(t1); clearTimeout(t2); }catch(_){ } try { if (gpPollId) { try { cancelAnimationFrame(gpPollId); } catch(_) { try { clearTimeout(gpPollId); } catch(_){} } } } catch(_){ } origCleanup(); };
+                } catch(_){ }
+
+            } catch(e){ try { resolve(); } catch(_){} }
+        });
+    }
     const minMs = typeof options.minMs === 'number' ? options.minMs : 2000;
     const preloadTimeout = typeof options.preloadTimeout === 'number' ? options.preloadTimeout : 1800;
+    if (String(actId) === 'IV') {
+        // Play the Act IV two-step intro before showing the standard transition overlay
+        return showActIVCutscene().then(() => {
+            const ov = _createActTransitionOverlay(); const txt = document.getElementById('actTransitionOverlayText');
+            const label = 'Marsh of the Unfathomallard';
+            if (txt) txt.textContent = label;
+            try { console.info('[ActTransition] show', actId, label); } catch(_){ }
+            ov.style.pointerEvents = 'auto'; ov.style.opacity = '1';
+            try { console.info('[ActTransition] overlay set visible — element present?', !!ov, 'text=', (txt?txt.textContent:null)); } catch(_){ }
+            const start = Date.now();
+            const tasks = [
+                preloadActSprites(actId, preloadTimeout),
+                new Promise(r=>setTimeout(r, minMs))
+            ];
+            return Promise.all(tasks).then(()=>{
+                const passed = Date.now() - start; const remain = Math.max(0, 120 - (Date.now()-start));
+                setTimeout(()=>{ try { ov.style.opacity = '0'; ov.style.pointerEvents = 'none'; try { console.info('[ActTransition] hide overlay'); } catch(_){} } catch(_){}; setTimeout(()=>{ try{ if (ov && ov.parentElement) {} }catch(_){} },240); }, remain);
+            }).catch(()=>{ try{ ov.style.opacity='0'; ov.style.pointerEvents='none'; }catch(_){} });
+        });
+    }
+
     if (actId === 'I') {
         return showActICutscene().then(() => {
             // proceed with normal transition
@@ -8902,7 +8989,7 @@ function showTitleScreen() {
                     return;
                 }
                 // Start corresponding act; set act music if applicable then begin
-                try { game._selectedAct = a.id; try { ensureActMusic(game._selectedAct); } catch(_){} try { saveSelectedAct(); } catch(_){} } catch(_){}
+                try { game._selectedAct = a.id; game._titleMusicSuppressed = false; try { ensureActMusic(game._selectedAct); } catch(_){} try { saveSelectedAct(); } catch(_){} } catch(_){}
                 closeActMenu(); cleanup(); begin('title-space');
             };
             // Also register an actions entry for keyboard handling that simply triggers the click
@@ -9839,6 +9926,7 @@ function ensureActMusic(actId) {
         let desired = 'assets/audio/QuackshotChronicles.mp3';
         if (act === 'II') desired = 'assets/audio/GooseGhetto.mp3';
         else if (act === 'III') desired = 'assets/audio/MetalHeartsCollide.mp3';
+        else if (act === 'IV') desired = 'assets/audio/eldritch1.mp3';
 
         // Helper: compare only filename portion (URL may be absolute)
         const curSrc = (game && game.bgMusic && game.bgMusic.src) ? String(game.bgMusic.src) : '';
@@ -9848,7 +9936,7 @@ function ensureActMusic(actId) {
         if (curHas) {
             try { applyMusicPreference(); } catch(_){}
             try { updateAudioButtons(); } catch(_){}
-            try { game._actMusicSet = (act === 'II' || act === 'III'); } catch(_){}
+            try { game._actMusicSet = (act === 'II' || act === 'III' || act === 'IV'); } catch(_){}
             if (act !== 'DuckAndCover') {
                 try { if (typeof setDuckNowPlaying === 'function') setDuckNowPlaying(null); } catch(_){ }
                 try { game._duckActiveTrack = null; } catch(_){ }
@@ -9866,7 +9954,7 @@ function ensureActMusic(actId) {
             game.bgMusic = m;
             try { applyMusicPreference(); } catch(_){}
             try { updateAudioButtons(); } catch(_){}
-            try { game._actMusicSet = (act === 'II' || act === 'III'); } catch(_){ }
+            try { game._actMusicSet = (act === 'II' || act === 'III' || act === 'IV'); } catch(_){ }
             try { if (typeof setDuckNowPlaying === 'function') setDuckNowPlaying(null); } catch(_){ }
             try { game._duckActiveTrack = null; } catch(_){ }
         } catch(e) {
@@ -10591,6 +10679,58 @@ function offerPermanentAbilityChoice() {
     // Act III melee enemy: Swandroid 18 (non-ranged, Act III exclusive)
     // Uses assets/swans/swandroid18.jpeg. Front/Rear/Side frames provided; side faces RIGHT by default.
     ENEMY_TYPES['Swandroid 18'] = { health: 260, speed: 0.70, damage: 26, color: '#9FB3FF', size: 52, xp: 380, ranged: false, armor: 4, act: 'III' };
+
+    // Act IV enemy: Billnarock the Unhatched (exclusive to Act IV)
+    // Uses assets/eldritch/spritesheets/billnarock-sheet-0-23.png. Spritesheet with frames 0-23. Mirrors horizontally when facing left.
+    ENEMY_TYPES['Billnarock the Unhatched'] = { health: 400, speed: 0.75, damage: 40, color: '#8B4513', size: 64, xp: 600, ranged: false, armor: 6, act: 'IV' };
+
+    // Act IV enemy: Downspawn of the Abyss (exclusive to Act IV)
+    // Uses assets/eldritch/spritesheets/downspawn-sheet-9-31.png. Spritesheet with frames 9-31. Mirrors horizontally when facing left.
+    ENEMY_TYPES['Downspawn of the Abyss'] = { health: 450, speed: 0.70, damage: 45, color: '#000080', size: 66, xp: 650, ranged: false, armor: 7, act: 'IV' };
+
+    // Act IV enemy: Featheroth the Molten (exclusive to Act IV)
+    // Uses assets/eldritch/spritesheets/featheroth-sheet.png. Spritesheet with 32 frames, using all frames. Mirrors horizontally when facing left.
+    ENEMY_TYPES['Featheroth the Molten'] = { health: 500, speed: 0.65, damage: 50, color: '#FF4500', size: 68, xp: 700, ranged: false, armor: 8, act: 'IV' };
+
+    // Act IV enemy: Feathered Sleeper (exclusive to Act IV)
+    // Uses assets/eldritch/spritesheets/featheredsleeper-sheet.png. Spritesheet with 32 frames, using all frames. Mirrors horizontally when facing left.
+    ENEMY_TYPES['Feathered Sleeper'] = { health: 550, speed: 0.60, damage: 55, color: '#800080', size: 70, xp: 750, ranged: false, armor: 9, act: 'IV' };
+
+    // Act IV enemy: Waddlemancer (exclusive to Act IV)
+    // Uses assets/eldritch/spritesheets/waddlemancer-sheet.png. Spritesheet with 32 frames, using all frames. Mirrors horizontally when facing left.
+    ENEMY_TYPES['Waddlemancer'] = { health: 600, speed: 0.55, damage: 60, color: '#FFD700', size: 72, xp: 800, ranged: false, armor: 10, act: 'IV' };
+
+    // Act IV enemy: The Beakoner (exclusive to Act IV)
+    // Uses assets/eldritch/spritesheets/beakoner-sheet-4-23.png. Spritesheet with 32 frames, using frames 4-23. Mirrors horizontally when facing left.
+    ENEMY_TYPES['The Beakoner'] = { health: 650, speed: 0.50, damage: 65, color: '#FF6347', size: 74, xp: 850, ranged: false, armor: 11, act: 'IV' };
+
+    // Act IV enemy: Quackos Eternal (exclusive to Act IV)
+    // Uses assets/eldritch/spritesheets/quackos-sheet-2-31.png. Spritesheet with 32 frames, using frames 2-31. Mirrors horizontally when facing left.
+    ENEMY_TYPES['Quackos Eternal'] = { health: 700, speed: 0.45, damage: 70, color: '#8A2BE2', size: 76, xp: 900, ranged: false, armor: 12, act: 'IV' };
+
+    // Act IV enemy: Mallard of the Mire (exclusive to Act IV)
+    // Uses assets/eldritch/spritesheets/MallardMire-sheet-12-24.png. Spritesheet with 32 frames, using frames 12-24. Mirrors horizontally when facing left.
+    ENEMY_TYPES['Mallard of the Mire'] = { health: 750, speed: 0.40, damage: 75, color: '#228B22', size: 78, xp: 950, ranged: false, armor: 13, act: 'IV' };
+
+    // Act IV enemy: Plumagorgon (exclusive to Act IV)
+    // Uses assets/eldritch/spritesheets/plumagorgon-sheet-3-24.png. Spritesheet with 32 frames, using frames 3-24. Mirrors horizontally when facing left.
+    ENEMY_TYPES['Plumagorgon'] = { health: 800, speed: 0.35, damage: 80, color: '#DC143C', size: 80, xp: 1000, ranged: false, armor: 14, act: 'IV' };
+
+    // Act IV enemy: Molted Menace (exclusive to Act IV)
+    // Uses assets/eldritch/spritesheets/moltedmenace-sheet-3-29.png. Spritesheet with 32 frames, using frames 3-29. Mirrors horizontally when facing left.
+    ENEMY_TYPES['Molted Menace'] = { health: 850, speed: 0.30, damage: 85, color: '#FF8C00', size: 82, xp: 1050, ranged: false, armor: 15, act: 'IV' };
+
+    // Act IV enemy: Broodwaddle (exclusive to Act IV)
+    // Uses assets/eldritch/spritesheets/broodwaddle-sheet-11-31.png. Spritesheet with 32 frames, using frames 11-31. Mirrors horizontally when facing left.
+    ENEMY_TYPES['Broodwaddle'] = { health: 900, speed: 0.25, damage: 90, color: '#9932CC', size: 84, xp: 1100, ranged: false, armor: 16, act: 'IV' };
+
+    // Act IV boss: Artisanal Sourduck...of Doom (street 5)
+    // Uses assets/eldritch/spritesheets/sourduck-sheet-1-30.png. Spritesheet with 32 frames, using frames 1-30. Mirrors horizontally when facing left.
+    ENEMY_TYPES['Artisanal Sourduck...of Doom'] = { health: 2500, speed: 0.20, damage: 100, color: '#FF1493', size: 160, xp: 15000, ranged: true, rangedCooldown: 1000, armor: 18, act: 'IV', boss: true, spawnStreet: 5 };
+
+    // Act IV enemy: Mirequacker (exclusive to Act IV)
+    // Uses assets/eldritch/spritesheets/mirequack-sheet-12-31.png. Spritesheet with frames 12-31. Mirrors horizontally when facing left.
+    ENEMY_TYPES['Mirequacker'] = { health: 600, speed: 0.55, damage: 60, color: '#008000', size: 72, xp: 800, ranged: false, armor: 10, act: 'IV' };
 
     try { window.ENEMY_TYPES = ENEMY_TYPES; } catch(_){ }
 
@@ -11738,6 +11878,1151 @@ function offerPermanentAbilityChoice() {
                             try { if (!game.enemySprites.swandroid18) game.enemySprites.swandroid18 = game.enemySprites.swandroid18; } catch(_){ }
                             try { if (!game.enemySprites['Swandroid 18']) game.enemySprites['Swandroid 18'] = game.enemySprites.swandroid18; } catch(_){ }
                         } catch(e) { console.warn('[Swandroid18Sprite] install failed', e); }
+                    }
+
+                    // === Billnarock the Unhatched (Act IV enemy) sprite loader ===
+                    if (!game.enemySprites.billnarock) {
+                        try {
+                            const bnImg = new Image();
+                            try { bnImg.src = (new URL('assets/eldritch/spritesheets/billnarock-sheet-0-23.png', document.baseURI)).href; } catch(_) { bnImg.src = 'assets/eldritch/spritesheets/billnarock-sheet-0-23.png'; }
+                            game.enemySprites.billnarock = { image: bnImg, loaded: false, _forcedBitmap: null };
+                            const atlasFrames = [
+                                {"x":0,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":512,"w":256,"h":256,"duration":1}
+                            ];
+                            bnImg.onload = function(ev){
+                                try {
+                                    const img = (ev && ev.target) ? ev.target : this;
+                                    const cont = game.enemySprites.billnarock;
+                                    // If a createImageBitmap fallback was previously used, prefer the real Image now.
+                                    try {
+                                        if (cont && cont._forcedBitmap) {
+                                            try { if (cont._forcedBitmap.close) cont._forcedBitmap.close(); } catch(_){}
+                                            cont._forcedBitmap = null;
+                                            try { console.info('[BillnarockSprite] Image loaded; cleared forced bitmap fallback'); } catch(_){}
+                                        }
+                                    } catch(_){}
+                                    cont.loaded = true;
+                                    cont.frames = { seq: atlasFrames };
+                                    cont.anim = { frameStep: 8 };
+                                    const refH = 256;
+                                    cont.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
+                                    cont.computeHitbox = (enemy)=>{
+                                        try {
+                                            const size = enemy.size || 64; const scale = cont.baseScaleForSize(size);
+                                            const w = 256 * scale; const h = 256 * scale;
+                                            const hitW = w * 0.64; const hitH = h * 0.68;
+                                            return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
+                                        } catch(_) { return { w: enemy.size||64, h: enemy.size||64, ox: -(enemy.size||64)/2, oy: -(enemy.size||64)/2 }; }
+                                    };
+                                    try { console.info('[BillnarockSprite] Loaded billnarock spritesheet', cont.frames); } catch(_){}
+                                } catch(e) { console.warn('[BillnarockSprite] onload error', e); }
+                            };
+                            bnImg.onerror = function(ev){
+                                try {
+                                    const cont = game.enemySprites.billnarock;
+                                    try { console.warn('[BillnarockSprite] image onerror, attempting cache-bust then fetch fallback', bnImg && bnImg.src); } catch(_){ }
+                                    if (!bnImg._triedBust) { bnImg._triedBust = true; try { bnImg.src = bnImg.src + (bnImg.src.indexOf('?')===-1 ? '?v=1' : '&v=1'); } catch(_){}; return; }
+                                    const href = bnImg.src || '';
+                                    if (href.indexOf('file:') === 0) { cont._broken = true; try { console.warn('[BillnarockSprite] running from file:// - skipping fetch fallback'); } catch(_){}; return; }
+                                    try {
+                                        if (typeof fetch === 'function' && typeof createImageBitmap === 'function') {
+                                            try { console.info('[BillnarockSprite] starting fetch/createImageBitmap fallback for', href); } catch(_){ }
+                                            const ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                                            const signal = ac ? ac.signal : null;
+                                            const t = setTimeout(()=>{ try{ if (ac) ac.abort(); }catch(_){} }, 900);
+                                            fetch(href, { signal }).then(r=>{ clearTimeout(t); if (!r.ok) throw new Error('status '+r.status); return r.blob(); }).then(b=>createImageBitmap(b)).then(bmp=>{
+                                                clearTimeout(t);
+                                                cont._forcedBitmap = bmp; cont.loaded = true;
+                                                try { console.info('[BillnarockSprite] createImageBitmap fallback succeeded'); } catch(_){ }
+                                            }).catch(e=>{ clearTimeout(t); try { console.warn('[BillnarockSprite] fetch/createImageBitmap fallback failed', e); } catch(_){} });
+                                        }
+                                    } catch(e) { try { console.warn('[BillnarockSprite] fallback error', e); } catch(_){} }
+                                } catch(_){ }
+                            };
+                            try { if (!game.enemySprites.billnarock) game.enemySprites.billnarock = game.enemySprites.billnarock; } catch(_){ }
+                            try { if (!game.enemySprites['Billnarock the Unhatched']) game.enemySprites['Billnarock the Unhatched'] = game.enemySprites.billnarock; } catch(_){ }
+                        } catch(e) { console.warn('[BillnarockSprite] install failed', e); }
+                    }
+
+                    // === Downspawn of the Abyss (Act IV enemy) sprite loader ===
+                    if (!game.enemySprites.downspawn) {
+                        try {
+                            const dsImg = new Image();
+                            try { dsImg.src = (new URL('assets/eldritch/spritesheets/downspawn-sheet-9-31.png', document.baseURI)).href; } catch(_) { dsImg.src = 'assets/eldritch/spritesheets/downspawn-sheet-9-31.png'; }
+                            game.enemySprites.downspawn = { image: dsImg, loaded: false, _forcedBitmap: null };
+                            const atlasFrames = [
+                                {"x":256,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":768,"w":256,"h":256,"duration":1}
+                            ];
+                            dsImg.onload = function(ev){
+                                try {
+                                    const img = (ev && ev.target) ? ev.target : this;
+                                    const cont = game.enemySprites.downspawn;
+                                    // If a createImageBitmap fallback was previously used, prefer the real Image now.
+                                    try {
+                                        if (cont && cont._forcedBitmap) {
+                                            try { if (cont._forcedBitmap.close) cont._forcedBitmap.close(); } catch(_){}
+                                            cont._forcedBitmap = null;
+                                            try { console.info('[DownspawnSprite] Image loaded; cleared forced bitmap fallback'); } catch(_){}
+                                        }
+                                    } catch(_){}
+                                    cont.loaded = true;
+                                    cont.frames = { seq: atlasFrames };
+                                    cont.anim = { frameStep: 8 };
+                                    const refH = 256;
+                                    cont.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
+                                    cont.computeHitbox = (enemy)=>{
+                                        try {
+                                            const size = enemy.size || 66; const scale = cont.baseScaleForSize(size);
+                                            const w = 256 * scale; const h = 256 * scale;
+                                            const hitW = w * 0.64; const hitH = h * 0.68;
+                                            return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
+                                        } catch(_) { return { w: enemy.size||66, h: enemy.size||66, ox: -(enemy.size||66)/2, oy: -(enemy.size||66)/2 }; }
+                                    };
+                                    try { console.info('[DownspawnSprite] Loaded downspawn spritesheet', cont.frames); } catch(_){}
+                                } catch(e) { console.warn('[DownspawnSprite] onload error', e); }
+                            };
+                            dsImg.onerror = function(ev){
+                                try {
+                                    const cont = game.enemySprites.downspawn;
+                                    try { console.warn('[DownspawnSprite] image onerror, attempting cache-bust then fetch fallback', dsImg && dsImg.src); } catch(_){ }
+                                    if (!dsImg._triedBust) { dsImg._triedBust = true; try { dsImg.src = dsImg.src + (dsImg.src.indexOf('?')===-1 ? '?v=1' : '&v=1'); } catch(_){}; return; }
+                                    const href = dsImg.src || '';
+                                    if (href.indexOf('file:') === 0) { cont._broken = true; try { console.warn('[DownspawnSprite] running from file:// - skipping fetch fallback'); } catch(_){}; return; }
+                                    try {
+                                        if (typeof fetch === 'function' && typeof createImageBitmap === 'function') {
+                                            try { console.info('[DownspawnSprite] starting fetch/createImageBitmap fallback for', href); } catch(_){ }
+                                            const ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                                            const signal = ac ? ac.signal : null;
+                                            const t = setTimeout(()=>{ try{ if (ac) ac.abort(); }catch(_){} }, 900);
+                                            fetch(href, { signal }).then(r=>{ clearTimeout(t); if (!r.ok) throw new Error('status '+r.status); return r.blob(); }).then(b=>createImageBitmap(b)).then(bmp=>{
+                                                clearTimeout(t);
+                                                cont._forcedBitmap = bmp; cont.loaded = true;
+                                                try { console.info('[DownspawnSprite] createImageBitmap fallback succeeded'); } catch(_){ }
+                                            }).catch(e=>{ clearTimeout(t); try { console.warn('[DownspawnSprite] fetch/createImageBitmap fallback failed', e); } catch(_){} });
+                                        }
+                                    } catch(e) { try { console.warn('[DownspawnSprite] fallback error', e); } catch(_){} }
+                                } catch(_){ }
+                            };
+                            try { if (!game.enemySprites.downspawn) game.enemySprites.downspawn = game.enemySprites.downspawn; } catch(_){ }
+                            try { if (!game.enemySprites['Downspawn of the Abyss']) game.enemySprites['Downspawn of the Abyss'] = game.enemySprites.downspawn; } catch(_){ }
+                        } catch(e) { console.warn('[DownspawnSprite] install failed', e); }
+                    }
+
+                    // === Featheroth the Molten (Act IV enemy) sprite loader ===
+                    if (!game.enemySprites.featheroth) {
+                        try {
+                            const ftImg = new Image();
+                            try { ftImg.src = (new URL('assets/eldritch/spritesheets/featheroth-sheet.png', document.baseURI)).href; } catch(_) { ftImg.src = 'assets/eldritch/spritesheets/featheroth-sheet.png'; }
+                            game.enemySprites.featheroth = { image: ftImg, loaded: false, _forcedBitmap: null };
+                            const atlasFrames = [
+                                {"x":0,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":768,"w":256,"h":256,"duration":1}
+                            ];
+                            ftImg.onload = function(ev){
+                                try {
+                                    const img = (ev && ev.target) ? ev.target : this;
+                                    const cont = game.enemySprites.featheroth;
+                                    // If a createImageBitmap fallback was previously used, prefer the real Image now.
+                                    try {
+                                        if (cont && cont._forcedBitmap) {
+                                            try { if (cont._forcedBitmap.close) cont._forcedBitmap.close(); } catch(_){}
+                                            cont._forcedBitmap = null;
+                                            try { console.info('[FeatherothSprite] Image loaded; cleared forced bitmap fallback'); } catch(_){}
+                                        }
+                                    } catch(_){}
+                                    cont.loaded = true;
+                                    cont.frames = { seq: atlasFrames };
+                                    cont.anim = { frameStep: 8 };
+                                    const refH = 256;
+                                    cont.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
+                                    cont.computeHitbox = (enemy)=>{
+                                        try {
+                                            const size = enemy.size || 68; const scale = cont.baseScaleForSize(size);
+                                            const w = 256 * scale; const h = 256 * scale;
+                                            const hitW = w * 0.64; const hitH = h * 0.68;
+                                            return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
+                                        } catch(_) { return { w: enemy.size||68, h: enemy.size||68, ox: -(enemy.size||68)/2, oy: -(enemy.size||68)/2 }; }
+                                    };
+                                    try { console.info('[FeatherothSprite] Loaded featheroth spritesheet', cont.frames); } catch(_){}
+                                } catch(e) { console.warn('[FeatherothSprite] onload error', e); }
+                            };
+                            ftImg.onerror = function(ev){
+                                try {
+                                    const cont = game.enemySprites.featheroth;
+                                    try { console.warn('[FeatherothSprite] image onerror, attempting cache-bust then fetch fallback', ftImg && ftImg.src); } catch(_){ }
+                                    if (!ftImg._triedBust) { ftImg._triedBust = true; try { ftImg.src = ftImg.src + (ftImg.src.indexOf('?')===-1 ? '?v=1' : '&v=1'); } catch(_){}; return; }
+                                    const href = ftImg.src || '';
+                                    if (href.indexOf('file:') === 0) { cont._broken = true; try { console.warn('[FeatherothSprite] running from file:// - skipping fetch fallback'); } catch(_){}; return; }
+                                    try {
+                                        if (typeof fetch === 'function' && typeof createImageBitmap === 'function') {
+                                            try { console.info('[FeatherothSprite] starting fetch/createImageBitmap fallback for', href); } catch(_){ }
+                                            const ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                                            const signal = ac ? ac.signal : null;
+                                            const t = setTimeout(()=>{ try{ if (ac) ac.abort(); }catch(_){} }, 900);
+                                            fetch(href, { signal }).then(r=>{ clearTimeout(t); if (!r.ok) throw new Error('status '+r.status); return r.blob(); }).then(b=>createImageBitmap(b)).then(bmp=>{
+                                                clearTimeout(t);
+                                                cont._forcedBitmap = bmp; cont.loaded = true;
+                                                try { console.info('[FeatherothSprite] createImageBitmap fallback succeeded'); } catch(_){ }
+                                            }).catch(e=>{ clearTimeout(t); try { console.warn('[FeatherothSprite] fetch/createImageBitmap fallback failed', e); } catch(_){} });
+                                        }
+                                    } catch(e) { try { console.warn('[FeatherothSprite] fallback error', e); } catch(_){} }
+                                } catch(_){ }
+                            };
+                            try { if (!game.enemySprites.featheroth) game.enemySprites.featheroth = game.enemySprites.featheroth; } catch(_){ }
+                            try { if (!game.enemySprites['Featheroth the Molten']) game.enemySprites['Featheroth the Molten'] = game.enemySprites.featheroth; } catch(_){ }
+                        } catch(e) { console.warn('[FeatherothSprite] install failed', e); }
+                    }
+
+                    // === Feathered Sleeper (Act IV enemy) sprite loader ===
+                    if (!game.enemySprites.featheredsleeper) {
+                        try {
+                            const fsImg = new Image();
+                            try { fsImg.src = (new URL('assets/eldritch/spritesheets/featheredsleeper-sheet.png', document.baseURI)).href; } catch(_) { fsImg.src = 'assets/eldritch/spritesheets/featheredsleeper-sheet.png'; }
+                            game.enemySprites.featheredsleeper = { image: fsImg, loaded: false, _forcedBitmap: null };
+                            const atlasFrames = [
+                                {"x":0,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":768,"w":256,"h":256,"duration":1}
+                            ];
+                            fsImg.onload = function(ev){
+                                try {
+                                    const img = (ev && ev.target) ? ev.target : this;
+                                    const cont = game.enemySprites.featheredsleeper;
+                                    // If a createImageBitmap fallback was previously used, prefer the real Image now.
+                                    try {
+                                        if (cont && cont._forcedBitmap) {
+                                            try { if (cont._forcedBitmap.close) cont._forcedBitmap.close(); } catch(_){}
+                                            cont._forcedBitmap = null;
+                                            try { console.info('[FeatheredSleeperSprite] Image loaded; cleared forced bitmap fallback'); } catch(_){}
+                                        }
+                                    } catch(_){}
+                                    cont.loaded = true;
+                                    cont.frames = { seq: atlasFrames };
+                                    cont.anim = { frameStep: 8 };
+                                    const refH = 256;
+                                    cont.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
+                                    cont.computeHitbox = (enemy)=>{
+                                        try {
+                                            const size = enemy.size || 70; const scale = cont.baseScaleForSize(size);
+                                            const w = 256 * scale; const h = 256 * scale;
+                                            const hitW = w * 0.64; const hitH = h * 0.68;
+                                            return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
+                                        } catch(_) { return { w: enemy.size||70, h: enemy.size||70, ox: -(enemy.size||70)/2, oy: -(enemy.size||70)/2 }; }
+                                    };
+                                    try { console.info('[FeatheredSleeperSprite] Loaded featheredsleeper spritesheet', cont.frames); } catch(_){}
+                                } catch(e) { console.warn('[FeatheredSleeperSprite] onload error', e); }
+                            };
+                            fsImg.onerror = function(ev){
+                                try {
+                                    const cont = game.enemySprites.featheredsleeper;
+                                    try { console.warn('[FeatheredSleeperSprite] image onerror, attempting cache-bust then fetch fallback', fsImg && fsImg.src); } catch(_){ }
+                                    if (!fsImg._triedBust) { fsImg._triedBust = true; try { fsImg.src = fsImg.src + (fsImg.src.indexOf('?')===-1 ? '?v=1' : '&v=1'); } catch(_){}; return; }
+                                    const href = fsImg.src || '';
+                                    if (href.indexOf('file:') === 0) { cont._broken = true; try { console.warn('[FeatheredSleeperSprite] running from file:// - skipping fetch fallback'); } catch(_){}; return; }
+                                    try {
+                                        if (typeof fetch === 'function' && typeof createImageBitmap === 'function') {
+                                            try { console.info('[FeatheredSleeperSprite] starting fetch/createImageBitmap fallback for', href); } catch(_){ }
+                                            const ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                                            const signal = ac ? ac.signal : null;
+                                            const t = setTimeout(()=>{ try{ if (ac) ac.abort(); }catch(_){} }, 900);
+                                            fetch(href, { signal }).then(r=>{ clearTimeout(t); if (!r.ok) throw new Error('status '+r.status); return r.blob(); }).then(b=>createImageBitmap(b)).then(bmp=>{
+                                                clearTimeout(t);
+                                                cont._forcedBitmap = bmp; cont.loaded = true;
+                                                try { console.info('[FeatheredSleeperSprite] createImageBitmap fallback succeeded'); } catch(_){ }
+                                            }).catch(e=>{ clearTimeout(t); try { console.warn('[FeatheredSleeperSprite] fetch/createImageBitmap fallback failed', e); } catch(_){} });
+                                        }
+                                    } catch(e) { try { console.warn('[FeatheredSleeperSprite] fallback error', e); } catch(_){} }
+                                } catch(_){ }
+                            };
+                            try { if (!game.enemySprites.featheredsleeper) game.enemySprites.featheredsleeper = game.enemySprites.featheredsleeper; } catch(_){ }
+                            try { if (!game.enemySprites['Feathered Sleeper']) game.enemySprites['Feathered Sleeper'] = game.enemySprites.featheredsleeper; } catch(_){ }
+                        } catch(e) { console.warn('[FeatheredSleeperSprite] install failed', e); }
+                    }
+
+                    // === Waddlemancer (Act IV enemy) sprite loader ===
+                    if (!game.enemySprites.waddlemancer) {
+                        try {
+                            const wmImg = new Image();
+                            try { wmImg.src = (new URL('assets/eldritch/spritesheets/waddlemancer-sheet.png', document.baseURI)).href; } catch(_) { wmImg.src = 'assets/eldritch/spritesheets/waddlemancer-sheet.png'; }
+                            game.enemySprites.waddlemancer = { image: wmImg, loaded: false, _forcedBitmap: null };
+                            const atlasFrames = [
+                                {"x":0,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":768,"w":256,"h":256,"duration":1}
+                            ];
+                            wmImg.onload = function(ev){
+                                try {
+                                    const img = (ev && ev.target) ? ev.target : this;
+                                    const cont = game.enemySprites.waddlemancer;
+                                    // If a createImageBitmap fallback was previously used, prefer the real Image now.
+                                    try {
+                                        if (cont && cont._forcedBitmap) {
+                                            try { if (cont._forcedBitmap.close) cont._forcedBitmap.close(); } catch(_){}
+                                            cont._forcedBitmap = null;
+                                            try { console.info('[WaddlemancerSprite] Image loaded; cleared forced bitmap fallback'); } catch(_){}
+                                        }
+                                    } catch(_){}
+                                    cont.loaded = true;
+                                    cont.frames = { seq: atlasFrames };
+                                    cont.anim = { frameStep: 8 };
+                                    const refH = 256;
+                                    cont.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
+                                    cont.computeHitbox = (enemy)=>{
+                                        try {
+                                            const size = enemy.size || 72; const scale = cont.baseScaleForSize(size);
+                                            const w = 256 * scale; const h = 256 * scale;
+                                            const hitW = w * 0.64; const hitH = h * 0.68;
+                                            return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
+                                        } catch(_) { return { w: enemy.size||72, h: enemy.size||72, ox: -(enemy.size||72)/2, oy: -(enemy.size||72)/2 }; }
+                                    };
+                                    try { console.info('[WaddlemancerSprite] Loaded waddlemancer spritesheet', cont.frames); } catch(_){}
+                                } catch(e) { console.warn('[WaddlemancerSprite] onload error', e); }
+                            };
+                            wmImg.onerror = function(ev){
+                                try {
+                                    const cont = game.enemySprites.waddlemancer;
+                                    try { console.warn('[WaddlemancerSprite] image onerror, attempting cache-bust then fetch fallback', wmImg && wmImg.src); } catch(_){ }
+                                    if (!wmImg._triedBust) { wmImg._triedBust = true; try { wmImg.src = wmImg.src + (wmImg.src.indexOf('?')===-1 ? '?v=1' : '&v=1'); } catch(_){}; return; }
+                                    const href = wmImg.src || '';
+                                    if (href.indexOf('file:') === 0) { cont._broken = true; try { console.warn('[WaddlemancerSprite] running from file:// - skipping fetch fallback'); } catch(_){}; return; }
+                                    try {
+                                        if (typeof fetch === 'function' && typeof createImageBitmap === 'function') {
+                                            try { console.info('[WaddlemancerSprite] starting fetch/createImageBitmap fallback for', href); } catch(_){ }
+                                            const ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                                            const signal = ac ? ac.signal : null;
+                                            const t = setTimeout(()=>{ try{ if (ac) ac.abort(); }catch(_){} }, 900);
+                                            fetch(href, { signal }).then(r=>{ clearTimeout(t); if (!r.ok) throw new Error('status '+r.status); return r.blob(); }).then(b=>createImageBitmap(b)).then(bmp=>{
+                                                clearTimeout(t);
+                                                cont._forcedBitmap = bmp; cont.loaded = true;
+                                                try { console.info('[WaddlemancerSprite] createImageBitmap fallback succeeded'); } catch(_){ }
+                                            }).catch(e=>{ clearTimeout(t); try { console.warn('[WaddlemancerSprite] fetch/createImageBitmap fallback failed', e); } catch(_){} });
+                                        }
+                                    } catch(e) { try { console.warn('[WaddlemancerSprite] fallback error', e); } catch(_){} }
+                                } catch(_){ }
+                            };
+                            try { if (!game.enemySprites.waddlemancer) game.enemySprites.waddlemancer = game.enemySprites.waddlemancer; } catch(_){ }
+                            try { if (!game.enemySprites['Waddlemancer']) game.enemySprites['Waddlemancer'] = game.enemySprites.waddlemancer; } catch(_){ }
+                        } catch(e) { console.warn('[WaddlemancerSprite] install failed', e); }
+                    }
+
+                    // === The Beakoner (Act IV enemy) sprite loader ===
+                    if (!game.enemySprites.beakoner) {
+                        try {
+                            const bkImg = new Image();
+                            try { bkImg.src = (new URL('assets/eldritch/spritesheets/beakoner-sheet-4-23.png', document.baseURI)).href; } catch(_) { bkImg.src = 'assets/eldritch/spritesheets/beakoner-sheet-4-23.png'; }
+                            game.enemySprites.beakoner = { image: bkImg, loaded: false, _forcedBitmap: null };
+                            const atlasFrames = [
+                                {"x":1024,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":512,"w":256,"h":256,"duration":1}
+                            ];
+                            bkImg.onload = function(ev){
+                                try {
+                                    const img = (ev && ev.target) ? ev.target : this;
+                                    const cont = game.enemySprites.beakoner;
+                                    // If a createImageBitmap fallback was previously used, prefer the real Image now.
+                                    try {
+                                        if (cont && cont._forcedBitmap) {
+                                            try { if (cont._forcedBitmap.close) cont._forcedBitmap.close(); } catch(_){}
+                                            cont._forcedBitmap = null;
+                                            try { console.info('[BeakonerSprite] Image loaded; cleared forced bitmap fallback'); } catch(_){}
+                                        }
+                                    } catch(_){}
+                                    cont.loaded = true;
+                                    cont.frames = { seq: atlasFrames };
+                                    cont.anim = { frameStep: 8 };
+                                    const refH = 256;
+                                    cont.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
+                                    cont.computeHitbox = (enemy)=>{
+                                        try {
+                                            const size = enemy.size || 74; const scale = cont.baseScaleForSize(size);
+                                            const w = 256 * scale; const h = 256 * scale;
+                                            const hitW = w * 0.64; const hitH = h * 0.68;
+                                            return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
+                                        } catch(_) { return { w: enemy.size||74, h: enemy.size||74, ox: -(enemy.size||74)/2, oy: -(enemy.size||74)/2 }; }
+                                    };
+                                    try { console.info('[BeakonerSprite] Loaded beakoner spritesheet', cont.frames); } catch(_){}
+                                } catch(e) { console.warn('[BeakonerSprite] onload error', e); }
+                            };
+                            bkImg.onerror = function(ev){
+                                try {
+                                    const cont = game.enemySprites.beakoner;
+                                    try { console.warn('[BeakonerSprite] image onerror, attempting cache-bust then fetch fallback', bkImg && bkImg.src); } catch(_){ }
+                                    if (!bkImg._triedBust) { bkImg._triedBust = true; try { bkImg.src = bkImg.src + (bkImg.src.indexOf('?')===-1 ? '?v=1' : '&v=1'); } catch(_){}; return; }
+                                    const href = bkImg.src || '';
+                                    if (href.indexOf('file:') === 0) { cont._broken = true; try { console.warn('[BeakonerSprite] running from file:// - skipping fetch fallback'); } catch(_){}; return; }
+                                    try {
+                                        if (typeof fetch === 'function' && typeof createImageBitmap === 'function') {
+                                            try { console.info('[BeakonerSprite] starting fetch/createImageBitmap fallback for', href); } catch(_){ }
+                                            const ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                                            const signal = ac ? ac.signal : null;
+                                            const t = setTimeout(()=>{ try{ if (ac) ac.abort(); }catch(_){} }, 900);
+                                            fetch(href, { signal }).then(r=>{ clearTimeout(t); if (!r.ok) throw new Error('status '+r.status); return r.blob(); }).then(b=>createImageBitmap(b)).then(bmp=>{
+                                                clearTimeout(t);
+                                                cont._forcedBitmap = bmp; cont.loaded = true;
+                                                try { console.info('[BeakonerSprite] createImageBitmap fallback succeeded'); } catch(_){ }
+                                            }).catch(e=>{ clearTimeout(t); try { console.warn('[BeakonerSprite] fetch/createImageBitmap fallback failed', e); } catch(_){} });
+                                        }
+                                    } catch(e) { try { console.warn('[BeakonerSprite] fallback error', e); } catch(_){} }
+                                } catch(_){ }
+                            };
+                            try { if (!game.enemySprites.beakoner) game.enemySprites.beakoner = game.enemySprites.beakoner; } catch(_){ }
+                            try { if (!game.enemySprites['The Beakoner']) game.enemySprites['The Beakoner'] = game.enemySprites.beakoner; } catch(_){ }
+                        } catch(e) { console.warn('[BeakonerSprite] install failed', e); }
+                    }
+
+                    // === Quackos Eternal (Act IV enemy) sprite loader ===
+                    if (!game.enemySprites.quackoseternal) {
+                        try {
+                            const qeImg = new Image();
+                            try { qeImg.src = (new URL('assets/eldritch/spritesheets/quackos-sheet-2-31.png', document.baseURI)).href; } catch(_) { qeImg.src = 'assets/eldritch/spritesheets/quackos-sheet-2-31.png'; }
+                            game.enemySprites.quackoseternal = { image: qeImg, loaded: false, _forcedBitmap: null };
+                            const atlasFrames = [
+                                {"x":512,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":768,"w":256,"h":256,"duration":1}
+                            ];
+                            qeImg.onload = function(ev){
+                                try {
+                                    const img = (ev && ev.target) ? ev.target : this;
+                                    const cont = game.enemySprites.quackoseternal;
+                                    // If a createImageBitmap fallback was previously used, prefer the real Image now.
+                                    try {
+                                        if (cont && cont._forcedBitmap) {
+                                            try { if (cont._forcedBitmap.close) cont._forcedBitmap.close(); } catch(_){}
+                                            cont._forcedBitmap = null;
+                                            try { console.info('[QuackosEternalSprite] Image loaded; cleared forced bitmap fallback'); } catch(_){}
+                                        }
+                                    } catch(_){}
+                                    cont.loaded = true;
+                                    cont.frames = { seq: atlasFrames };
+                                    cont.anim = { frameStep: 8 };
+                                    const refH = 256;
+                                    cont.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
+                                    cont.computeHitbox = (enemy)=>{
+                                        try {
+                                            const size = enemy.size || 76; const scale = cont.baseScaleForSize(size);
+                                            const w = 256 * scale; const h = 256 * scale;
+                                            const hitW = w * 0.64; const hitH = h * 0.68;
+                                            return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
+                                        } catch(_) { return { w: enemy.size||76, h: enemy.size||76, ox: -(enemy.size||76)/2, oy: -(enemy.size||76)/2 }; }
+                                    };
+                                    try { console.info('[QuackosEternalSprite] Loaded quackoseternal spritesheet', cont.frames); } catch(_){}
+                                } catch(e) { console.warn('[QuackosEternalSprite] onload error', e); }
+                            };
+                            qeImg.onerror = function(ev){
+                                try {
+                                    const cont = game.enemySprites.quackoseternal;
+                                    try { console.warn('[QuackosEternalSprite] image onerror, attempting cache-bust then fetch fallback', qeImg && qeImg.src); } catch(_){ }
+                                    if (!qeImg._triedBust) { qeImg._triedBust = true; try { qeImg.src = qeImg.src + (qeImg.src.indexOf('?')===-1 ? '?v=1' : '&v=1'); } catch(_){}; return; }
+                                    const href = qeImg.src || '';
+                                    if (href.indexOf('file:') === 0) { cont._broken = true; try { console.warn('[QuackosEternalSprite] running from file:// - skipping fetch fallback'); } catch(_){}; return; }
+                                    try {
+                                        if (typeof fetch === 'function' && typeof createImageBitmap === 'function') {
+                                            try { console.info('[QuackosEternalSprite] starting fetch/createImageBitmap fallback for', href); } catch(_){ }
+                                            const ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                                            const signal = ac ? ac.signal : null;
+                                            const t = setTimeout(()=>{ try{ if (ac) ac.abort(); }catch(_){} }, 900);
+                                            fetch(href, { signal }).then(r=>{ clearTimeout(t); if (!r.ok) throw new Error('status '+r.status); return r.blob(); }).then(b=>createImageBitmap(b)).then(bmp=>{
+                                                clearTimeout(t);
+                                                cont._forcedBitmap = bmp; cont.loaded = true;
+                                                try { console.info('[QuackosEternalSprite] createImageBitmap fallback succeeded'); } catch(_){ }
+                                            }).catch(e=>{ clearTimeout(t); try { console.warn('[QuackosEternalSprite] fetch/createImageBitmap fallback failed', e); } catch(_){} });
+                                        }
+                                    } catch(e) { try { console.warn('[QuackosEternalSprite] fallback error', e); } catch(_){} }
+                                } catch(_){ }
+                            };
+                            try { if (!game.enemySprites.quackoseternal) game.enemySprites.quackoseternal = game.enemySprites.quackoseternal; } catch(_){ }
+                            try { if (!game.enemySprites['Quackos Eternal']) game.enemySprites['Quackos Eternal'] = game.enemySprites.quackoseternal; } catch(_){ }
+                        } catch(e) { console.warn('[QuackosEternalSprite] install failed', e); }
+                    }
+
+                    // === Mallard of the Mire (Act IV enemy) sprite loader ===
+                    if (!game.enemySprites.mallardmire) {
+                        try {
+                            const mmImg = new Image();
+                            try { mmImg.src = (new URL('assets/eldritch/spritesheets/MallardMire-sheet-12-24.png', document.baseURI)).href; } catch(_) { mmImg.src = 'assets/eldritch/spritesheets/MallardMire-sheet-12-24.png'; }
+                            game.enemySprites.mallardmire = { image: mmImg, loaded: false, _forcedBitmap: null };
+                            const atlasFrames = [
+                                {"x":512,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":1024,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":1024,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":1024,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":1024,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":1024,"w":256,"h":256,"duration":1}
+                            ];
+                            mmImg.onload = function(ev){
+                                try {
+                                    const img = (ev && ev.target) ? ev.target : this;
+                                    const cont = game.enemySprites.mallardmire;
+                                    // If a createImageBitmap fallback was previously used, prefer the real Image now.
+                                    try {
+                                        if (cont && cont._forcedBitmap) {
+                                            try { if (cont._forcedBitmap.close) cont._forcedBitmap.close(); } catch(_){}
+                                            cont._forcedBitmap = null;
+                                            try { console.info('[MallardMireSprite] Image loaded; cleared forced bitmap fallback'); } catch(_){}
+                                        }
+                                    } catch(_){}
+                                    cont.loaded = true;
+                                    cont.frames = { seq: atlasFrames };
+                                    cont.anim = { frameStep: 8 };
+                                    const refH = 256;
+                                    cont.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
+                                    cont.computeHitbox = (enemy)=>{
+                                        try {
+                                            const size = enemy.size || 78; const scale = cont.baseScaleForSize(size);
+                                            const w = 256 * scale; const h = 256 * scale;
+                                            const hitW = w * 0.64; const hitH = h * 0.68;
+                                            return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
+                                        } catch(_) { return { w: enemy.size||78, h: enemy.size||78, ox: -(enemy.size||78)/2, oy: -(enemy.size||78)/2 }; }
+                                    };
+                                    try { console.info('[MallardMireSprite] Loaded mallardmire spritesheet', cont.frames); } catch(_){}
+                                } catch(e) { console.warn('[MallardMireSprite] onload error', e); }
+                            };
+                            mmImg.onerror = function(ev){
+                                try {
+                                    const cont = game.enemySprites.mallardmire;
+                                    try { console.warn('[MallardMireSprite] image onerror, attempting cache-bust then fetch fallback', mmImg && mmImg.src); } catch(_){ }
+                                    if (!mmImg._triedBust) { mmImg._triedBust = true; try { mmImg.src = mmImg.src + (mmImg.src.indexOf('?')===-1 ? '?v=1' : '&v=1'); } catch(_){}; return; }
+                                    const href = mmImg.src || '';
+                                    if (href.indexOf('file:') === 0) { cont._broken = true; try { console.warn('[MallardMireSprite] running from file:// - skipping fetch fallback'); } catch(_){}; return; }
+                                    try {
+                                        if (typeof fetch === 'function' && typeof createImageBitmap === 'function') {
+                                            try { console.info('[MallardMireSprite] starting fetch/createImageBitmap fallback for', href); } catch(_){ }
+                                            const ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                                            const signal = ac ? ac.signal : null;
+                                            const t = setTimeout(()=>{ try{ if (ac) ac.abort(); }catch(_){} }, 900);
+                                            fetch(href, { signal }).then(r=>{ clearTimeout(t); if (!r.ok) throw new Error('status '+r.status); return r.blob(); }).then(b=>createImageBitmap(b)).then(bmp=>{
+                                                clearTimeout(t);
+                                                cont._forcedBitmap = bmp; cont.loaded = true;
+                                                try { console.info('[MallardMireSprite] createImageBitmap fallback succeeded'); } catch(_){ }
+                                            }).catch(e=>{ clearTimeout(t); try { console.warn('[MallardMireSprite] fetch/createImageBitmap fallback failed', e); } catch(_){} });
+                                        }
+                                    } catch(e) { try { console.warn('[MallardMireSprite] fallback error', e); } catch(_){} }
+                                } catch(_){ }
+                            };
+                            try { if (!game.enemySprites.mallardmire) game.enemySprites.mallardmire = game.enemySprites.mallardmire; } catch(_){ }
+                            try { if (!game.enemySprites['Mallard of the Mire']) game.enemySprites['Mallard of the Mire'] = game.enemySprites.mallardmire; } catch(_){ }
+                        } catch(e) { console.warn('[MallardMireSprite] install failed', e); }
+                    }
+
+                    // === Plumagorgon (Act IV enemy) sprite loader ===
+                    if (!game.enemySprites.plumagorgon) {
+                        try {
+                            const pgImg = new Image();
+                            try { pgImg.src = (new URL('assets/eldritch/spritesheets/plumagorgon-sheet-3-24.png', document.baseURI)).href; } catch(_) { pgImg.src = 'assets/eldritch/spritesheets/plumagorgon-sheet-3-24.png'; }
+                            game.enemySprites.plumagorgon = { image: pgImg, loaded: false, _forcedBitmap: null };
+                            const atlasFrames = [
+                                {"x":768,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":1024,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":1024,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":1024,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":1024,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":1024,"w":256,"h":256,"duration":1}
+                            ];
+                            pgImg.onload = function(ev){
+                                try {
+                                    const img = (ev && ev.target) ? ev.target : this;
+                                    const cont = game.enemySprites.plumagorgon;
+                                    // If a createImageBitmap fallback was previously used, prefer the real Image now.
+                                    try {
+                                        if (cont && cont._forcedBitmap) {
+                                            try { if (cont._forcedBitmap.close) cont._forcedBitmap.close(); } catch(_){}
+                                            cont._forcedBitmap = null;
+                                            try { console.info('[PlumagorgonSprite] Image loaded; cleared forced bitmap fallback'); } catch(_){}
+                                        }
+                                    } catch(_){}
+                                    cont.loaded = true;
+                                    cont.frames = { seq: atlasFrames };
+                                    cont.anim = { frameStep: 8 };
+                                    const refH = 256;
+                                    cont.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
+                                    cont.computeHitbox = (enemy)=>{
+                                        try {
+                                            const size = enemy.size || 80; const scale = cont.baseScaleForSize(size);
+                                            const w = 256 * scale; const h = 256 * scale;
+                                            const hitW = w * 0.64; const hitH = h * 0.68;
+                                            return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
+                                        } catch(_) { return { w: enemy.size||80, h: enemy.size||80, ox: -(enemy.size||80)/2, oy: -(enemy.size||80)/2 }; }
+                                    };
+                                    try { console.info('[PlumagorgonSprite] Loaded plumagorgon spritesheet', cont.frames); } catch(_){}
+                                } catch(e) { console.warn('[PlumagorgonSprite] onload error', e); }
+                            };
+                            pgImg.onerror = function(ev){
+                                try {
+                                    const cont = game.enemySprites.plumagorgon;
+                                    try { console.warn('[PlumagorgonSprite] image onerror, attempting cache-bust then fetch fallback', pgImg && pgImg.src); } catch(_){ }
+                                    if (!pgImg._triedBust) { pgImg._triedBust = true; try { pgImg.src = pgImg.src + (pgImg.src.indexOf('?')===-1 ? '?v=1' : '&v=1'); } catch(_){}; return; }
+                                    const href = pgImg.src || '';
+                                    if (href.indexOf('file:') === 0) { cont._broken = true; try { console.warn('[PlumagorgonSprite] running from file:// - skipping fetch fallback'); } catch(_){}; return; }
+                                    try {
+                                        if (typeof fetch === 'function' && typeof createImageBitmap === 'function') {
+                                            try { console.info('[PlumagorgonSprite] starting fetch/createImageBitmap fallback for', href); } catch(_){ }
+                                            const ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                                            const signal = ac ? ac.signal : null;
+                                            const t = setTimeout(()=>{ try{ if (ac) ac.abort(); }catch(_){} }, 900);
+                                            fetch(href, { signal }).then(r=>{ clearTimeout(t); if (!r.ok) throw new Error('status '+r.status); return r.blob(); }).then(b=>createImageBitmap(b)).then(bmp=>{
+                                                clearTimeout(t);
+                                                cont._forcedBitmap = bmp; cont.loaded = true;
+                                                try { console.info('[PlumagorgonSprite] createImageBitmap fallback succeeded'); } catch(_){ }
+                                            }).catch(e=>{ clearTimeout(t); try { console.warn('[PlumagorgonSprite] fetch/createImageBitmap fallback failed', e); } catch(_){} });
+                                        }
+                                    } catch(e) { try { console.warn('[PlumagorgonSprite] fallback error', e); } catch(_){} }
+                                } catch(_){ }
+                            };
+                            try { if (!game.enemySprites.plumagorgon) game.enemySprites.plumagorgon = game.enemySprites.plumagorgon; } catch(_){ }
+                            try { if (!game.enemySprites['Plumagorgon']) game.enemySprites['Plumagorgon'] = game.enemySprites.plumagorgon; } catch(_){ }
+                        } catch(e) { console.warn('[PlumagorgonSprite] install failed', e); }
+                    }
+
+                    // === Molted Menace (Act IV enemy) sprite loader ===
+                    if (!game.enemySprites.moltedmenace) {
+                        try {
+                            const mmImg = new Image();
+                            try { mmImg.src = (new URL('assets/eldritch/spritesheets/moltedmenace-sheet-3-29.png', document.baseURI)).href; } catch(_) { mmImg.src = 'assets/eldritch/spritesheets/moltedmenace-sheet-3-29.png'; }
+                            game.enemySprites.moltedmenace = { image: mmImg, loaded: false, _forcedBitmap: null };
+                            const atlasFrames = [
+                                {"x":768,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":768,"w":256,"h":256,"duration":1}
+                            ];
+                            mmImg.onload = function(ev){
+                                try {
+                                    const img = (ev && ev.target) ? ev.target : this;
+                                    const cont = game.enemySprites.moltedmenace;
+                                    // If a createImageBitmap fallback was previously used, prefer the real Image now.
+                                    try {
+                                        if (cont && cont._forcedBitmap) {
+                                            try { if (cont._forcedBitmap.close) cont._forcedBitmap.close(); } catch(_){}
+                                            cont._forcedBitmap = null;
+                                            try { console.info('[MoltedMenaceSprite] Image loaded; cleared forced bitmap fallback'); } catch(_){}
+                                        }
+                                    } catch(_){}
+                                    cont.loaded = true;
+                                    cont.frames = { seq: atlasFrames };
+                                    cont.anim = { frameStep: 8 };
+                                    const refH = 256;
+                                    cont.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
+                                    cont.computeHitbox = (enemy)=>{
+                                        try {
+                                            const size = enemy.size || 82; const scale = cont.baseScaleForSize(size);
+                                            const w = 256 * scale; const h = 256 * scale;
+                                            const hitW = w * 0.64; const hitH = h * 0.68;
+                                            return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
+                                        } catch(_) { return { w: enemy.size||82, h: enemy.size||82, ox: -(enemy.size||82)/2, oy: -(enemy.size||82)/2 }; }
+                                    };
+                                    try { console.info('[MoltedMenaceSprite] Loaded moltedmenace spritesheet', cont.frames); } catch(_){}
+                                } catch(e) { console.warn('[MoltedMenaceSprite] onload error', e); }
+                            };
+                            mmImg.onerror = function(ev){
+                                try {
+                                    const cont = game.enemySprites.moltedmenace;
+                                    try { console.warn('[MoltedMenaceSprite] image onerror, attempting cache-bust then fetch fallback', mmImg && mmImg.src); } catch(_){ }
+                                    if (!mmImg._triedBust) { mmImg._triedBust = true; try { mmImg.src = mmImg.src + (mmImg.src.indexOf('?')===-1 ? '?v=1' : '&v=1'); } catch(_){}; return; }
+                                    const href = mmImg.src || '';
+                                    if (href.indexOf('file:') === 0) { cont._broken = true; try { console.warn('[MoltedMenaceSprite] running from file:// - skipping fetch fallback'); } catch(_){}; return; }
+                                    try {
+                                        if (typeof fetch === 'function' && typeof createImageBitmap === 'function') {
+                                            try { console.info('[MoltedMenaceSprite] starting fetch/createImageBitmap fallback for', href); } catch(_){ }
+                                            const ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                                            const signal = ac ? ac.signal : null;
+                                            const t = setTimeout(()=>{ try{ if (ac) ac.abort(); }catch(_){} }, 900);
+                                            fetch(href, { signal }).then(r=>{ clearTimeout(t); if (!r.ok) throw new Error('status '+r.status); return r.blob(); }).then(b=>createImageBitmap(b)).then(bmp=>{
+                                                clearTimeout(t);
+                                                cont._forcedBitmap = bmp; cont.loaded = true;
+                                                try { console.info('[MoltedMenaceSprite] createImageBitmap fallback succeeded'); } catch(_){ }
+                                            }).catch(e=>{ clearTimeout(t); try { console.warn('[MoltedMenaceSprite] fetch/createImageBitmap fallback failed', e); } catch(_){} });
+                                        }
+                                    } catch(e) { try { console.warn('[MoltedMenaceSprite] fallback error', e); } catch(_){} }
+                                } catch(_){ }
+                            };
+                            try { if (!game.enemySprites.moltedmenace) game.enemySprites.moltedmenace = game.enemySprites.moltedmenace; } catch(_){ }
+                            try { if (!game.enemySprites['Molted Menace']) game.enemySprites['Molted Menace'] = game.enemySprites.moltedmenace; } catch(_){ }
+                        } catch(e) { console.warn('[MoltedMenaceSprite] install failed', e); }
+                    }
+
+                    // === Broodwaddle (Act IV enemy) sprite loader ===
+                    if (!game.enemySprites.broodwaddle) {
+                        try {
+                            const bwImg = new Image();
+                            try { bwImg.src = (new URL('assets/eldritch/spritesheets/broodwaddle-sheet-11-31.png', document.baseURI)).href; } catch(_) { bwImg.src = 'assets/eldritch/spritesheets/broodwaddle-sheet-11-31.png'; }
+                            game.enemySprites.broodwaddle = { image: bwImg, loaded: false, _forcedBitmap: null };
+                            const atlasFrames = [
+                                {"x":768,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":768,"w":256,"h":256,"duration":1}
+                            ];
+                            bwImg.onload = function(ev){
+                                try {
+                                    const img = (ev && ev.target) ? ev.target : this;
+                                    const cont = game.enemySprites.broodwaddle;
+                                    // If a createImageBitmap fallback was previously used, prefer the real Image now.
+                                    try {
+                                        if (cont && cont._forcedBitmap) {
+                                            try { if (cont._forcedBitmap.close) cont._forcedBitmap.close(); } catch(_){}
+                                            cont._forcedBitmap = null;
+                                            try { console.info('[BroodwaddleSprite] Image loaded; cleared forced bitmap fallback'); } catch(_){}
+                                        }
+                                    } catch(_){}
+                                    cont.loaded = true;
+                                    cont.frames = { seq: atlasFrames };
+                                    cont.anim = { frameStep: 8 };
+                                    const refH = 256;
+                                    cont.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
+                                    cont.computeHitbox = (enemy)=>{
+                                        try {
+                                            const size = enemy.size || 84; const scale = cont.baseScaleForSize(size);
+                                            const w = 256 * scale; const h = 256 * scale;
+                                            const hitW = w * 0.64; const hitH = h * 0.68;
+                                            return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
+                                        } catch(_) { return { w: enemy.size||84, h: enemy.size||84, ox: -(enemy.size||84)/2, oy: -(enemy.size||84)/2 }; }
+                                    };
+                                    try { console.info('[BroodwaddleSprite] Loaded broodwaddle spritesheet', cont.frames); } catch(_){}
+                                } catch(e) { console.warn('[BroodwaddleSprite] onload error', e); }
+                            };
+                            bwImg.onerror = function(ev){
+                                try {
+                                    const cont = game.enemySprites.broodwaddle;
+                                    try { console.warn('[BroodwaddleSprite] image onerror, attempting cache-bust then fetch fallback', bwImg && bwImg.src); } catch(_){ }
+                                    if (!bwImg._triedBust) { bwImg._triedBust = true; try { bwImg.src = bwImg.src + (bwImg.src.indexOf('?')===-1 ? '?v=1' : '&v=1'); } catch(_){}; return; }
+                                    const href = bwImg.src || '';
+                                    if (href.indexOf('file:') === 0) { cont._broken = true; try { console.warn('[BroodwaddleSprite] running from file:// - skipping fetch fallback'); } catch(_){}; return; }
+                                    try {
+                                        if (typeof fetch === 'function' && typeof createImageBitmap === 'function') {
+                                            try { console.info('[BroodwaddleSprite] starting fetch/createImageBitmap fallback for', href); } catch(_){ }
+                                            const ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                                            const signal = ac ? ac.signal : null;
+                                            const t = setTimeout(()=>{ try{ if (ac) ac.abort(); }catch(_){} }, 900);
+                                            fetch(href, { signal }).then(r=>{ clearTimeout(t); if (!r.ok) throw new Error('status '+r.status); return r.blob(); }).then(b=>createImageBitmap(b)).then(bmp=>{
+                                                clearTimeout(t);
+                                                cont._forcedBitmap = bmp; cont.loaded = true;
+                                                try { console.info('[BroodwaddleSprite] createImageBitmap fallback succeeded'); } catch(_){ }
+                                            }).catch(e=>{ clearTimeout(t); try { console.warn('[BroodwaddleSprite] fetch/createImageBitmap fallback failed', e); } catch(_){} });
+                                        }
+                                    } catch(e) { try { console.warn('[BroodwaddleSprite] fallback error', e); } catch(_){} }
+                                } catch(_){ }
+                            };
+                            try { if (!game.enemySprites.broodwaddle) game.enemySprites.broodwaddle = game.enemySprites.broodwaddle; } catch(_){ }
+                            try { if (!game.enemySprites['Broodwaddle']) game.enemySprites['Broodwaddle'] = game.enemySprites.broodwaddle; } catch(_){ }
+                        } catch(e) { console.warn('[BroodwaddleSprite] install failed', e); }
+                    }
+
+                    // === Artisanal Sourduck...of Doom (Act IV boss) sprite loader ===
+                    if (!game.enemySprites.sourduck) {
+                        try {
+                            const sdImg = new Image();
+                            try { sdImg.src = (new URL('assets/eldritch/spritesheets/sourduck-sheet-1-30.png', document.baseURI)).href; } catch(_) { sdImg.src = 'assets/eldritch/spritesheets/sourduck-sheet-1-30.png'; }
+                            game.enemySprites.sourduck = { image: sdImg, loaded: false, _forcedBitmap: null };
+                            const atlasFrames = [
+                                {"x":256,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":0,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":768,"w":256,"h":256,"duration":1}
+                            ];
+                            sdImg.onload = function(ev){
+                                try {
+                                    const img = (ev && ev.target) ? ev.target : this;
+                                    const cont = game.enemySprites.sourduck;
+                                    // If a createImageBitmap fallback was previously used, prefer the real Image now.
+                                    try {
+                                        if (cont && cont._forcedBitmap) {
+                                            try { if (cont._forcedBitmap.close) cont._forcedBitmap.close(); } catch(_){}
+                                            cont._forcedBitmap = null;
+                                            try { console.info('[SourduckSprite] Image loaded; cleared forced bitmap fallback'); } catch(_){}
+                                        }
+                                    } catch(_){}
+                                    cont.loaded = true;
+                                    cont.frames = { seq: atlasFrames };
+                                    cont.anim = { frameStep: 8 };
+                                    const refH = 256;
+                                    cont.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
+                                    cont.computeHitbox = (enemy)=>{
+                                        try {
+                                            const size = enemy.size || 160; const scale = cont.baseScaleForSize(size);
+                                            const w = 256 * scale; const h = 256 * scale;
+                                            const hitW = w * 0.64; const hitH = h * 0.68;
+                                            return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
+                                        } catch(_) { return { w: enemy.size||160, h: enemy.size||160, ox: -(enemy.size||160)/2, oy: -(enemy.size||160)/2 }; }
+                                    };
+                                    try { console.info('[SourduckSprite] Loaded sourduck spritesheet', cont.frames); } catch(_){}
+                                } catch(e) { console.warn('[SourduckSprite] onload error', e); }
+                            };
+                            sdImg.onerror = function(ev){
+                                try {
+                                    const cont = game.enemySprites.sourduck;
+                                    try { console.warn('[SourduckSprite] image onerror, attempting cache-bust then fetch fallback', sdImg && sdImg.src); } catch(_){ }
+                                    if (!sdImg._triedBust) { sdImg._triedBust = true; try { sdImg.src = sdImg.src + (sdImg.src.indexOf('?')===-1 ? '?v=1' : '&v=1'); } catch(_){}; return; }
+                                    const href = sdImg.src || '';
+                                    if (href.indexOf('file:') === 0) { cont._broken = true; try { console.warn('[SourduckSprite] running from file:// - skipping fetch fallback'); } catch(_){}; return; }
+                                    try {
+                                        if (typeof fetch === 'function' && typeof createImageBitmap === 'function') {
+                                            try { console.info('[SourduckSprite] starting fetch/createImageBitmap fallback for', href); } catch(_){ }
+                                            const ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                                            const signal = ac ? ac.signal : null;
+                                            const t = setTimeout(()=>{ try{ if (ac) ac.abort(); }catch(_){} }, 900);
+                                            fetch(href, { signal }).then(r=>{ clearTimeout(t); if (!r.ok) throw new Error('status '+r.status); return r.blob(); }).then(b=>createImageBitmap(b)).then(bmp=>{
+                                                clearTimeout(t);
+                                                cont._forcedBitmap = bmp; cont.loaded = true;
+                                                try { console.info('[SourduckSprite] createImageBitmap fallback succeeded'); } catch(_){ }
+                                            }).catch(e=>{ clearTimeout(t); try { console.warn('[SourduckSprite] fetch/createImageBitmap fallback failed', e); } catch(_){} });
+                                        }
+                                    } catch(e) { try { console.warn('[SourduckSprite] fallback error', e); } catch(_){} }
+                                } catch(_){ }
+                            };
+                            try { if (!game.enemySprites.sourduck) game.enemySprites.sourduck = game.enemySprites.sourduck; } catch(_){ }
+                            try { if (!game.enemySprites['Artisanal Sourduck...of Doom']) game.enemySprites['Artisanal Sourduck...of Doom'] = game.enemySprites.sourduck; } catch(_){ }
+                        } catch(e) { console.warn('[SourduckSprite] install failed', e); }
+                    }
+
+                    // === Mirequacker (Act IV enemy) sprite loader ===
+                    if (!game.enemySprites.mirequacker) {
+                        try {
+                            const mqImg = new Image();
+                            try { mqImg.src = (new URL('assets/eldritch/spritesheets/mirequack-sheet-12-31.png', document.baseURI)).href; } catch(_) { mqImg.src = 'assets/eldritch/spritesheets/mirequack-sheet-12-31.png'; }
+                            game.enemySprites.mirequacker = { image: mqImg, loaded: false, _forcedBitmap: null };
+                            const atlasFrames = [
+                                {"x":1024,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":256,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":512,"w":256,"h":256,"duration":1},
+                                {"x":0,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":256,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":512,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":768,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1024,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1280,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1536,"y":768,"w":256,"h":256,"duration":1},
+                                {"x":1792,"y":768,"w":256,"h":256,"duration":1}
+                            ];
+                            mqImg.onload = function(ev){
+                                try {
+                                    const img = (ev && ev.target) ? ev.target : this;
+                                    const cont = game.enemySprites.mirequacker;
+                                    // If a createImageBitmap fallback was previously used, prefer the real Image now.
+                                    try {
+                                        if (cont && cont._forcedBitmap) {
+                                            try { if (cont._forcedBitmap.close) cont._forcedBitmap.close(); } catch(_){}
+                                            cont._forcedBitmap = null;
+                                            try { console.info('[MirequackerSprite] Image loaded; cleared forced bitmap fallback'); } catch(_){}
+                                        }
+                                    } catch(_){}
+                                    cont.loaded = true;
+                                    cont.frames = { seq: atlasFrames };
+                                    cont.anim = { frameStep: 8 };
+                                    const refH = 256;
+                                    cont.baseScaleForSize = (enemySize)=> ((enemySize*2)/refH);
+                                    cont.computeHitbox = (enemy)=>{
+                                        try {
+                                            const size = enemy.size || 72; const scale = cont.baseScaleForSize(size);
+                                            const w = 256 * scale; const h = 256 * scale;
+                                            const hitW = w * 0.64; const hitH = h * 0.68;
+                                            return { w: hitW, h: hitH, ox: -hitW/2, oy: -hitH/2 + h*0.06 };
+                                        } catch(_) { return { w: enemy.size||72, h: enemy.size||72, ox: -(enemy.size||72)/2, oy: -(enemy.size||72)/2 }; }
+                                    };
+                                    try { console.info('[MirequackerSprite] Loaded mirequacker spritesheet', cont.frames); } catch(_){}
+                                } catch(e) { console.warn('[MirequackerSprite] onload error', e); }
+                            };
+                            mqImg.onerror = function(ev){
+                                try {
+                                    const cont = game.enemySprites.mirequacker;
+                                    try { console.warn('[MirequackerSprite] image onerror, attempting cache-bust then fetch fallback', mqImg && mqImg.src); } catch(_){ }
+                                    if (!mqImg._triedBust) { mqImg._triedBust = true; try { mqImg.src = mqImg.src + (mqImg.src.indexOf('?')===-1 ? '?v=1' : '&v=1'); } catch(_){}; return; }
+                                    const href = mqImg.src || '';
+                                    if (href.indexOf('file:') === 0) { cont._broken = true; try { console.warn('[MirequackerSprite] running from file:// - skipping fetch fallback'); } catch(_){}; return; }
+                                    try {
+                                        if (typeof fetch === 'function' && typeof createImageBitmap === 'function') {
+                                            try { console.info('[MirequackerSprite] starting fetch/createImageBitmap fallback for', href); } catch(_){ }
+                                            const ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                                            const signal = ac ? ac.signal : null;
+                                            const t = setTimeout(()=>{ try{ if (ac) ac.abort(); }catch(_){} }, 900);
+                                            fetch(href, { signal }).then(r=>{ clearTimeout(t); if (!r.ok) throw new Error('status '+r.status); return r.blob(); }).then(b=>createImageBitmap(b)).then(bmp=>{
+                                                clearTimeout(t);
+                                                cont._forcedBitmap = bmp; cont.loaded = true;
+                                                try { console.info('[MirequackerSprite] createImageBitmap fallback succeeded'); } catch(_){ }
+                                            }).catch(e=>{ clearTimeout(t); try { console.warn('[MirequackerSprite] fetch/createImageBitmap fallback failed', e); } catch(_){} });
+                                        }
+                                    } catch(e) { try { console.warn('[MirequackerSprite] fallback error', e); } catch(_){} }
+                                } catch(_){ }
+                            };
+                            try { if (!game.enemySprites.mirequacker) game.enemySprites.mirequacker = game.enemySprites.mirequacker; } catch(_){ }
+                            try { if (!game.enemySprites['Mirequacker']) game.enemySprites['Mirequacker'] = game.enemySprites.mirequacker; } catch(_){ }
+                        } catch(e) { console.warn('[MirequackerSprite] install failed', e); }
                     }
 
             // === Street Dog enemy sprite sheet ===
@@ -14542,6 +15827,113 @@ function offerPermanentAbilityChoice() {
                 window.pickRandomBackground();
             }
 
+            // Special scripted sequence for District 10, Street 5 (eldritch boss set-piece)
+            try {
+                if (game.dungeon === 10 && game.room === 5) {
+                    // Force a single background (override the random picker)
+                    try {
+                        window._streetBackgrounds = window._streetBackgrounds || {};
+                        const forced = 'assets/streets/eldritch/eldritchboss1.png';
+                        window._streetBackgrounds.list = [forced];
+                        window._streetBackgrounds.currentIndex = 0;
+                        // Preload and make immediately available for render
+                        const bgImg = new Image();
+                        bgImg.onload = function(){ try { window._streetBackgrounds.img = bgImg; window._streetBackgrounds.ready = true; window._streetBackgrounds.alpha = 1.0; } catch(_){} };
+                        bgImg.onerror = function(){ try { window._streetBackgrounds.img = null; window._streetBackgrounds.ready = false; } catch(_){} };
+                        try { bgImg.src = new URL(forced, document.baseURI).href; } catch(_) { bgImg.src = forced; }
+                        window._streetBackgrounds.img = bgImg;
+                        window._streetBackgrounds.ready = !!(bgImg && bgImg.complete && (bgImg.naturalWidth||bgImg.width));
+                        window._streetBackgrounds.alpha = 1.0;
+                    } catch(_){}
+
+                    // Swap to eldritch boss music immediately (ensure previous track was faded)
+                    try {
+                        if (!game.bgMusic) game.bgMusic = new Audio();
+                        try { game.bgMusic.pause(); } catch(_){}
+                        game.bgMusic = game.bgMusic || new Audio();
+                        game.bgMusic.src = 'assets/audio/eldritchboss.mp3';
+                        game.bgMusic.loop = true;
+                        game.bgMusic.volume = 1.0;
+                        game.bgMusic.play().catch(()=>{});
+                    } catch(_){}
+
+                    // Persistent lilypad under player
+                    try {
+                        game._eldritchLilypad = new Image();
+                        game._eldritchLilypad.onload = function(){ try{ game._eldritchLilypadReady = true; } catch(_){} };
+                        game._eldritchLilypad.onerror = function(){ game._eldritchLilypadReady = false; };
+                        game._eldritchLilypad.src = 'assets/streets/eldritch/lilypad.png';
+                        game._eldritchLilypadActive = true;
+                    } catch(_){}
+
+                    // Spawn two chests on opposite sides of the map (left/right center)
+                    try {
+                        if (!Array.isArray(game.chests)) game.chests = [];
+                        const y = Math.round(LOGICAL_H/2);
+                        const leftX = 80;
+                        const rightX = Math.max(120, Math.round(LOGICAL_W - 80));
+                        const makeChest = (x, y) => ({ x, y, opened: false, variant: 'gold', jigglePhase: 0, ability: null, rainbow: false });
+                        game.chests.push(makeChest(leftX, y));
+                        game.chests.push(makeChest(rightX, y));
+                    } catch(_){}
+
+                    // Schedule bubbles/splash animation sequence and eventual boss spawn
+                    try {
+                        game._eldritchAnimations = game._eldritchAnimations || [];
+                        // Preload spritesheets
+                        const bubblesImg = new Image(); bubblesImg.src = 'assets/streets/eldritch/spritesheets/bubbles.png';
+                        const splashImg = new Image(); splashImg.src = 'assets/streets/eldrich/spritesheets/splash.png';
+                        game._eldritchSprites = game._eldritchSprites || {};
+                        game._eldritchSprites.bubbles = bubblesImg;
+                        game._eldritchSprites.splash = splashImg;
+
+                        const centerX = Math.round(LOGICAL_W/2);
+                        const centerY = Math.round(LOGICAL_H/2);
+                        const spawnAnim = (img, opts) => {
+                            const anim = {
+                                img: img,
+                                x: opts.x || centerX,
+                                y: opts.y || centerY,
+                                frames: opts.frames || 32,
+                                fps: opts.fps || 12,
+                                started: performance.now(),
+                                loop: !!opts.loop,
+                                played: 0,
+                                maxPlays: opts.maxPlays || 1,
+                                onComplete: opts.onComplete || null
+                            };
+                            game._eldritchAnimations.push(anim);
+                            return anim;
+                        };
+
+                        // At +3s: one bubble animation
+                        setTimeout(()=>{ try { spawnAnim(bubblesImg, { frames: 32, fps: 20, maxPlays: 1 }); } catch(_){} }, 3000);
+                        // At +6s: bubble again then splash once, then schedule boss spawn
+                        setTimeout(()=>{
+                            try {
+                                // second bubble
+                                const a = spawnAnim(bubblesImg, { frames: 32, fps: 20, maxPlays: 1 });
+                                // after bubble finishes (~frames/fps sec), spawn splash and schedule boss
+                                const bubbleDur = Math.max(300, Math.round((a.frames / a.fps) * 1000));
+                                setTimeout(()=>{
+                                    try { spawnAnim(splashImg, { frames: 16, fps: 18, maxPlays: 1 }); } catch(_){}
+                                    // Boss spawn placeholder after splash
+                                    setTimeout(()=>{
+                                        try {
+                                            // Place a minimal placeholder boss entity at the same spot. This is a lightweight placeholder — replace with full boss spawn when available.
+                                            const boss = { type: 'EldritchBoss', x: centerX, y: centerY, health: 450, size: 180 };
+                                            game.enemies = game.enemies || [];
+                                            game.enemies.push(boss);
+                                            console.info('[Eldritch] Placeholder boss spawned', boss);
+                                        } catch(_){}
+                                    }, 1200);
+                                }, bubbleDur + 40);
+                            } catch(_){}
+                        }, 6000);
+                    } catch(_){}
+                }
+            } catch(_){}
+
             // Create perimeter collision-only walls (invisible) so projectiles can bounce off edges
             // These walls are marked `invisible:true` to avoid drawing sprites but preserve collision behavior.
             for (let x = 0; x < ROOM_WIDTH; x++) {
@@ -14841,6 +16233,24 @@ function offerPermanentAbilityChoice() {
                                 try { console.info('[RoomGen] Golden Goose chosen as Act II final boss (dungeon 10)'); } catch(_){ }
                             } else {
                                 typeName = 'Big Bill';
+                            }
+                        } else if (String(game._selectedAct) === 'IV') {
+                            // Act IV boss slot: check for Act IV bosses with matching spawnStreet
+                            try {
+                                // Look for Act IV bosses that should spawn on this street
+                                const actIVBosses = Object.keys(ENEMY_TYPES).filter(name => {
+                                    const meta = ENEMY_TYPES[name];
+                                    return meta && meta.act === 'IV' && meta.boss === true && meta.spawnStreet && Number(meta.spawnStreet) === Number(game.room);
+                                });
+                                if (actIVBosses.length > 0) {
+                                    typeName = actIVBosses[0]; // Use first matching boss
+                                    console.info('[RoomGen] Act IV boss forced to ' + typeName + ' (room ' + game.room + ')');
+                                } else {
+                                    // Fallback to default Act IV boss logic if no specific street match
+                                    console.info('[RoomGen] No Act IV boss found for room ' + game.room + ', using fallback');
+                                }
+                            } catch(e) {
+                                console.warn('[RoomGen] Error selecting Act IV boss:', e);
                             }
                         } else if (game.dungeon === 10) {
                             typeName = 'The Big Quack';
@@ -20145,6 +21555,14 @@ function offerPermanentAbilityChoice() {
                             }
                             // Propagate laser marker into metadata so update/render code can special-case it
                             if (projArgs && projArgs.laser) meta.laser = true;
+                            // Artisanal Sourduck...of Doom uses Crusty Bread ability (bread projectiles)
+                            if (enemy.type === 'Artisanal Sourduck...of Doom') {
+                                meta.weaponType = 'bread';
+                                // Increase damage for bread projectiles
+                                meta.baseDamage = Math.max(1, Math.floor(meta.baseDamage * 1.35 + 10));
+                                // Optional mild knockback due to mass
+                                meta.knockback = true; meta.knockbackDistance = Math.max(meta.knockbackDistance||0, 38);
+                            }
                             if (store) store.set(pIdx, meta);
                             if (game.projectilesSoA && game.projectilesSoA.colorIdx) {
                                 // Palette index 2 is red in current palette; for lasers prefer a distinct fallback
@@ -26492,6 +27910,12 @@ function offerPermanentAbilityChoice() {
         }
 
         function nextRoom() {
+            // Quick music fade when advancing from District 10 Street 4 to Street 5
+            try {
+                if (game && game.dungeon === 10 && game.room === 4) {
+                    try { fadeOutBgMusic(400); } catch(_){}
+                }
+            } catch(_){}
             game.room++;
             
             if (game.room > 5) {
@@ -26513,6 +27937,32 @@ function offerPermanentAbilityChoice() {
             if (typeof game.resetProjectilePool === 'function') game.resetProjectilePool();
             generateRoom();
             updateUI();
+        }
+
+        // Fade out current background music over `ms` milliseconds (best-effort)
+        function fadeOutBgMusic(ms) {
+            try {
+                if (!ms || typeof ms !== 'number') ms = 400;
+                if (!game || !game.bgMusic) return;
+                const a = game.bgMusic;
+                try { if (a._fadeInterval) { clearInterval(a._fadeInterval); a._fadeInterval = null; } } catch(_){}
+                const startVol = (typeof a.volume === 'number') ? a.volume : 1.0;
+                const steps = Math.max(6, Math.round(ms / 50));
+                const stepDelta = startVol / steps;
+                let cur = 0;
+                a._fadeInterval = setInterval(() => {
+                    try {
+                        cur++;
+                        const nv = Math.max(0, startVol - stepDelta * cur);
+                        a.volume = nv;
+                        if (nv <= 0.001 || cur >= steps) {
+                            try { a.pause(); } catch(_){}
+                            try { clearInterval(a._fadeInterval); } catch(_){}
+                            a._fadeInterval = null;
+                        }
+                    } catch(_){}
+                }, Math.max(20, Math.floor(ms / steps)));
+            } catch(_){}
         }
 
         // Temporary debug helper: jump directly to a specific district and street.
@@ -26764,6 +28214,11 @@ function offerPermanentAbilityChoice() {
                                     setDuckNowPlaying(null);
                                 } else if (game && game._selectedAct && String(game._selectedAct) === 'II') {
                                     game.bgMusic = new Audio('assets/audio/GooseGhetto.mp3');
+                                    try { game._actMusicSet = true; } catch(_){ }
+                                    game._duckActiveTrack = null;
+                                    setDuckNowPlaying(null);
+                                } else if (game && game._selectedAct && String(game._selectedAct) === 'IV') {
+                                    game.bgMusic = new Audio('assets/audio/eldritch1.mp3');
                                     try { game._actMusicSet = true; } catch(_){ }
                                     game._duckActiveTrack = null;
                                     setDuckNowPlaying(null);
@@ -30000,6 +31455,500 @@ function offerPermanentAbilityChoice() {
                             ctx.restore();
                             return;
                         }
+                        // Billnarock the Unhatched sprite override (Act IV enemy)
+                        if (enemy.type === 'Billnarock the Unhatched' && game.enemySprites && game.enemySprites.billnarock && (game.enemySprites.billnarock.loaded || game.enemySprites.billnarock._forcedBitmap)) {
+                            const bn = game.enemySprites.billnarock;
+                            const seq = bn.frames && bn.frames.seq;
+                            const frameStep = bn.anim && bn.anim.frameStep || 8;
+                            const playerX = game.player ? game.player.x : 0;
+                            const facing = (playerX < enemy.x) ? 'left' : 'right';
+                            const animTicks = Math.floor(game.frame / frameStep);
+                            const box = seq ? seq[animTicks % seq.length] : null;
+                            const img = bn.image;
+                            const size = enemy.size;
+                            const scale = bn.baseScaleForSize ? bn.baseScaleForSize(size) : ((size*2)/256);
+                            const srcW = (box && box.w) ? box.w : (bn._forcedBitmap ? bn._forcedBitmap.width : (img && (img.naturalWidth || img.width)) || size*2);
+                            const srcH = (box && box.h) ? box.h : (bn._forcedBitmap ? bn._forcedBitmap.height : (img && (img.naturalHeight || img.height)) || size*2);
+                            const drawW = srcW * scale;
+                            const drawH = srcH * scale;
+
+                            ctx.save(); ctx.translate(enemy.x, enemy.y);
+                            if (typeof ctx.imageSmoothingEnabled !== 'undefined') try{ ctx.imageSmoothingEnabled = true; } catch(_){ }
+                            try { if (enemy) enemy._noFallback = true; } catch(_){ }
+                            const dstW = Math.max(1, Math.round(drawW));
+                            const dstH = Math.max(1, Math.round(drawH));
+
+                            if (facing === 'left') {
+                                ctx.scale(-1, 1);
+                            }
+
+                            if (bn._forcedBitmap && box) {
+                                ctx.drawImage(bn._forcedBitmap, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (img && box) {
+                                ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (bn._forcedBitmap) {
+                                ctx.drawImage(bn._forcedBitmap, 0, 0, bn._forcedBitmap.width, bn._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
+                            }
+                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(139,69,19,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            ctx.restore();
+                            return;
+                        }
+                        // Downspawn of the Abyss sprite override (Act IV enemy)
+                        if (enemy.type === 'Downspawn of the Abyss' && game.enemySprites && game.enemySprites.downspawn && (game.enemySprites.downspawn.loaded || game.enemySprites.downspawn._forcedBitmap)) {
+                            const ds = game.enemySprites.downspawn;
+                            const seq = ds.frames && ds.frames.seq;
+                            const frameStep = ds.anim && ds.anim.frameStep || 8;
+                            const playerX = game.player ? game.player.x : 0;
+                            const facing = (playerX < enemy.x) ? 'left' : 'right';
+                            const animTicks = Math.floor(game.frame / frameStep);
+                            const box = seq ? seq[animTicks % seq.length] : null;
+                            const img = ds.image;
+                            const size = enemy.size;
+                            const scale = ds.baseScaleForSize ? ds.baseScaleForSize(size) : ((size*2)/256);
+                            const srcW = (box && box.w) ? box.w : (ds._forcedBitmap ? ds._forcedBitmap.width : (img && (img.naturalWidth || img.width)) || size*2);
+                            const srcH = (box && box.h) ? box.h : (ds._forcedBitmap ? ds._forcedBitmap.height : (img && (img.naturalHeight || img.height)) || size*2);
+                            const drawW = srcW * scale;
+                            const drawH = srcH * scale;
+
+                            ctx.save(); ctx.translate(enemy.x, enemy.y);
+                            if (typeof ctx.imageSmoothingEnabled !== 'undefined') try{ ctx.imageSmoothingEnabled = true; } catch(_){ }
+                            try { if (enemy) enemy._noFallback = true; } catch(_){ }
+                            const dstW = Math.max(1, Math.round(drawW));
+                            const dstH = Math.max(1, Math.round(drawH));
+
+                            if (facing === 'left') {
+                                ctx.scale(-1, 1);
+                            }
+
+                            if (ds._forcedBitmap && box) {
+                                ctx.drawImage(ds._forcedBitmap, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (img && box) {
+                                ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (ds._forcedBitmap) {
+                                ctx.drawImage(ds._forcedBitmap, 0, 0, ds._forcedBitmap.width, ds._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
+                            }
+                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(0,0,128,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            ctx.restore();
+                            return;
+                        }
+                        // Featheroth the Molten sprite override (Act IV enemy)
+                        if (enemy.type === 'Featheroth the Molten' && game.enemySprites && game.enemySprites.featheroth && (game.enemySprites.featheroth.loaded || game.enemySprites.featheroth._forcedBitmap)) {
+                            const ft = game.enemySprites.featheroth;
+                            const seq = ft.frames && ft.frames.seq;
+                            const frameStep = ft.anim && ft.anim.frameStep || 8;
+                            const playerX = game.player ? game.player.x : 0;
+                            const facing = (playerX < enemy.x) ? 'left' : 'right';
+                            const animTicks = Math.floor(game.frame / frameStep);
+                            const box = seq ? seq[animTicks % seq.length] : null;
+                            const img = ft.image;
+                            const size = enemy.size;
+                            const scale = ft.baseScaleForSize ? ft.baseScaleForSize(size) : ((size*2)/256);
+                            const srcW = (box && box.w) ? box.w : (ft._forcedBitmap ? ft._forcedBitmap.width : (img && (img.naturalWidth || img.width)) || size*2);
+                            const srcH = (box && box.h) ? box.h : (ft._forcedBitmap ? ft._forcedBitmap.height : (img && (img.naturalHeight || img.height)) || size*2);
+                            const drawW = srcW * scale;
+                            const drawH = srcH * scale;
+
+                            ctx.save(); ctx.translate(enemy.x, enemy.y);
+                            if (typeof ctx.imageSmoothingEnabled !== 'undefined') try{ ctx.imageSmoothingEnabled = true; } catch(_){ }
+                            try { if (enemy) enemy._noFallback = true; } catch(_){ }
+                            const dstW = Math.max(1, Math.round(drawW));
+                            const dstH = Math.max(1, Math.round(drawH));
+
+                            if (facing === 'left') {
+                                ctx.scale(-1, 1);
+                            }
+
+                            if (ft._forcedBitmap && box) {
+                                ctx.drawImage(ft._forcedBitmap, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (img && box) {
+                                ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (ft._forcedBitmap) {
+                                ctx.drawImage(ft._forcedBitmap, 0, 0, ft._forcedBitmap.width, ft._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
+                            }
+                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(255,69,0,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            ctx.restore();
+                            return;
+                        }
+                        // Feathered Sleeper sprite override (Act IV enemy)
+                        if (enemy.type === 'Feathered Sleeper' && game.enemySprites && game.enemySprites.featheredsleeper && (game.enemySprites.featheredsleeper.loaded || game.enemySprites.featheredsleeper._forcedBitmap)) {
+                            const fs = game.enemySprites.featheredsleeper;
+                            const seq = fs.frames && fs.frames.seq;
+                            const frameStep = fs.anim && fs.anim.frameStep || 8;
+                            const playerX = game.player ? game.player.x : 0;
+                            const facing = (playerX < enemy.x) ? 'left' : 'right';
+                            const animTicks = Math.floor(game.frame / frameStep);
+                            const box = seq ? seq[animTicks % seq.length] : null;
+                            const img = fs.image;
+                            const size = enemy.size;
+                            const scale = fs.baseScaleForSize ? fs.baseScaleForSize(size) : ((size*2)/256);
+                            const srcW = (box && box.w) ? box.w : (fs._forcedBitmap ? fs._forcedBitmap.width : (img && (img.naturalWidth || img.width)) || size*2);
+                            const srcH = (box && box.h) ? box.h : (fs._forcedBitmap ? fs._forcedBitmap.height : (img && (img.naturalHeight || img.height)) || size*2);
+                            const drawW = srcW * scale;
+                            const drawH = srcH * scale;
+
+                            ctx.save(); ctx.translate(enemy.x, enemy.y);
+                            if (typeof ctx.imageSmoothingEnabled !== 'undefined') try{ ctx.imageSmoothingEnabled = true; } catch(_){ }
+                            try { if (enemy) enemy._noFallback = true; } catch(_){ }
+                            const dstW = Math.max(1, Math.round(drawW));
+                            const dstH = Math.max(1, Math.round(drawH));
+
+                            if (facing === 'left') {
+                                ctx.scale(-1, 1);
+                            }
+
+                            if (fs._forcedBitmap && box) {
+                                ctx.drawImage(fs._forcedBitmap, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (img && box) {
+                                ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (fs._forcedBitmap) {
+                                ctx.drawImage(fs._forcedBitmap, 0, 0, fs._forcedBitmap.width, fs._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
+                            }
+                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(128,0,128,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            ctx.restore();
+                            return;
+                        }
+                        // Waddlemancer sprite override (Act IV enemy)
+                        if (enemy.type === 'Waddlemancer' && game.enemySprites && game.enemySprites.waddlemancer && (game.enemySprites.waddlemancer.loaded || game.enemySprites.waddlemancer._forcedBitmap)) {
+                            const wm = game.enemySprites.waddlemancer;
+                            const seq = wm.frames && wm.frames.seq;
+                            const frameStep = wm.anim && wm.anim.frameStep || 8;
+                            const playerX = game.player ? game.player.x : 0;
+                            const facing = (playerX < enemy.x) ? 'left' : 'right';
+                            const animTicks = Math.floor(game.frame / frameStep);
+                            const box = seq ? seq[animTicks % seq.length] : null;
+                            const img = wm.image;
+                            const size = enemy.size;
+                            const scale = wm.baseScaleForSize ? wm.baseScaleForSize(size) : ((size*2)/256);
+                            const srcW = (box && box.w) ? box.w : (wm._forcedBitmap ? wm._forcedBitmap.width : (img && (img.naturalWidth || img.width)) || size*2);
+                            const srcH = (box && box.h) ? box.h : (wm._forcedBitmap ? wm._forcedBitmap.height : (img && (img.naturalHeight || img.height)) || size*2);
+                            const drawW = srcW * scale;
+                            const drawH = srcH * scale;
+
+                            ctx.save(); ctx.translate(enemy.x, enemy.y);
+                            if (typeof ctx.imageSmoothingEnabled !== 'undefined') try{ ctx.imageSmoothingEnabled = true; } catch(_){ }
+                            try { if (enemy) enemy._noFallback = true; } catch(_){ }
+                            const dstW = Math.max(1, Math.round(drawW));
+                            const dstH = Math.max(1, Math.round(drawH));
+
+                            if (facing === 'left') {
+                                ctx.scale(-1, 1);
+                            }
+
+                            if (wm._forcedBitmap && box) {
+                                ctx.drawImage(wm._forcedBitmap, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (img && box) {
+                                ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (wm._forcedBitmap) {
+                                ctx.drawImage(wm._forcedBitmap, 0, 0, wm._forcedBitmap.width, wm._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
+                            }
+                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(128,0,128,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            ctx.restore();
+                            return;
+                        }
+                        // The Beakoner sprite override (Act IV enemy)
+                        if (enemy.type === 'The Beakoner' && game.enemySprites && game.enemySprites.beakoner && (game.enemySprites.beakoner.loaded || game.enemySprites.beakoner._forcedBitmap)) {
+                            const bk = game.enemySprites.beakoner;
+                            const seq = bk.frames && bk.frames.seq;
+                            const frameStep = bk.anim && bk.anim.frameStep || 8;
+                            const playerX = game.player ? game.player.x : 0;
+                            const facing = (playerX < enemy.x) ? 'left' : 'right';
+                            const animTicks = Math.floor(game.frame / frameStep);
+                            const box = seq ? seq[animTicks % seq.length] : null;
+                            const img = bk.image;
+                            const size = enemy.size;
+                            const scale = bk.baseScaleForSize ? bk.baseScaleForSize(size) : ((size*2)/256);
+                            const srcW = (box && box.w) ? box.w : (bk._forcedBitmap ? bk._forcedBitmap.width : (img && (img.naturalWidth || img.width)) || size*2);
+                            const srcH = (box && box.h) ? box.h : (bk._forcedBitmap ? bk._forcedBitmap.height : (img && (img.naturalHeight || img.height)) || size*2);
+                            const drawW = srcW * scale;
+                            const drawH = srcH * scale;
+
+                            ctx.save(); ctx.translate(enemy.x, enemy.y);
+                            if (typeof ctx.imageSmoothingEnabled !== 'undefined') try{ ctx.imageSmoothingEnabled = true; } catch(_){ }
+                            try { if (enemy) enemy._noFallback = true; } catch(_){ }
+                            const dstW = Math.max(1, Math.round(drawW));
+                            const dstH = Math.max(1, Math.round(drawH));
+
+                            if (facing === 'left') {
+                                ctx.scale(-1, 1);
+                            }
+
+                            if (bk._forcedBitmap && box) {
+                                ctx.drawImage(bk._forcedBitmap, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (img && box) {
+                                ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (bk._forcedBitmap) {
+                                ctx.drawImage(bk._forcedBitmap, 0, 0, bk._forcedBitmap.width, bk._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
+                            }
+                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(128,0,128,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            ctx.restore();
+                            return;
+                        }
+                        // Quackos Eternal sprite override (Act IV enemy)
+                        if (enemy.type === 'Quackos Eternal' && game.enemySprites && game.enemySprites.quackoseternal && (game.enemySprites.quackoseternal.loaded || game.enemySprites.quackoseternal._forcedBitmap)) {
+                            const qe = game.enemySprites.quackoseternal;
+                            const seq = qe.frames && qe.frames.seq;
+                            const frameStep = qe.anim && qe.anim.frameStep || 8;
+                            const playerX = game.player ? game.player.x : 0;
+                            const facing = (playerX < enemy.x) ? 'left' : 'right';
+                            const animTicks = Math.floor(game.frame / frameStep);
+                            const box = seq ? seq[animTicks % seq.length] : null;
+                            const img = qe.image;
+                            const size = enemy.size;
+                            const scale = qe.baseScaleForSize ? qe.baseScaleForSize(size) : ((size*2)/256);
+                            const srcW = (box && box.w) ? box.w : (qe._forcedBitmap ? qe._forcedBitmap.width : (img && (img.naturalWidth || img.width)) || size*2);
+                            const srcH = (box && box.h) ? box.h : (qe._forcedBitmap ? qe._forcedBitmap.height : (img && (img.naturalHeight || img.height)) || size*2);
+                            const drawW = srcW * scale;
+                            const drawH = srcH * scale;
+
+                            ctx.save(); ctx.translate(enemy.x, enemy.y);
+                            if (typeof ctx.imageSmoothingEnabled !== 'undefined') try{ ctx.imageSmoothingEnabled = true; } catch(_){ }
+                            try { if (enemy) enemy._noFallback = true; } catch(_){ }
+                            const dstW = Math.max(1, Math.round(drawW));
+                            const dstH = Math.max(1, Math.round(drawH));
+
+                            if (facing === 'left') {
+                                ctx.scale(-1, 1);
+                            }
+
+                            if (qe._forcedBitmap && box) {
+                                ctx.drawImage(qe._forcedBitmap, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (img && box) {
+                                ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (qe._forcedBitmap) {
+                                ctx.drawImage(qe._forcedBitmap, 0, 0, qe._forcedBitmap.width, qe._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
+                            }
+                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(128,0,128,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            ctx.restore();
+                            return;
+                        }
+                        // Mallard of the Mire sprite override (Act IV enemy)
+                        if (enemy.type === 'Mallard of the Mire' && game.enemySprites && game.enemySprites.mallardmire && (game.enemySprites.mallardmire.loaded || game.enemySprites.mallardmire._forcedBitmap)) {
+                            const mm = game.enemySprites.mallardmire;
+                            const seq = mm.frames && mm.frames.seq;
+                            const frameStep = mm.anim && mm.anim.frameStep || 8;
+                            const playerX = game.player ? game.player.x : 0;
+                            const facing = (playerX < enemy.x) ? 'left' : 'right';
+                            const animTicks = Math.floor(game.frame / frameStep);
+                            const box = seq ? seq[animTicks % seq.length] : null;
+                            const img = mm.image;
+                            const size = enemy.size;
+                            const scale = mm.baseScaleForSize ? mm.baseScaleForSize(size) : ((size*2)/256);
+                            const srcW = (box && box.w) ? box.w : (mm._forcedBitmap ? mm._forcedBitmap.width : (img && (img.naturalWidth || img.width)) || size*2);
+                            const srcH = (box && box.h) ? box.h : (mm._forcedBitmap ? mm._forcedBitmap.height : (img && (img.naturalHeight || img.height)) || size*2);
+                            const drawW = srcW * scale;
+                            const drawH = srcH * scale;
+
+                            ctx.save(); ctx.translate(enemy.x, enemy.y);
+                            if (typeof ctx.imageSmoothingEnabled !== 'undefined') try{ ctx.imageSmoothingEnabled = true; } catch(_){ }
+                            try { if (enemy) enemy._noFallback = true; } catch(_){ }
+                            const dstW = Math.max(1, Math.round(drawW));
+                            const dstH = Math.max(1, Math.round(drawH));
+
+                            if (facing === 'left') {
+                                ctx.scale(-1, 1);
+                            }
+
+                            if (mm._forcedBitmap && box) {
+                                ctx.drawImage(mm._forcedBitmap, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (img && box) {
+                                ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (mm._forcedBitmap) {
+                                ctx.drawImage(mm._forcedBitmap, 0, 0, mm._forcedBitmap.width, mm._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
+                            }
+                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(128,0,128,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            ctx.restore();
+                            return;
+                        }
+                        // Plumagorgon sprite override (Act IV enemy)
+                        if (enemy.type === 'Plumagorgon' && game.enemySprites && game.enemySprites.plumagorgon && (game.enemySprites.plumagorgon.loaded || game.enemySprites.plumagorgon._forcedBitmap)) {
+                            const pg = game.enemySprites.plumagorgon;
+                            const seq = pg.frames && pg.frames.seq;
+                            const frameStep = pg.anim && pg.anim.frameStep || 8;
+                            const playerX = game.player ? game.player.x : 0;
+                            const facing = (playerX < enemy.x) ? 'left' : 'right';
+                            const animTicks = Math.floor(game.frame / frameStep);
+                            const box = seq ? seq[animTicks % seq.length] : null;
+                            const img = pg.image;
+                            const size = enemy.size;
+                            const scale = pg.baseScaleForSize ? pg.baseScaleForSize(size) : ((size*2)/256);
+                            const srcW = (box && box.w) ? box.w : (pg._forcedBitmap ? pg._forcedBitmap.width : (img && (img.naturalWidth || img.width)) || size*2);
+                            const srcH = (box && box.h) ? box.h : (pg._forcedBitmap ? pg._forcedBitmap.height : (img && (img.naturalHeight || img.height)) || size*2);
+                            const drawW = srcW * scale;
+                            const drawH = srcH * scale;
+
+                            ctx.save(); ctx.translate(enemy.x, enemy.y);
+                            if (typeof ctx.imageSmoothingEnabled !== 'undefined') try{ ctx.imageSmoothingEnabled = true; } catch(_){ }
+                            try { if (enemy) enemy._noFallback = true; } catch(_){ }
+                            const dstW = Math.max(1, Math.round(drawW));
+                            const dstH = Math.max(1, Math.round(drawH));
+
+                            if (facing === 'left') {
+                                ctx.scale(-1, 1);
+                            }
+
+                            if (pg._forcedBitmap && box) {
+                                ctx.drawImage(pg._forcedBitmap, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (img && box) {
+                                ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (pg._forcedBitmap) {
+                                ctx.drawImage(pg._forcedBitmap, 0, 0, pg._forcedBitmap.width, pg._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
+                            }
+                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(128,0,128,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            ctx.restore();
+                            return;
+                        }
+                        // Molted Menace sprite override (Act IV enemy)
+                        if (enemy.type === 'Molted Menace' && game.enemySprites && game.enemySprites.moltedmenace && (game.enemySprites.moltedmenace.loaded || game.enemySprites.moltedmenace._forcedBitmap)) {
+                            const mm = game.enemySprites.moltedmenace;
+                            const seq = mm.frames && mm.frames.seq;
+                            const frameStep = mm.anim && mm.anim.frameStep || 8;
+                            const playerX = game.player ? game.player.x : 0;
+                            const facing = (playerX < enemy.x) ? 'left' : 'right';
+                            const animTicks = Math.floor(game.frame / frameStep);
+                            const box = seq ? seq[animTicks % seq.length] : null;
+                            const img = mm.image;
+                            const size = enemy.size;
+                            const scale = mm.baseScaleForSize ? mm.baseScaleForSize(size) : ((size*2)/256);
+                            const srcW = (box && box.w) ? box.w : (mm._forcedBitmap ? mm._forcedBitmap.width : (img && (img.naturalWidth || img.width)) || size*2);
+                            const srcH = (box && box.h) ? box.h : (mm._forcedBitmap ? mm._forcedBitmap.height : (img && (img.naturalHeight || img.height)) || size*2);
+                            const drawW = srcW * scale;
+                            const drawH = srcH * scale;
+
+                            ctx.save(); ctx.translate(enemy.x, enemy.y);
+                            if (typeof ctx.imageSmoothingEnabled !== 'undefined') try{ ctx.imageSmoothingEnabled = true; } catch(_){ }
+                            try { if (enemy) enemy._noFallback = true; } catch(_){ }
+                            const dstW = Math.max(1, Math.round(drawW));
+                            const dstH = Math.max(1, Math.round(drawH));
+
+                            if (facing === 'left') {
+                                ctx.scale(-1, 1);
+                            }
+
+                            if (mm._forcedBitmap && box) {
+                                ctx.drawImage(mm._forcedBitmap, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (img && box) {
+                                ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (mm._forcedBitmap) {
+                                ctx.drawImage(mm._forcedBitmap, 0, 0, mm._forcedBitmap.width, mm._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
+                            }
+                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(128,0,128,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            ctx.restore();
+                            return;
+                        }
+                        // Broodwaddle sprite override (Act IV enemy)
+                        if (enemy.type === 'Broodwaddle' && game.enemySprites && game.enemySprites.broodwaddle && (game.enemySprites.broodwaddle.loaded || game.enemySprites.broodwaddle._forcedBitmap)) {
+                            const bw = game.enemySprites.broodwaddle;
+                            const seq = bw.frames && bw.frames.seq;
+                            const frameStep = bw.anim && bw.anim.frameStep || 8;
+                            const playerX = game.player ? game.player.x : 0;
+                            const facing = (playerX < enemy.x) ? 'left' : 'right';
+                            const animTicks = Math.floor(game.frame / frameStep);
+                            const box = seq ? seq[animTicks % seq.length] : null;
+                            const img = bw.image;
+                            const size = enemy.size;
+                            const scale = bw.baseScaleForSize ? bw.baseScaleForSize(size) : ((size*2)/256);
+                            const srcW = (box && box.w) ? box.w : (bw._forcedBitmap ? bw._forcedBitmap.width : (img && (img.naturalWidth || img.width)) || size*2);
+                            const srcH = (box && box.h) ? box.h : (bw._forcedBitmap ? bw._forcedBitmap.height : (img && (img.naturalHeight || img.height)) || size*2);
+                            const drawW = srcW * scale;
+                            const drawH = srcH * scale;
+
+                            ctx.save(); ctx.translate(enemy.x, enemy.y);
+                            if (typeof ctx.imageSmoothingEnabled !== 'undefined') try{ ctx.imageSmoothingEnabled = true; } catch(_){ }
+                            try { if (enemy) enemy._noFallback = true; } catch(_){ }
+                            const dstW = Math.max(1, Math.round(drawW));
+                            const dstH = Math.max(1, Math.round(drawH));
+
+                            if (facing === 'left') {
+                                ctx.scale(-1, 1);
+                            }
+
+                            if (bw._forcedBitmap && box) {
+                                ctx.drawImage(bw._forcedBitmap, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (img && box) {
+                                ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (bw._forcedBitmap) {
+                                ctx.drawImage(bw._forcedBitmap, 0, 0, bw._forcedBitmap.width, bw._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
+                            }
+                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(128,0,128,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            ctx.restore();
+                            return;
+                        }
+                        // Artisanal Sourduck...of Doom sprite override (Act IV boss)
+                        if (enemy.type === 'Artisanal Sourduck...of Doom' && game.enemySprites && game.enemySprites.sourduck && (game.enemySprites.sourduck.loaded || game.enemySprites.sourduck._forcedBitmap)) {
+                            const sd = game.enemySprites.sourduck;
+                            const seq = sd.frames && sd.frames.seq;
+                            const frameStep = sd.anim && sd.anim.frameStep || 8;
+                            const playerX = game.player ? game.player.x : 0;
+                            const facing = (playerX < enemy.x) ? 'left' : 'right';
+                            const animTicks = Math.floor(game.frame / frameStep);
+                            const box = seq ? seq[animTicks % seq.length] : null;
+                            const img = sd.image;
+                            const size = enemy.size;
+                            const scale = sd.baseScaleForSize ? sd.baseScaleForSize(size) : ((size*2)/256);
+                            const srcW = (box && box.w) ? box.w : (sd._forcedBitmap ? sd._forcedBitmap.width : (img && (img.naturalWidth || img.width)) || size*2);
+                            const srcH = (box && box.h) ? box.h : (sd._forcedBitmap ? sd._forcedBitmap.height : (img && (img.naturalHeight || img.height)) || size*2);
+                            const drawW = srcW * scale;
+                            const drawH = srcH * scale;
+
+                            ctx.save(); ctx.translate(enemy.x, enemy.y);
+                            if (typeof ctx.imageSmoothingEnabled !== 'undefined') try{ ctx.imageSmoothingEnabled = true; } catch(_){ }
+                            try { if (enemy) enemy._noFallback = true; } catch(_){ }
+                            const dstW = Math.max(1, Math.round(drawW));
+                            const dstH = Math.max(1, Math.round(drawH));
+
+                            if (facing === 'left') {
+                                ctx.scale(-1, 1);
+                            }
+
+                            if (sd._forcedBitmap && box) {
+                                ctx.drawImage(sd._forcedBitmap, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (img && box) {
+                                ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (sd._forcedBitmap) {
+                                ctx.drawImage(sd._forcedBitmap, 0, 0, sd._forcedBitmap.width, sd._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
+                            }
+                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(128,0,128,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            ctx.restore();
+                            return;
+                        }
+                        // Mirequacker sprite override (Act IV enemy)
+                        if (enemy.type === 'Mirequacker' && game.enemySprites && game.enemySprites.mirequacker && (game.enemySprites.mirequacker.loaded || game.enemySprites.mirequacker._forcedBitmap)) {
+                            const mq = game.enemySprites.mirequacker;
+                            const seq = mq.frames && mq.frames.seq;
+                            const frameStep = mq.anim && mq.anim.frameStep || 8;
+                            const playerX = game.player ? game.player.x : 0;
+                            const facing = (playerX < enemy.x) ? 'left' : 'right';
+                            const animTicks = Math.floor(game.frame / frameStep);
+                            const box = seq ? seq[animTicks % seq.length] : null;
+                            const img = mq.image;
+                            const size = enemy.size;
+                            const scale = mq.baseScaleForSize ? mq.baseScaleForSize(size) : ((size*2)/256);
+                            const srcW = (box && box.w) ? box.w : (mq._forcedBitmap ? mq._forcedBitmap.width : (img && (img.naturalWidth || img.width)) || size*2);
+                            const srcH = (box && box.h) ? box.h : (mq._forcedBitmap ? mq._forcedBitmap.height : (img && (img.naturalHeight || img.height)) || size*2);
+                            const drawW = srcW * scale;
+                            const drawH = srcH * scale;
+
+                            ctx.save(); ctx.translate(enemy.x, enemy.y);
+                            if (typeof ctx.imageSmoothingEnabled !== 'undefined') try{ ctx.imageSmoothingEnabled = true; } catch(_){ }
+                            try { if (enemy) enemy._noFallback = true; } catch(_){ }
+                            const dstW = Math.max(1, Math.round(drawW));
+                            const dstH = Math.max(1, Math.round(drawH));
+
+                            if (facing === 'left') {
+                                ctx.scale(-1, 1);
+                            }
+
+                            if (mq._forcedBitmap && box) {
+                                ctx.drawImage(mq._forcedBitmap, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (img && box) {
+                                ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
+                            } else if (mq._forcedBitmap) {
+                                ctx.drawImage(mq._forcedBitmap, 0, 0, mq._forcedBitmap.width, mq._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
+                            }
+                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(0,128,0,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            ctx.restore();
+                            return;
+                        }
                         // Honkutus of Cygnus sprite override (Act III ranged)
                         if (enemy.type === 'Honkutus of Cygnus' && game.enemySprites && game.enemySprites.honkutusOfCygnus && (game.enemySprites.honkutusOfCygnus.loaded || game.enemySprites.honkutusOfCygnus._forcedBitmap)) {
                             const hk = game.enemySprites.honkutusOfCygnus;
@@ -32327,6 +34276,61 @@ function offerPermanentAbilityChoice() {
                 game.player.forceVisibleFrames--;
             }
             const forceShowPlayer = (game._bigQuackDefeated && !game.gameOver) || (game.player && game.player.forceVisibleFrames>0);
+            // Eldritch: draw scheduled special animations (bubbles/splash) and persistent lilypad under player
+            try {
+                if (game && Array.isArray(game._eldritchAnimations) && game._eldritchAnimations.length) {
+                    const now = performance.now();
+                    for (let ai = game._eldritchAnimations.length - 1; ai >= 0; ai--) {
+                        const an = game._eldritchAnimations[ai];
+                        try {
+                            if (!an || !an.img || !an.img.complete) continue;
+                            const elapsed = now - (an.started || now);
+                            const frameMs = 1000 / Math.max(1, an.fps || 12);
+                            const totalFrames = Math.max(1, an.frames || 1);
+                            const idx = Math.min(totalFrames - 1, Math.floor(elapsed / frameMs));
+                            const frameW = Math.max(1, Math.round((an.img.naturalWidth || an.img.width || 0) / totalFrames));
+                            const frameH = an.img.naturalHeight || an.img.height || 0;
+                            const sx = Math.min(an.img.naturalWidth || an.img.width || 0, idx * frameW);
+                            const sy = 0;
+                            const px = an.x || (window.__LOGICAL_CANVAS__ ? window.__LOGICAL_CANVAS__.w/2 : canvas.width/2);
+                            const py = an.y || (window.__LOGICAL_CANVAS__ ? window.__LOGICAL_CANVAS__.h/2 : canvas.height/2);
+                            const scale = 1.0;
+                            const dw = frameW * scale; const dh = frameH * scale;
+                            try { ctx.drawImage(an.img, sx, sy, frameW, frameH, Math.round(px - dw/2), Math.round(py - dh/2), Math.round(dw), Math.round(dh)); } catch(_){}
+                            // Remove once played the configured number of times
+                            if (elapsed >= (frameMs * totalFrames)) {
+                                an.played = (an.played || 0) + 1;
+                                if (!an.loop && an.played >= (an.maxPlays || 1)) {
+                                    try { if (typeof an.onComplete === 'function') an.onComplete(); } catch(_){}
+                                    game._eldritchAnimations.splice(ai, 1);
+                                } else {
+                                    // restart if looping
+                                    an.started = performance.now();
+                                }
+                            }
+                        } catch(_){}
+                    }
+                }
+                // Draw lilypad anchored under player (beneath player sprite)
+                if (game && game._eldritchLilypadActive && game._eldritchLilypad && game._eldritchLilypadReady && game.player) {
+                    try {
+                        const img = game._eldritchLilypad;
+                        const px = Math.round(game.player.x);
+                        const py = Math.round(game.player.y);
+                        const iw = img.naturalWidth || img.width || 0;
+                        const ih = img.naturalHeight || img.height || 0;
+                        const drawH = Math.max(24, Math.min(64, ih));
+                        const scale = drawH / Math.max(1, ih);
+                        const drawW = Math.round(iw * scale);
+                        const yOffset = 10; // nudge under feet
+                        ctx.save();
+                        ctx.globalAlpha = 0.98;
+                        ctx.drawImage(img, px - drawW/2, py - drawH/2 + yOffset, drawW, drawH);
+                        ctx.restore();
+                    } catch(_){}
+                }
+            } catch(_){}
+
             const invulnerableNow = !!(game.player && game.player.invulnerable);
             const isDamageBlink = invulnerableNow && game.player._invulnSource === 'damage';
             if (game.player && (!invulnerableNow || isDamageBlink) && game.player._invulnTimerMax) {

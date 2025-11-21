@@ -1,0 +1,3 @@
+Spawned from an ancient, cursed sourdough starter said to predate bread—and sanity—Artisanal Sourduck rose from the doughy depths to spread despair one slice at a time. This starter was whispered into existence by cultists chanting “rise and shine” under a blood moon, and it’s been fermenting madness ever since. His sourdough essence is steeped in forbidden yeast, giving him the power to leaven entire dimensions.
+
+Crusty, bitter, and always rising to the occasion. He believes life is all about loaf and death.

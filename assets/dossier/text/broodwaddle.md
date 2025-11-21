@@ -1,0 +1,3 @@
+Broodwaddle hatched in the Dread Nest, where whispers ripple through stagnant waters and sanity sinks like a stone. His tentacles are said to be the remnants of an ancient pact—each one a wriggling contract signed in quacks and ichor. He waddles between worlds, brooding over cosmic secrets no duck should ever know.
+
+Melancholy and menacing, Broodwaddle is the ultimate brooder, always contemplating the futility of existence while plotting to drown it in darkness. His favorite pastime? Watching ripples spread… and then devour the pond.
