@@ -7701,6 +7701,8 @@ function spawnEnemyDebug(typeName, opts) {
             try { enemy._noFallback = true; } catch(_){}
         }
     } catch(_){}
+    // Silence noisy default-white numbers near freshly spawned debug enemies for a short window
+    try { enemy._suppressDamageNumbers = 120; } catch(_){ }
     game.enemies.push(enemy);
     try { console.info('[EnemyDebugSpawn] spawned', typeName, { x: enemy.x, y: enemy.y, elite: enemy.elite }); } catch(_) {}
     return enemy;
@@ -15047,6 +15049,25 @@ function offerPermanentAbilityChoice() {
         // {crit:true, type:'fire'|'ice'|..., armor:true, heal:true, color:'#rrggbb', big:true, scale:number}
         function addDamageNumber(amount, x, y, opts={}) {
             if (amount == null) return;
+            // Quiet noisy default-white spawn ticks near freshly-spawned enemies.
+            try {
+                if (typeof x === 'number' && typeof y === 'number' && Array.isArray(game && game.enemies)) {
+                    for (let ei = 0; ei < game.enemies.length; ei++) {
+                        try {
+                            const en = game.enemies[ei]; if (!en) continue;
+                            if (en._suppressDamageNumbers && en._suppressDamageNumbers > 0) {
+                                const dx = Math.abs((en.x||0) - x); const dy = Math.abs((en.y||0) - y);
+                                if (dx < 16 && dy < 16) {
+                                    // If caller explicitly provided a type/color/heal/armor/crit, allow it; otherwise suppress default-white numbers
+                                    if (!(opts && (opts.type || opts.color || opts.heal || opts.armor || opts.crit))) {
+                                        return;
+                                    }
+                                }
+                            }
+                        } catch(_){}
+                    }
+                }
+            } catch(_){}
             // Avoid flooding: cap active numbers
             if (game.damageNumbers.length > 120) game.damageNumbers.splice(0, game.damageNumbers.length - 120);
             const typeColors = {
@@ -16601,6 +16622,14 @@ function offerPermanentAbilityChoice() {
                             typeName = pool[Math.floor(Math.random() * pool.length)];
                         }
                     }
+                    // Safety: ensure 'The Great Beaked One' only appears as the Act IV final boss
+                    try {
+                        const isFinalQuthulu = (Number(game.dungeon) === 10 && Number(game.room) === 5 && String(game._selectedAct) === 'IV');
+                        if (typeName === 'The Great Beaked One' && !isFinalQuthulu) {
+                            try { console.info('[RoomGen] Remapping non-final "The Great Beaked One" spawn to "Artisanal Sourduck...of Doom" to avoid miniboss misuse'); } catch(_){ }
+                            typeName = 'Artisanal Sourduck...of Doom';
+                        }
+                    } catch(_) {}
                     const baseType = ENEMY_TYPES[typeName];
                     // Compounding 35% health increase per completed district: multiplier = 1.35^(dungeon-1)
                     const healthMult = Math.pow(1.35, (game.dungeon - 1));
@@ -21305,6 +21334,10 @@ function offerPermanentAbilityChoice() {
                     // decay fear timer if already applied (post pull) else defer.
                     return; // skip rest of processing this frame until pull completes
                 }
+
+                // Decrement temporary suppression counter for newly-spawned enemies so
+                // transient spawn-time damage-number ticks can be muted briefly.
+                try { if (enemy._suppressDamageNumbers && enemy._suppressDamageNumbers > 0) enemy._suppressDamageNumbers--; } catch(_){}
 
                         // === Enemy Spatial Hash (mirrors projectile hash) ===
                         (function initEnemyHash(){
