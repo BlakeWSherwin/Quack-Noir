@@ -160,11 +160,11 @@
                             <!-- Left: Scaled game canvas column -->
                             <div id="gameOuter" style="position: relative; display: flex; flex-direction: column; align-items: flex-start;">
                                 <div id="gameContainer" style="position: relative;">
-                                    <canvas id="gameCanvas" width="640" height="480"></canvas>
-                                    <div id="abilityTooltip" class="tooltip">
-                                        <div id="tooltipName" class="ability-name"></div>
-                                        <div id="tooltipDesc" class="ability-desc"></div>
-                                    </div>
+                                        <canvas id="gameCanvas" width="640" height="480"></canvas>
+                                        <div id="abilityTooltip" class="tooltip">
+                                            <div id="tooltipName" class="ability-name"></div>
+                                            <div id="tooltipDesc" class="ability-desc"></div>
+                                        </div>
                                 </div>
                             </div>
                             <!-- Right: Side panel (health HUD on top, stats below) -->
@@ -15882,54 +15882,93 @@ function offerPermanentAbilityChoice() {
                         game._eldritchAnimations = game._eldritchAnimations || [];
                         // Preload spritesheets
                         const bubblesImg = new Image(); bubblesImg.src = 'assets/streets/eldritch/spritesheets/bubbles.png';
-                        const splashImg = new Image(); splashImg.src = 'assets/streets/eldrich/spritesheets/splash.png';
+                        // splash path had a typo in folder name; correct to 'eldritch'
+                        const splashImg = new Image(); splashImg.src = 'assets/streets/eldritch/spritesheets/splash.png';
                         game._eldritchSprites = game._eldritchSprites || {};
                         game._eldritchSprites.bubbles = bubblesImg;
                         game._eldritchSprites.splash = splashImg;
+
+                        // Bubbles atlas (32 frames, 256x256 each) - ordered left-to-right, top-to-bottom
+                        try {
+                            game._eldritchSprites.bubblesAtlas = [
+                                { x:0, y:0, w:256, h:256 },{ x:256, y:0, w:256, h:256 },{ x:512, y:0, w:256, h:256 },{ x:768, y:0, w:256, h:256 },
+                                { x:1024, y:0, w:256, h:256 },{ x:1280, y:0, w:256, h:256 },{ x:1536, y:0, w:256, h:256 },{ x:1792, y:0, w:256, h:256 },
+                                { x:0, y:256, w:256, h:256 },{ x:256, y:256, w:256, h:256 },{ x:512, y:256, w:256, h:256 },{ x:768, y:256, w:256, h:256 },
+                                { x:1024, y:256, w:256, h:256 },{ x:1280, y:256, w:256, h:256 },{ x:1536, y:256, w:256, h:256 },{ x:1792, y:256, w:256, h:256 },
+                                { x:0, y:512, w:256, h:256 },{ x:256, y:512, w:256, h:256 },{ x:512, y:512, w:256, h:256 },{ x:768, y:512, w:256, h:256 },
+                                { x:1024, y:512, w:256, h:256 },{ x:1280, y:512, w:256, h:256 },{ x:1536, y:512, w:256, h:256 },{ x:1792, y:512, w:256, h:256 },
+                                { x:0, y:768, w:256, h:256 },{ x:256, y:768, w:256, h:256 },{ x:512, y:768, w:256, h:256 },{ x:768, y:768, w:256, h:256 },
+                                { x:1024, y:768, w:256, h:256 },{ x:1280, y:768, w:256, h:256 },{ x:1536, y:768, w:256, h:256 },{ x:1792, y:768, w:256, h:256 }
+                            ];
+                        } catch(_) { }
+                        // Splash atlas (32 frames, 256x256 each) - same layout as bubbles
+                        try {
+                            game._eldritchSprites.splashAtlas = [
+                                { x:0, y:0, w:256, h:256 },{ x:256, y:0, w:256, h:256 },{ x:512, y:0, w:256, h:256 },{ x:768, y:0, w:256, h:256 },
+                                { x:1024, y:0, w:256, h:256 },{ x:1280, y:0, w:256, h:256 },{ x:1536, y:0, w:256, h:256 },{ x:1792, y:0, w:256, h:256 },
+                                { x:0, y:256, w:256, h:256 },{ x:256, y:256, w:256, h:256 },{ x:512, y:256, w:256, h:256 },{ x:768, y:256, w:256, h:256 },
+                                { x:1024, y:256, w:256, h:256 },{ x:1280, y:256, w:256, h:256 },{ x:1536, y:256, w:256, h:256 },{ x:1792, y:256, w:256, h:256 },
+                                { x:0, y:512, w:256, h:256 },{ x:256, y:512, w:256, h:256 },{ x:512, y:512, w:256, h:256 },{ x:768, y:512, w:256, h:256 },
+                                { x:1024, y:512, w:256, h:256 },{ x:1280, y:512, w:256, h:256 },{ x:1536, y:512, w:256, h:256 },{ x:1792, y:512, w:256, h:256 },
+                                { x:0, y:768, w:256, h:256 },{ x:256, y:768, w:256, h:256 },{ x:512, y:768, w:256, h:256 },{ x:768, y:768, w:256, h:256 },
+                                { x:1024, y:768, w:256, h:256 },{ x:1280, y:768, w:256, h:256 },{ x:1536, y:768, w:256, h:256 },{ x:1792, y:768, w:256, h:256 }
+                            ];
+                        } catch(_) { }
 
                         const centerX = Math.round(LOGICAL_W/2);
                         const centerY = Math.round(LOGICAL_H/2);
                         const spawnAnim = (img, opts) => {
                             const anim = {
-                                img: img,
-                                x: opts.x || centerX,
-                                y: opts.y || centerY,
-                                frames: opts.frames || 32,
-                                fps: opts.fps || 12,
-                                started: performance.now(),
-                                loop: !!opts.loop,
-                                played: 0,
-                                maxPlays: opts.maxPlays || 1,
-                                onComplete: opts.onComplete || null
-                            };
+                                    img: img,
+                                    // round coordinates to avoid fractional-pixel drift between animations
+                                    x: Math.round((opts.x != null) ? opts.x : centerX),
+                                    y: Math.round((opts.y != null) ? opts.y : centerY),
+                                    frames: opts.frames || 32,
+                                    fps: opts.fps || 12,
+                                    started: performance.now(),
+                                    loop: !!opts.loop,
+                                    played: 0,
+                                    maxPlays: opts.maxPlays || 1,
+                                    onComplete: opts.onComplete || null,
+                                    // optional per-animation scale (1.0 default)
+                                    scale: (typeof opts.scale === 'number') ? opts.scale : 1.0,
+                                    // optional pixel offsets applied after centering (useful for fine alignment)
+                                    offsetX: (typeof opts.offsetX === 'number') ? opts.offsetX : 0,
+                                    offsetY: (typeof opts.offsetY === 'number') ? opts.offsetY : 0,
+                                    // attach atlas frames if provided or available on shared sprites
+                                    atlasFrames: (opts.atlasFrames && opts.atlasFrames.slice && opts.atlasFrames.slice()) || ((img === bubblesImg && game._eldritchSprites && game._eldritchSprites.bubblesAtlas) ? game._eldritchSprites.bubblesAtlas.slice() : ((img === splashImg && game._eldritchSprites && game._eldritchSprites.splashAtlas) ? game._eldritchSprites.splashAtlas.slice() : null))
+                                };
                             game._eldritchAnimations.push(anim);
                             return anim;
                         };
 
-                        // At +3s: one bubble animation
-                        setTimeout(()=>{ try { spawnAnim(bubblesImg, { frames: 32, fps: 20, maxPlays: 1 }); } catch(_){} }, 3000);
-                        // At +6s: bubble again then splash once, then schedule boss spawn
+                        // At +5s: one bubble animation
+                        setTimeout(()=>{ try { spawnAnim(bubblesImg, { frames: 32, fps: 20, maxPlays: 1 }); } catch(_){} }, 5000);
+                        // At +10s: bubble again then splash once, then schedule boss spawn
                         setTimeout(()=>{
                             try {
                                 // second bubble
                                 const a = spawnAnim(bubblesImg, { frames: 32, fps: 20, maxPlays: 1 });
-                                // after bubble finishes (~frames/fps sec), spawn splash and schedule boss
-                                const bubbleDur = Math.max(300, Math.round((a.frames / a.fps) * 1000));
+                                // spawn splash 5000ms after the second bubble spawns (5s interval)
                                 setTimeout(()=>{
-                                    try { spawnAnim(splashImg, { frames: 16, fps: 18, maxPlays: 1 }); } catch(_){}
+                                    try {
+                                        // spawn splash at the bubble's renderer-computed draw center when available
+                                        const splashX = (a && a._drawCenterX != null) ? a._drawCenterX : Math.round(a.x);
+                                        const splashY = (a && a._drawCenterY != null) ? a._drawCenterY : Math.round(a.y);
+                                        spawnAnim(splashImg, { frames: 16, fps: 18, maxPlays: 1, x: Math.round(splashX), y: Math.round(splashY), scale: 1.30, offsetY: -20 });
+                                    } catch(_){ }
                                     // Boss spawn placeholder after splash
                                     setTimeout(()=>{
                                         try {
-                                            // Place a minimal placeholder boss entity at the same spot. This is a lightweight placeholder — replace with full boss spawn when available.
-                                            const boss = { type: 'EldritchBoss', x: centerX, y: centerY, health: 450, size: 180 };
-                                            game.enemies = game.enemies || [];
-                                            game.enemies.push(boss);
-                                            console.info('[Eldritch] Placeholder boss spawned', boss);
-                                        } catch(_){}
+                                            // Do NOT spawn a placeholder enemy directly here. Mark a pending flag so
+                                            // the canonical boss spawn routine can create the final boss later.
+                                            try { game._eldritchBossPending = true; } catch(_){ }
+                                            console.info('[Eldritch] Boss pending flag set for D10 R5 (no placeholder spawned)');
+                                        } catch(_){ }
                                     }, 1200);
-                                }, bubbleDur + 40);
+                                }, 5000);
                             } catch(_){}
-                        }, 6000);
+                        }, 10000);
                     } catch(_){}
                 }
             } catch(_){}
@@ -16162,6 +16201,7 @@ function offerPermanentAbilityChoice() {
             const hasBoss = game.room === 5;
             
             for (let i = 0; i < enemyCount; i++) {
+                if (game.dungeon === 10 && game.room === 5) { console.info('[RoomGen] Regular enemy spawns skipped for District 10 Room 5 (boss-only).'); break; }
                 let x, y, attempts = 0;
                 do {
                     x = 60 + Math.random() * (LOGICAL_W - 120);
@@ -16516,7 +16556,11 @@ function offerPermanentAbilityChoice() {
                     if (i === 0) console.info('[RoomGen] First enemy', { type: typeName, x: +enemyObj.x.toFixed(1), y: +enemyObj.y.toFixed(1) });
                 }
             }
-            if (game.enemies.length === 0) {
+            if (game.dungeon === 10 && game.room === 5) {
+                console.info('[RoomGen] Enemy spawn fallback suppressed for District 10 Room 5 (boss-only).');
+                game._roomSpawnedEnemies = 0;
+                game.enemies = [];
+            } else if (game.enemies.length === 0) {
                 console.warn('[RoomGen] No enemies spawned; injecting fallback.');
                 const fallback = { x: (LOGICAL_W/2)+(Math.random()*160-80), y: (LOGICAL_H/2)+(Math.random()*160-80), type:'Thug', health:40, maxHealth:40, speed:1.1, baseSpeed:1.1, damage:5, color:'#884400', size:20, xp:5, ranged:false, lastAttack:0, poisoned:false, slowed:false, burning:false, wunderScribble:false, wunderScribbleTime:0, wunderScribbleInterval:0, wunderScribbleTickDamage:0, _wunderScribbleTick:0 };
                 game.enemies.push(fallback);
@@ -34288,27 +34332,35 @@ function offerPermanentAbilityChoice() {
                             const frameMs = 1000 / Math.max(1, an.fps || 12);
                             const totalFrames = Math.max(1, an.frames || 1);
                             const idx = Math.min(totalFrames - 1, Math.floor(elapsed / frameMs));
-                            const frameW = Math.max(1, Math.round((an.img.naturalWidth || an.img.width || 0) / totalFrames));
-                            const frameH = an.img.naturalHeight || an.img.height || 0;
-                            const sx = Math.min(an.img.naturalWidth || an.img.width || 0, idx * frameW);
-                            const sy = 0;
-                            const px = an.x || (window.__LOGICAL_CANVAS__ ? window.__LOGICAL_CANVAS__.w/2 : canvas.width/2);
-                            const py = an.y || (window.__LOGICAL_CANVAS__ ? window.__LOGICAL_CANVAS__.h/2 : canvas.height/2);
-                            const scale = 1.0;
+                            let frameW = 0, frameH = 0, sx = 0, sy = 0;
+                            if (Array.isArray(an.atlasFrames) && an.atlasFrames.length) {
+                                const f = an.atlasFrames[Math.min(idx, an.atlasFrames.length - 1)];
+                                frameW = f.w || 0; frameH = f.h || 0; sx = f.x || 0; sy = f.y || 0;
+                            } else {
+                                frameW = Math.max(1, Math.round((an.img.naturalWidth || an.img.width || 0) / totalFrames));
+                                frameH = an.img.naturalHeight || an.img.height || 0;
+                                sx = Math.min(an.img.naturalWidth || an.img.width || 0, idx * frameW);
+                                sy = 0;
+                            }
+                            const px = (an.x != null) ? an.x : (window.__LOGICAL_CANVAS__ ? window.__LOGICAL_CANVAS__.w/2 : canvas.width/2);
+                            const py = (an.y != null) ? an.y : (window.__LOGICAL_CANVAS__ ? window.__LOGICAL_CANVAS__.h/2 : canvas.height/2);
+                            const scale = (typeof an.scale === 'number') ? an.scale : 1.0;
                             const dw = frameW * scale; const dh = frameH * scale;
-                            try { ctx.drawImage(an.img, sx, sy, frameW, frameH, Math.round(px - dw/2), Math.round(py - dh/2), Math.round(dw), Math.round(dh)); } catch(_){}
+                            const drawX = Math.round(px - dw/2 + (an.offsetX || 0));
+                            const drawY = Math.round(py - dh/2 + (an.offsetY || 0));
+                            try { ctx.drawImage(an.img, sx, sy, frameW, frameH, drawX, drawY, Math.round(dw), Math.round(dh)); } catch(_){ }
+                            try { an._drawCenterX = drawX + Math.round(dw/2); an._drawCenterY = drawY + Math.round(dh/2); } catch(_){ }
                             // Remove once played the configured number of times
                             if (elapsed >= (frameMs * totalFrames)) {
                                 an.played = (an.played || 0) + 1;
                                 if (!an.loop && an.played >= (an.maxPlays || 1)) {
-                                    try { if (typeof an.onComplete === 'function') an.onComplete(); } catch(_){}
+                                    try { if (typeof an.onComplete === 'function') an.onComplete(); } catch(_){ }
                                     game._eldritchAnimations.splice(ai, 1);
                                 } else {
-                                    // restart if looping
                                     an.started = performance.now();
                                 }
                             }
-                        } catch(_){}
+                        } catch(_){ }
                     }
                 }
                 // Draw lilypad anchored under player (beneath player sprite)
@@ -34320,16 +34372,16 @@ function offerPermanentAbilityChoice() {
                         const iw = img.naturalWidth || img.width || 0;
                         const ih = img.naturalHeight || img.height || 0;
                         const drawH = Math.max(24, Math.min(64, ih));
-                        const scale = drawH / Math.max(1, ih);
-                        const drawW = Math.round(iw * scale);
+                        const lscale = drawH / Math.max(1, ih);
+                        const drawW = Math.round(iw * lscale);
                         const yOffset = 10; // nudge under feet
                         ctx.save();
                         ctx.globalAlpha = 0.98;
                         ctx.drawImage(img, px - drawW/2, py - drawH/2 + yOffset, drawW, drawH);
                         ctx.restore();
-                    } catch(_){}
+                    } catch(_){ }
                 }
-            } catch(_){}
+            } catch(_){ }
 
             const invulnerableNow = !!(game.player && game.player.invulnerable);
             const isDamageBlink = invulnerableNow && game.player._invulnSource === 'damage';
