@@ -46,9 +46,10 @@
                 console.warn('[favicon] none of the candidate paths loaded; verify file location and server/static routes');
             })();
         } catch(e) { console.warn('[favicon] runtime probe failed', e); }
-    })();
-    </script>
-    <style>
+                })();
+            </script>
+
+            <style>
         #bossBadge {
             display:inline-block;
             margin-left:8px;
@@ -434,7 +435,12 @@
                             const drawH = reference.h * scale;
                             const hitW = drawW * 0.68;
                             const hitH = drawH * 0.74;
-                            return { w: hitW, h: hitH, ox: -hitW / 2, oy: -hitH / 2 + drawH * 0.04 };
+                                        try {
+                                            const yTweak = (typeof window !== 'undefined' && typeof window._quthuluOverlayTweakY === 'number') ? window._quthuluOverlayTweakY : 0;
+                                            return { w: hitW, h: hitH, ox: -hitW / 2, oy: -hitH / 2 + drawH * 0.04 + yTweak };
+                                        } catch(_) {
+                                            return { w: hitW, h: hitH, ox: -hitW / 2, oy: -hitH / 2 + drawH * 0.04 };
+                                        }
                         };
                         container.drawOffsetY = container.drawOffsetY || 0;
                     };
@@ -1023,6 +1029,24 @@
                 fps: 6 // target animation rate; derived via frame step from game.frame
             };
 
+            // Preload Cosmic Rock spritesheet (Act IV exclusive obstacle)
+            try {
+                const crImg = new Image();
+                crImg.onload = () => { crImg._ok = true; };
+                crImg.onerror = () => { console.warn('[CosmicRockSprite] Failed to load assets/eldritch/spritesheets/cosmicrock-sheet-3-8.png'); crImg._broken = true; };
+                crImg.src = 'assets/eldritch/spritesheets/cosmicrock-sheet-3-8.png';
+                // Use only frames 3-8 from the provided atlas
+                const crFrames = [
+                    { x: 768, y: 0, w: 256, h: 256 },
+                    { x: 1024, y: 0, w: 256, h: 256 },
+                    { x: 1280, y: 0, w: 256, h: 256 },
+                    { x: 1536, y: 0, w: 256, h: 256 },
+                    { x: 1792, y: 0, w: 256, h: 256 },
+                    { x: 0, y: 256, w: 256, h: 256 }
+                ];
+                window._cosmicRockSprite = { image: crImg, frames: crFrames, fps: 6 };
+            } catch(_) { }
+
             // Helper: compute the current on-canvas destination rectangle for a dumpster sprite,
             // matching how we draw it (aspect fit with slight padding). Returns
             // { x, y, w, h, frame } where frame is the source frame rect used.
@@ -1048,6 +1072,27 @@
                                 return { x, y, w: drawW, h: drawH, frame };
                             } catch(e) { return { x: wall.x || 0, y: wall.y || 0, w: (wall && wall.width) || (typeof TILE_SIZE !== 'undefined' ? TILE_SIZE : 22), h: (wall && wall.height) || (typeof TILE_SIZE !== 'undefined' ? TILE_SIZE : 22), frame: null }; }
             };
+
+                // Helper: compute destination rect for Cosmic Rock sprite (align bottom similar to dumpster)
+                window.getCosmicRockSpriteRect = function getCosmicRockSpriteRect(wall){
+                    try {
+                        const spr = window._cosmicRockSprite;
+                        const containerW = (wall && wall.width) ? wall.width : (typeof TILE_SIZE !== 'undefined' ? TILE_SIZE : 22);
+                        const containerH = (wall && wall.height) ? wall.height : (typeof TILE_SIZE !== 'undefined' ? TILE_SIZE : 22);
+                        if (!spr || !Array.isArray(spr.frames) || !spr.frames.length) {
+                            return { x: wall.x || 0, y: wall.y || 0, w: containerW, h: containerH, frame: null };
+                        }
+                        const frame = spr.frames[0] || { w: containerW, h: containerH };
+                        const srcW = frame.w || containerW;
+                        const srcH = frame.h || containerH;
+                        const scale = Math.min(containerW / srcW, containerH / srcH);
+                        const drawW = Math.max(1, Math.floor(srcW * scale));
+                        const drawH = Math.max(1, Math.floor(srcH * scale));
+                        const x = (wall.x || 0) + Math.round((containerW - drawW) / 2);
+                        const y = (wall.y || 0) + Math.round(containerH - drawH);
+                        return { x, y, w: drawW, h: drawH, frame };
+                    } catch(e) { return { x: wall.x || 0, y: wall.y || 0, w: (wall && wall.width) || (typeof TILE_SIZE !== 'undefined' ? TILE_SIZE : 22), h: (wall && wall.height) || (typeof TILE_SIZE !== 'undefined' ? TILE_SIZE : 22), frame: null }; }
+                };
 
             // Background image list used by window._streetBackgrounds. Kept as a constant so other code can reference it.
             const STREET_BG_PATHS = [
@@ -1097,28 +1142,22 @@
                 const existing = b.cache.get(src);
                 if (existing && (existing.ready || existing.loading)) return existing.promise || Promise.resolve(existing);
                 const img = new Image();
-                // If images are same-origin, CORS is not required; harmless if left off
                 img.decoding = 'async';
-                img.src = src;
+
                 const p = new Promise((resolve) => {
-                    function finalize(){
-                        const done = (bitmap)=>{ const entry = { img, bitmap, ready: true }; b.cache.set(src, entry); resolve(entry); };
+                    function finalize() {
                         try {
-                            if (typeof createImageBitmap === 'function') {
-                                createImageBitmap(img).then(bmp => done(bmp)).catch(()=> done(null));
-                            } else {
-                                done(null);
-                            }
-                        } catch(_) { done(null); }
+                            b.cache.set(src, { img: img, ready: true, loading: false });
+                            resolve({ img: img, ready: true });
+                        } catch(_) { resolve(null); }
                     }
-                    if (img.decode) {
-                        img.decode().then(finalize).catch(()=>{ img.onload = finalize; img.onerror = ()=>{ b.cache.set(src,{ error:true }); resolve(null); }; });
-                    } else {
-                        img.onload = finalize;
-                        img.onerror = ()=>{ b.cache.set(src,{ error:true }); resolve(null); };
-                    }
+                    img.onload = finalize;
+                    img.onerror = function(){ try { b.cache.set(src, { img: null, error: true, loading: false }); } catch(_){} resolve(null); };
+                    // assign src last to ensure handlers are attached
+                    try { img.src = src; } catch(_) { img.src = src; }
                 });
-                b.cache.set(src, { img, loading: true, promise: p });
+
+                b.cache.set(src, { img: img, loading: true, promise: p });
                 return p;
             }
             window.preloadStreetBackgrounds = function preloadStreetBackgrounds(){
@@ -7636,6 +7675,12 @@ function spawnEnemyDebug(typeName, opts) {
         elite: !!(opts && opts.elite),
         debugSpawn: true
     };
+    // Initialize boss-specific cooldowns for debug-spawned final bosses
+    try {
+        if (typeName === 'The Great Beaked One') {
+            try { enemy._releaseQuackenCd = 120; } catch(_){}
+        }
+    } catch(_){}
     if (enemy.elite) {
         enemy.health = Math.floor(enemy.health * 5.0);
         enemy.maxHealth = enemy.health;
@@ -7647,6 +7692,15 @@ function spawnEnemyDebug(typeName, opts) {
         enemy.finalBoss = true;
     }
     if (!Array.isArray(game.enemies)) game.enemies = [];
+    // If a sprite container for this type is already present and ready, mark the
+    // spawned enemy to skip fallback drawing immediately to avoid transient ducks/magenta.
+    try {
+        const sprites = game.enemySprites || null;
+        const cont = sprites ? (sprites[typeName] || sprites[(typeName || '').toLowerCase()] || null) : null;
+        if (cont && (cont.loaded || cont._forcedBitmap)) {
+            try { enemy._noFallback = true; } catch(_){}
+        }
+    } catch(_){}
     game.enemies.push(enemy);
     try { console.info('[EnemyDebugSpawn] spawned', typeName, { x: enemy.x, y: enemy.y, elite: enemy.elite }); } catch(_) {}
     return enemy;
@@ -10671,6 +10725,8 @@ function offerPermanentAbilityChoice() {
 
     // Act III melee enemy: Swanomaly (non-ranged, Act III exclusive)
     ENEMY_TYPES['Swanomaly'] = { health: 220, speed: 0.52, damage: 18, color: '#E6F4FF', size: 56, xp: 420, ranged: false, armor: 3, act: 'III' };
+    // Act IV final boss: The Great Beaked One (stationary eldritch boss that releases tentacles)
+    ENEMY_TYPES['The Great Beaked One'] = { health: 8000, speed: 0.0, damage: 72, color: '#2b1b3a', size: 220, xp: 20000, ranged: true, rangedCooldown: 2200, armor: 12, act: 'IV', boss: true, spawnStreet: 5, bossFinal: true };
     // Act III ranged enemy: Swan Wick (exclusive to Act III)
     // Uses assets/swans/spritesheets/swanwick-sheet-3-29.png (animated spritesheet, frames 3-29, left/right facing only, mirrors for left).
     // Uses assets/swans/swanwick.png. Default side faces right; left is mirrored.
@@ -15901,6 +15957,124 @@ function offerPermanentAbilityChoice() {
                                 { x:1024, y:768, w:256, h:256 },{ x:1280, y:768, w:256, h:256 },{ x:1536, y:768, w:256, h:256 },{ x:1792, y:768, w:256, h:256 }
                             ];
                         } catch(_) { }
+                        // Quthulu / Great Beaked One sprites (optional boss spritesheet). Use frames 1-19 if available.
+                        try {
+                            const qImg = new Image(); qImg.onload = ()=>{ qImg._ok = true; };
+                            qImg.onerror = ()=>{ console.warn('[QuthuluSprite] Failed to load assets/eldritch/spritesheets/quthulu-sheet-1-19.png'); qImg._broken = true; };
+                            qImg.src = 'assets/eldritch/spritesheets/quthulu-sheet-1-19.png';
+                            game._eldritchSprites.quthulu = qImg;
+                            // Build full 32-frame atlas (8x4 grid) then select frames 1..19 (inclusive)
+                            try {
+                                const full = [];
+                                for (let i = 0; i < 32; i++) {
+                                    const row = Math.floor(i / 8);
+                                    const col = i % 8;
+                                    full.push({ x: col * 256, y: row * 256, w: 256, h: 256 });
+                                }
+                                game._eldritchSprites.quthuluAtlas = full;
+                                // Pick frames 1..19 from the atlas (user-provided atlas uses 0..31 keys)
+                                const seq = full.slice(1, 20); // indices 1..19 inclusive
+                                // Register a renderer-friendly enemy sprite container for the boss
+                                try {
+                                    game.enemySprites = game.enemySprites || {};
+                                    const container = { image: qImg, loaded: false };
+                                    container.frames = container.frames || {};
+                                    container.frames.seq = seq.slice();
+                                    container.anim = container.anim || {};
+                                    container.anim.frames = container.frames.seq;
+                                    container.anim.frameStep = 6;
+                                    container.anim.loop = true;
+                                    container.anim.frameCount = container.frames.seq.length;
+                                    const refH = 256;
+                                    container.baseScaleForSize = (size)=> ((size * 2) / refH);
+                                    container.computeHitbox = (enemy)=> {
+                                        const enemySize = enemy && enemy.size ? enemy.size : 220;
+                                        const scale = container.baseScaleForSize ? container.baseScaleForSize(enemySize) : ((enemySize * 2) / refH);
+                                        const drawW = 256 * scale;
+                                        const drawH = 256 * scale;
+                                        const hitW = drawW * 0.68;
+                                        const hitH = drawH * 0.74;
+                                        try {
+                                            const yTweak = (typeof window !== 'undefined' && typeof window._quthuluOverlayTweakY === 'number') ? window._quthuluOverlayTweakY : 0;
+                                            return { w: hitW, h: hitH, ox: -hitW / 2, oy: -hitH / 2 + drawH * 0.04 + yTweak };
+                                        } catch(_) {
+                                            return { w: hitW, h: hitH, ox: -hitW / 2, oy: -hitH / 2 + drawH * 0.04 };
+                                        }
+                                    };
+                                    // Mark container loaded and log when image finishes loading/decoding
+                                    try {
+                                        qImg.onload = function(ev) { try {
+                                            qImg._ok = true;
+                                            // If a createImageBitmap fallback was used earlier, clear it so the real Image is preferred
+                                            try { if (container && container._forcedBitmap) { try { if (container._forcedBitmap.close) container._forcedBitmap.close(); } catch(_){} container._forcedBitmap = null; try { console.info('[QuthuluSprite] Image loaded; cleared forced bitmap fallback'); } catch(_){} } } catch(_){ }
+                                            container.loaded = true;
+                                            // Defensive: mark sprite container as not needing fallback so main draw won't render magenta/yellow
+                                            try { container._noFallback = true; } catch(_){}
+                                            // Also mark any already-spawned enemy instances to skip fallback drawing
+                                            try {
+                                                if (typeof game !== 'undefined' && Array.isArray(game.enemies)) {
+                                                    for (let ei = 0; ei < game.enemies.length; ei++) {
+                                                        try {
+                                                            const en = game.enemies[ei];
+                                                            if (!en) continue;
+                                                            const t = (en.type || '').toString();
+                                                            if (!t) continue;
+                                                                            if (t === 'The Great Beaked One' || en._isEldritchFinal || (t && t.toLowerCase() === 'thegreatbeakedone')) {
+                                                                                try {
+                                                                                    en._noFallback = true;
+                                                                                    if (container && typeof container.computeHitbox === 'function') {
+                                                                                        try { en.hitbox = container.computeHitbox(en); } catch(_){ }
+                                                                                    }
+                                                                                } catch(_){ }
+                                                                            }
+                                                        } catch(_){}
+                                                    }
+                                                }
+                                            } catch(_){}
+                                            console.info('[QuthuluSprite] Loaded', qImg.src);
+                                        } catch(_){} };
+                                    // Expose convenient runtime helpers for overlay sampling and debug toggles
+                                    try {
+                                        window._quthuluOverlayOneShot = window._quthuluOverlayOneShot || false;
+                                        window._quthuluOverlayDebug = window._quthuluOverlayDebug || false;
+                                        // Persist the confirmed horizontal tweak so alignment stays correct by default
+                                        window._quthuluOverlayTweakX = (typeof window._quthuluOverlayTweakX === 'number') ? window._quthuluOverlayTweakX : -72;
+                                        // Default small vertical shift to lower boss/hitbox visually (user-confirmed baseline)
+                                        window._quthuluOverlayTweakY = (typeof window._quthuluOverlayTweakY === 'number') ? window._quthuluOverlayTweakY : -4;
+                                        window.quthuluOverlaySample = function() {
+                                            try { window._quthuluOverlayOneShot = true; console.info('[QuthuluSprite] One-shot overlay sample armed'); } catch(_){}
+                                        };
+                                        window.quthuluOverlayDebug = function(v) {
+                                            try { window._quthuluOverlayDebug = !!v; console.info('[QuthuluSprite] Debug=' + !!v); } catch(_){}
+                                        };
+                                        // Convenience helpers for adjusting/inspecting the runtime tweak value
+                                        window.quthuluOverlayNudge = function(dx) {
+                                            try {
+                                                const cur = (typeof window._quthuluOverlayTweakX === 'number') ? window._quthuluOverlayTweakX : 0;
+                                                const add = (typeof dx === 'number' && isFinite(dx)) ? dx : 0;
+                                                window._quthuluOverlayTweakX = cur + add;
+                                                console.info('[QuthuluSprite] Nudged tweak ->', window._quthuluOverlayTweakX);
+                                            } catch(_){}
+                                        };
+                                        window.quthuluOverlayNudgeY = function(dy) {
+                                            try {
+                                                const cur = (typeof window._quthuluOverlayTweakY === 'number') ? window._quthuluOverlayTweakY : 0;
+                                                const add = (typeof dy === 'number' && isFinite(dy)) ? dy : 0;
+                                                window._quthuluOverlayTweakY = cur + add;
+                                                console.info('[QuthuluSprite] Nudged tweakY ->', window._quthuluOverlayTweakY);
+                                            } catch(_){ }
+                                        };
+                                        window.quthuluOverlaySet = function(v) {
+                                            try { window._quthuluOverlayTweakX = (typeof v === 'number' && isFinite(v)) ? v : 0; console.info('[QuthuluSprite] Set tweak ->', window._quthuluOverlayTweakX); } catch(_){}
+                                        };
+                                        window.quthuluOverlayGet = function() { try { console.info('[QuthuluSprite] Tweak =', window._quthuluOverlayTweakX); return window._quthuluOverlayTweakX; } catch(_) { return undefined; } };
+                                    } catch(_){}
+                                    } catch(_){ }
+                                    try { game.enemySprites['The Great Beaked One'] = container; } catch(_){ }
+                                    try { game.enemySprites.thegreatbeakedone = container; } catch(_){ }
+                                } catch(_){ }
+                            } catch(_){ }
+                        } catch(_) { }
                         // Splash atlas (32 frames, 256x256 each) - same layout as bubbles
                         try {
                             game._eldritchSprites.splashAtlas = [
@@ -15953,9 +16127,32 @@ function offerPermanentAbilityChoice() {
                                 setTimeout(()=>{
                                     try {
                                         // spawn splash at the bubble's renderer-computed draw center when available
-                                        const splashX = (a && a._drawCenterX != null) ? a._drawCenterX : Math.round(a.x);
-                                        const splashY = (a && a._drawCenterY != null) ? a._drawCenterY : Math.round(a.y);
-                                        spawnAnim(splashImg, { frames: 16, fps: 18, maxPlays: 1, x: Math.round(splashX), y: Math.round(splashY), scale: 1.30, offsetY: -20 });
+                                                        const splashX = (a && a._drawCenterX != null) ? a._drawCenterX : Math.round(a.x);
+                                                        const splashY = (a && a._drawCenterY != null) ? a._drawCenterY : Math.round(a.y);
+                                                        // Spawn splash and schedule the final boss to appear halfway through the splash animation
+                                                        const splashAnim = spawnAnim(splashImg, { frames: 16, fps: 18, maxPlays: 1, x: Math.round(splashX), y: Math.round(splashY), scale: 1.30, offsetY: -48 });
+                                                        try {
+                                                            const totalMs = ((splashAnim.frames || 16) / (splashAnim.fps || 18)) * 1000;
+                                                            const halfMs = Math.max(1, Math.floor(totalMs / 2));
+                                                            setTimeout(()=>{
+                                                                try {
+                                                                    // Spawn the final boss directly at the splash center (D10 R5)
+                                                                    if (!game) return;
+                                                                    // Use debug spawn helper then reposition so it appears exactly at the splash center
+                                                                    const bossEnemy = spawnEnemyDebug('The Great Beaked One', { elite: false });
+                                                                    if (bossEnemy) {
+                                                                        bossEnemy.x = Math.round(splashAnim._drawCenterX || splashX);
+                                                                        bossEnemy.y = Math.round(splashAnim._drawCenterY || splashY);
+                                                                        bossEnemy.facing = 'down';
+                                                                        bossEnemy.speed = 0; // stationary
+                                                                        bossEnemy._isEldritchFinal = true;
+                                                                        // Telegraph: flag so renderer / UI can treat as final boss
+                                                                        try { game._eldritchBossSpawned = true; } catch(_){ }
+                                                                        console.info('[Eldritch] The Great Beaked One spawned at', bossEnemy.x, bossEnemy.y);
+                                                                    }
+                                                                } catch(_){ }
+                                                            }, halfMs);
+                                                        } catch(_){ }
                                     } catch(_){ }
                                     // Boss spawn placeholder after splash
                                     setTimeout(()=>{
@@ -16007,7 +16204,18 @@ function offerPermanentAbilityChoice() {
             }
             
             // Add varied obstacles (streetlight removed per design request)
-            const baseObstacleTypes = ['car', 'dumpster', 'barrier'];
+            // Base obstacle types. We'll filter these for Act IV to prevent specific obstacles from spawning there.
+            let baseObstacleTypes = ['car', 'dumpster', 'barrier'];
+            try {
+                if (String(game && game._selectedAct) === 'IV') {
+                    // Act IV: use an Act-IV-exclusive obstacle (Cosmic Rock), except for district 10, street 5
+                    try {
+                        const isExcluded = (Number(game.dungeon) === 10 && Number(game.room) === 5);
+                        if (!isExcluded) baseObstacleTypes = ['cosmic_rock'];
+                        else baseObstacleTypes = [];
+                    } catch(_) { baseObstacleTypes = ['cosmic_rock']; }
+                }
+            } catch(_){ }
             // Expand obstacle list according to theme weights (simple duplication weighting)
             let obstacleTypes = [];
             const ow = game.currentTheme.obstacleWeights || {};
@@ -16020,6 +16228,7 @@ function offerPermanentAbilityChoice() {
             const obstacleCount = 5 + Math.floor(game.dungeon / 2);
             const OBSTACLE_MIN_GAP = TILE_SIZE * 1.25; // minimum pixel gap between obstacle bounding boxes (excluding perimeter walls)
             
+            if (obstacleTypes.length > 0) {
             for (let i = 0; i < obstacleCount; i++) {
                 let x, y, attempts = 0;
                 do {
@@ -16077,7 +16286,30 @@ function offerPermanentAbilityChoice() {
                         // Enforce spacing for non-car obstacles too; dumpsters are up-scaled to a larger footprint
                         const tile = TILE_SIZE;
                         let widthPx = tile, heightPx = tile;
-                        if (type === 'dumpster') {
+                        if (type === 'cosmic_rock') {
+                            // Cosmic Rock: much larger Act IV-exclusive obstacle (bigger footprint)
+                            // Increased to 8x tiles to match player scale and be visually prominent
+                            const SCALE = 8;
+                            widthPx = tile * SCALE;
+                            heightPx = tile * SCALE;
+                            if (x < tile) x = tile;
+                            if (y < tile) y = tile;
+                            if (x + widthPx > (ROOM_WIDTH-1)*tile) x = Math.max(tile, (ROOM_WIDTH-1)*tile - widthPx - tile);
+                            if (y + heightPx > (ROOM_HEIGHT-1)*tile) y = Math.max(tile, (ROOM_HEIGHT-1)*tile - heightPx - tile);
+                            // Avoid player start zone similar to dumpster
+                            const startZoneW = 260; // width of exclusion zone
+                            const startZoneH = 220; // height of exclusion zone
+                            const sx1 = (LOGICAL_W/2) - startZoneW/2;
+                            const sy1 = (LOGICAL_H/2) - startZoneH/2;
+                            const sx2 = sx1 + startZoneW;
+                            const sy2 = sy1 + startZoneH;
+                            const ax1 = x, ay1 = y, ax2 = x + widthPx, ay2 = y + heightPx;
+                            const overlapsStart = !(ax2 <= sx1 || ax1 >= sx2 || ay2 <= sy1 || ay1 >= sy2);
+                            if (overlapsStart) {
+                                // Skip placing this cosmic rock and try another position
+                                continue;
+                            }
+                        } else if (type === 'dumpster') {
                             // At least 5x bigger in both dimensions
                             const SCALE = 5;
                             widthPx = tile * SCALE;
@@ -16120,9 +16352,9 @@ function offerPermanentAbilityChoice() {
                             return !(ax2 <= bx1 || ax1 >= bx2 || ay2 <= by1 || ay1 >= by2);
                         });
                         if (overlaps) continue;
-                        if (type === 'dumpster') {
+                        if (type === 'dumpster' || type === 'cosmic_rock') {
                             game.walls.push({ x, y, type, width: widthPx, height: heightPx });
-                            // Large dumpster counts as two obstacles to keep density reasonable
+                            // Large obstacle counts as two obstacles to keep density reasonable
                             if (i < obstacleCount - 1) i++;
                         } else if (type === 'barrier') {
                             game.walls.push({ x, y, type, width: widthPx, height: heightPx });
@@ -16133,6 +16365,9 @@ function offerPermanentAbilityChoice() {
                         }
                     }
                 }
+            }
+            } else {
+                try { console.info('[RoomGen] No obstacle types available for this act; skipping obstacle placement'); } catch(_){}
             }
             
             // Spawn enemies with scaling difficulty
@@ -16890,6 +17125,12 @@ function offerPermanentAbilityChoice() {
     function applyKnockback(enemy, a, b, c) {
         try {
             if (!enemy) return;
+            // Final boss is immune to all knockback
+            try {
+                const t = (enemy.type || '').toString();
+                const norm = t.toLowerCase().replace(/\s+/g,'');
+                if (t === 'The Great Beaked One' || enemy._isEldritchFinal || norm === 'thegreatbeakedone') return;
+            } catch(_){}
             const arg2 = a;
             const arg3 = b;
             const arg4 = c;
@@ -18351,6 +18592,12 @@ function offerPermanentAbilityChoice() {
                     return;
                 }
                 const tRaw = (now - st.startTime) / st.duration;
+                // Ensure pulls don't move the final boss — cancel if somehow assigned
+                try {
+                    const tt = (enemy && (enemy.type || '')).toString();
+                    const nn = tt.toLowerCase().replace(/\s+/g,'');
+                    if (tt === 'The Great Beaked One' || enemy._isEldritchFinal || nn === 'thegreatbeakedone') { st.active = false; return; }
+                } catch(_){}
                 const t = Math.min(1, Math.max(0, tRaw));
                 const ease = 1 - Math.pow(1 - t, 3); // cubic out
                 enemy.x = st.startX + (st.targetX - st.startX) * ease;
@@ -18994,6 +19241,26 @@ function offerPermanentAbilityChoice() {
             return { x: wall.x, y: wall.y, w: (wall.width||TILE_SIZE), h: (wall.height||TILE_SIZE) };
         }
 
+        function getCosmicRockAabb(wall) {
+            if (typeof window.getCosmicRockSpriteRect === 'function') {
+                const rect = window.getCosmicRockSpriteRect(wall);
+                if (rect) {
+                    // Reduce left/right padding on the hitbox so collisions are less wide than the sprite.
+                    try {
+                        const SHRINK_RATIO = 0.16; // total horizontal shrink ratio (16% of width)
+                        const shrinkPx = Math.round((rect.w || (wall.width||TILE_SIZE)) * SHRINK_RATIO);
+                        const nx = rect.x + Math.round(shrinkPx / 2);
+                        const nw = Math.max(1, (rect.w || (wall.width||TILE_SIZE)) - shrinkPx);
+                        return { x: nx, y: rect.y, w: nw, h: rect.h };
+                    } catch(_) {
+                        return { x: rect.x, y: rect.y, w: rect.w, h: rect.h };
+                    }
+                }
+                return { x: wall.x, y: wall.y, w: (wall.width||TILE_SIZE), h: (wall.height||TILE_SIZE) };
+            }
+            return { x: wall.x, y: wall.y, w: (wall.width||TILE_SIZE), h: (wall.height||TILE_SIZE) };
+        }
+
         function updateTrucks() {
             if (!Array.isArray(game.trucks) || !game.trucks.length) return;
             const w = (window.__LOGICAL_CANVAS__ && window.__LOGICAL_CANVAS__.w) || canvas.width;
@@ -19030,19 +19297,19 @@ function offerPermanentAbilityChoice() {
                             }
                         }
                     }
-                    // Check dumpster collisions only
+                    // Check dumpster/cosmic rock collisions
                     if (Array.isArray(game.walls) && game.walls.length) {
                         for (const wall of game.walls) {
-                            if (wall.type !== 'dumpster') continue;
+                            if (wall.type !== 'dumpster' && wall.type !== 'cosmic_rock') continue;
                             const a = { x: t.x - (t.width)/2, y: t.y - (t.height)/2, w: t.width, h: t.height };
-                            const b = getDumpsterAabb(wall);
+                            const b = (wall.type === 'dumpster') ? getDumpsterAabb(wall) : getCosmicRockAabb(wall);
                             if (a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y) {
-                                // Start impact sequence: show frame 2 then 3, then explode
+                                // Start impact sequence: show frame 2 then 3, then explode (same behavior for cosmic rock)
                                 t.state = 'impactSeq';
                                 t._impactStep = 1; // show frame index 1
                                 t._impactTimer = 0;
                                 t.vx = 0; // stop moving while impacting
-                                wall.flashTimer = 10; // brief dumpster flash
+                                wall.flashTimer = 10; // brief flash
                                 break;
                             }
                         }
@@ -21211,6 +21478,44 @@ function offerPermanentAbilityChoice() {
                 const dx = game.player.x - enemy.x;
                 const dy = game.player.y - enemy.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
+
+                // === Act IV final boss behavior: The Great Beaked One ===
+                try {
+                    if (String(enemy.type) === 'The Great Beaked One' && !enemy.dead && enemy.health > 0) {
+                        // Stationary boss: ensure it doesn't wander
+                        enemy.speed = 0;
+                        // Cooldown in frames for releasing quacken tentacles
+                        enemy._releaseQuackenCd = (typeof enemy._releaseQuackenCd === 'number') ? enemy._releaseQuackenCd : 120;
+                        if (enemy._releaseQuackenCd <= 0) {
+                            // Reset cooldown (2-4s roughly at 60fps)
+                            enemy._releaseQuackenCd = 120 + Math.floor(Math.random() * 120);
+                            // Spawn several tentacle projectiles anchored to the boss location
+                            const tentCount = 3 + (Math.random() < 0.5 ? 0 : 1) + (Math.random() < 0.33 ? 1 : 0); // 3-5
+                            for (let t = 0; t < tentCount; t++) {
+                                const ang = (Math.random() * Math.PI * 2);
+                                const speed = 6 + Math.random() * 2;
+                                const sx = enemy.x + Math.cos(ang) * Math.max(16, enemy.size * 0.18);
+                                const sy = enemy.y + Math.sin(ang) * Math.max(16, enemy.size * 0.18);
+                                const pIdx = game.spawnProjectile({ x: sx, y: sy, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 60000, r: 14, damage: Math.max(8, Math.floor((enemy.damage || 32) * 0.45)) });
+                                if (pIdx >= 0) {
+                                    try {
+                                        const store = game.projectilesSoA && game.projectilesSoA.metaStore;
+                                        if (store) {
+                                            // Anchor tentacle to the boss by providing a lightweight anchor object
+                                            store.set(pIdx, { quackenTentacle: true, _tentacleAnchorPlayer: { x: enemy.x, y: enemy.y }, _tentacleRange: 420, baseDamage: Math.max(6, Math.floor((enemy.damage || 32) * 0.5)), _tentacleExtendFrames: 46 });
+                                        }
+                                    } catch(_){}
+                                }
+                            }
+                            // Visual cue
+                            try { addParticle(enemy.x, enemy.y, '#5B49C8', 'ring'); } catch(_){}
+                        } else {
+                            enemy._releaseQuackenCd--;
+                        }
+                        // Boss does not perform normal AI movement/attacks
+                        return;
+                    }
+                } catch(_){}
 
                 // Process smooth knockback BEFORE stun/freeze early returns so sliding occurs even if stunned.
                 if (enemy.kbFrames && enemy.kbFrames > 0 && (enemy.kbVX || enemy.kbVY)) {
@@ -25931,24 +26236,40 @@ function offerPermanentAbilityChoice() {
                 enemy.slowTime = Math.max(enemy.slowTime || 0, 160);
             }
             if (proj.quackenTentacle) {
-                const slowFrames = proj.quackenSlowFrames || 200;
-                const snareFrames = proj.quackenSnareFrames || (slowFrames + 20);
-                enemy.slowed = true;
-                enemy.slowTime = Math.max(enemy.slowTime || 0, slowFrames);
-                enemy.quackenSnared = true;
-                enemy.quackenSnareTime = Math.max(enemy.quackenSnareTime || 0, snareFrames);
-                enemy._quackenStack = Math.min(5, (enemy._quackenStack || 0) + 1);
-                enemy._quackenBaseDamage = Math.max(enemy._quackenBaseDamage || 0, proj.damage || proj.baseDamage || (typeof calculateDamage === 'function' ? calculateDamage() : 8));
-                enemy._quackenDotScale = proj.quackenDotScale || enemy._quackenDotScale || 0.24;
-                enemy._quackenTick = Math.max(enemy._quackenTick || 0, 6);
-                enemy._quackenRingCd = Math.max(enemy._quackenRingCd || 0, 4);
-                if (!(game.perf && game.perf.lowFx)) {
-                    addParticle(enemy.x, enemy.y, '#6A55D4', 'ring');
-                    addParticle(enemy.x + (Math.random() - 0.5) * 12, enemy.y + (Math.random() - 0.5) * 12, '#5F4BCE', 'spark');
+                // If this tentacle projectile was anchored to a given point (typically the
+                // boss that spawned it), avoid applying its snare/effects to the entity
+                // at that anchor point. This prevents the boss from immediately snaring
+                // itself when its own tentacle projectiles spawn nearby.
+                var _ignoreAnchorTentacle = false;
+                try {
+                    const anchor = proj._tentacleAnchorPlayer || proj._tentacleAnchorEnemy || null;
+                    if (anchor && typeof anchor.x === 'number' && typeof anchor.y === 'number') {
+                        // small tolerance to allow for minor positional jitter
+                        if (Math.abs((enemy.x||0) - anchor.x) < 8 && Math.abs((enemy.y||0) - anchor.y) < 8) {
+                            _ignoreAnchorTentacle = true;
+                        }
+                    }
+                } catch(_) { _ignoreAnchorTentacle = false; }
+                if (!_ignoreAnchorTentacle) {
+                    const slowFrames = proj.quackenSlowFrames || 200;
+                    const snareFrames = proj.quackenSnareFrames || (slowFrames + 20);
+                    enemy.slowed = true;
+                    enemy.slowTime = Math.max(enemy.slowTime || 0, slowFrames);
+                    enemy.quackenSnared = true;
+                    enemy.quackenSnareTime = Math.max(enemy.quackenSnareTime || 0, snareFrames);
+                    enemy._quackenStack = Math.min(5, (enemy._quackenStack || 0) + 1);
+                    enemy._quackenBaseDamage = Math.max(enemy._quackenBaseDamage || 0, proj.damage || proj.baseDamage || (typeof calculateDamage === 'function' ? calculateDamage() : 8));
+                    enemy._quackenDotScale = proj.quackenDotScale || enemy._quackenDotScale || 0.24;
+                    enemy._quackenTick = Math.max(enemy._quackenTick || 0, 6);
+                    enemy._quackenRingCd = Math.max(enemy._quackenRingCd || 0, 4);
+                    if (!(game.perf && game.perf.lowFx)) {
+                        addParticle(enemy.x, enemy.y, '#6A55D4', 'ring');
+                        addParticle(enemy.x + (Math.random() - 0.5) * 12, enemy.y + (Math.random() - 0.5) * 12, '#5F4BCE', 'spark');
+                    }
+                    proj._tentacleHit = true;
+                    proj._tentacleStage = 'retract';
+                    proj._tentacleStageTimer = 0;
                 }
-                proj._tentacleHit = true;
-                proj._tentacleStage = 'retract';
-                proj._tentacleStageTimer = 0;
             }
             // If this projectile is a Gooster Teeth gold-tooth projectile, spawn gold-dust pool now (idempotent).
             try {
@@ -27484,6 +27805,12 @@ function offerPermanentAbilityChoice() {
                     const dy = f.y - enemy.y;
                     const dist = Math.sqrt(dx*dx + dy*dy);
                     if (dist < f.radius) {
+                        // Do not allow the Act IV final boss to be pulled by vortex fields.
+                        try {
+                            const t = (enemy && (enemy.type || '')).toString();
+                            const n = t.toLowerCase().replace(/\s+/g,'');
+                            if (t === 'The Great Beaked One' || enemy._isEldritchFinal || n === 'thegreatbeakedone') return;
+                        } catch(_){}
                         // Normalized inward vector
                         const nx = dx / Math.max(dist, 1);
                         const ny = dy / Math.max(dist, 1);
@@ -28195,6 +28522,28 @@ function offerPermanentAbilityChoice() {
             const skipRoomInit = !!options.skipRoomInit;
             let duckMode = false;
             console.info('[resetGame] called', { dungeon: game.dungeon, room: game.room, skipRoomInit });
+            // Clear any boss-specific / eldritch set-piece state so restarting fully resets visuals
+            try {
+                if (typeof game !== 'undefined' && game) {
+                    try { game._eldritchLilypadActive = false; } catch(_){}
+                    try { game._eldritchLilypadReady = false; } catch(_){}
+                    try { game._eldritchLilypad = null; } catch(_){}
+                    try { game._eldritchSprites = {}; } catch(_){}
+                    try { game._eldritchAnimations = []; } catch(_){ }
+                }
+                try {
+                    if (window && window._streetBackgrounds) {
+                        // Preserve the configured `list` so act-specific pools (e.g. eldritch)
+                        // remain available after a reset/play-again. Clear only transient
+                        // runtime state (current image/ready flag) and reset preload so
+                        // the list can be re-preloaded when the room/init runs again.
+                        try { window._streetBackgrounds.currentIndex = 0; } catch(_){}
+                        try { window._streetBackgrounds.img = null; } catch(_){}
+                        try { window._streetBackgrounds.ready = false; } catch(_){}
+                        try { window._streetBackgrounds._preloadPromise = null; } catch(_){}
+                    }
+                } catch(_){ }
+            } catch(_){ }
                     // Configure Duck and Cover state before rebuilding player data
                     try {
                         duckMode = String(game && game._selectedAct) === 'DuckAndCover';
@@ -28870,6 +29219,26 @@ function offerPermanentAbilityChoice() {
                         // Compute destination rect via shared helper so collisions match visuals
                         const rect = window.getDumpsterSpriteRect(wall);
                         // Determine current frame to sample from
+                        const fps = spr.fps || 6;
+                        const step = Math.max(1, Math.round(60 / fps));
+                        const frameIdx = Math.floor(((game.frame||0) / step)) % frames.length;
+                        const f = frames[frameIdx];
+                        ctx.drawImage(img, f.x, f.y, f.w, f.h, rect.x, rect.y, rect.w, rect.h);
+                        break;
+                    }
+                    case 'cosmic_rock': {
+                        const tileW = wall.width || TILE_SIZE;
+                        const tileH = wall.height || TILE_SIZE;
+                        const spr = window._cosmicRockSprite;
+                        const img = spr && spr.image;
+                        const frames = spr && spr.frames;
+                        if (!img || img._broken || !img.complete || !img.naturalWidth || !frames || frames.length === 0) {
+                            // Fallback: simple colored rock box
+                            ctx.fillStyle = '#4b2f5b';
+                            ctx.fillRect(wall.x, wall.y, tileW, tileH);
+                            break;
+                        }
+                        const rect = window.getCosmicRockSpriteRect(wall);
                         const fps = spr.fps || 6;
                         const step = Math.max(1, Math.round(60 / fps));
                         const frameIdx = Math.floor(((game.frame||0) / step)) % frames.length;
@@ -30326,6 +30695,51 @@ function offerPermanentAbilityChoice() {
                     const isGoldenGoose = (enemy && enemy.type && typeof enemy.type === 'string') ? enemy.type.toLowerCase().includes('goose') : false;
                     // Normalized lowercase type string for robust matching of variants (e.g. "Swandroid18" vs "Swandroid 18")
                     const typeStr = (enemy && (enemy.type || enemy.name || '')).toString().toLowerCase();
+                    // Debug: log Great Beaked One container state so we can see why fallback is drawn
+                    try {
+                        if (enemy && (enemy.type === 'The Great Beaked One' || enemy._isEldritchFinal || typeStr === 'thegreatbeakedone')) {
+                            try {
+                                const cont = (game && game.enemySprites) ? (game.enemySprites['The Great Beaked One'] || game.enemySprites.thegreatbeakedone || null) : null;
+                                try {
+                                    // Rate-limit debug spam: only log at most once per second
+                                    game._debug = game._debug || {};
+                                    const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+                                    const last = game._debug._lastQuthuluInfoTime || 0;
+                                    if (!last || (now - last) > 1000) {
+                                        game._debug._lastQuthuluInfoTime = now;
+                                        const info = {
+                                            frame: (game && typeof game.frame === 'number') ? game.frame : null,
+                                            x: enemy.x, y: enemy.y,
+                                            container: !!cont,
+                                            loaded: !!(cont && cont.loaded),
+                                            hasForcedBitmap: !!(cont && cont._forcedBitmap),
+                                            imageSrc: (cont && cont.image && cont.image.src) ? cont.image.src : null,
+                                            imageSize: (cont && cont.image) ? ((cont.image.naturalWidth || cont.image.width) || 0) : 0
+                                        };
+                                        try { console.info('[QuthuluDebug][DRAW] boss container state', info); } catch(_){ }
+                                    }
+                                } catch(_) {}
+
+                                // If a container exists, attempt to compute and set the enemy.hitbox so
+                                // the in-world collision rectangle matches the overlay alignment.
+                                try {
+                                    if (cont && typeof cont.computeHitbox === 'function') {
+                                        const hb = cont.computeHitbox(enemy) || null;
+                                        if (hb) {
+                                            if ('x' in hb && 'y' in hb) {
+                                                enemy.hitbox = { x: Math.round(hb.x), y: Math.round(hb.y), w: Math.round(hb.w || 0), h: Math.round(hb.h || 0) };
+                                            } else if ('ox' in hb || 'oy' in hb) {
+                                                const w = hb.w || 0; const h = hb.h || 0;
+                                                const cx = (enemy.x || 0) + ((hb.ox || 0) + (w / 2));
+                                                const cy = (enemy.y || 0) + ((hb.oy || 0) + (h / 2));
+                                                enemy.hitbox = { x: Math.round(cx - w / 2), y: Math.round(cy - h / 2), w: Math.round(w), h: Math.round(h) };
+                                            }
+                                        }
+                                    }
+                                } catch(_) {}
+                            } catch(_) {}
+                        }
+                    } catch(_) {}
                     // Emergency quick-draw for Swandroid variants: try to render immediately from any
                     // available source (preflipped canvases, forced bitmap, or the image crop). This
                     // covers timing races where the sprite container exists but the later specialized
@@ -32327,6 +32741,9 @@ function offerPermanentAbilityChoice() {
                                         enemy._goldenSpriteNeedsOverlay = false;
                                     }
                                 } catch(_) {}
+                                try {
+                                    try { console.info('[GoldenGoose][OVERLAY] markDrawSuccess', { frame: (game && typeof game.frame === 'number') ? game.frame : null, type: enemy && enemy.type, noFallback: !!(enemy && enemy._noFallback) }); } catch(_){ }
+                                } catch(_){}
                             };
                                 try {
                                 // Prefer the sprite-provided computeHitbox if available (keeps draw & collision in sync)
@@ -32635,6 +33052,17 @@ function offerPermanentAbilityChoice() {
                                 if (ws && (ws.loaded || (ws.image && ((ws.image.naturalWidth || ws.image.width) > 0)))) {
                                     return;
                                 }
+                                // Diagnostic: log when we are about to draw the magenta fallback so we can capture ordering
+                                try {
+                                    const cont = (game && game.enemySprites) ? (game.enemySprites['The Great Beaked One'] || game.enemySprites.thegreatbeakedone || null) : null;
+                                    const dbg = {
+                                        when: 'magenta-fallback', frame: (game && typeof game.frame === 'number') ? game.frame : null,
+                                        type: enemy && enemy.type, x: enemy && enemy.x, y: enemy && enemy.y,
+                                        overlayDrawnFrame: enemy && enemy._overlayDrawnFrame, noFallback: !!(enemy && enemy._noFallback),
+                                        containerExists: !!cont, containerLoaded: !!(cont && cont.loaded), hasForcedBitmap: !!(cont && cont._forcedBitmap), imageSrc: cont && cont.image && cont.image.src
+                                    };
+                                    try { console.info('[FallbackDebug][DRAW]', dbg); } catch(_){ }
+                                } catch(_){}
                             } catch(_){ }
                             // Visible magenta circle fallback (debug-only) so you can see the enemy even if sprite failed
                             try {
@@ -34617,26 +35045,61 @@ function offerPermanentAbilityChoice() {
                 ctx.globalAlpha = 1;
             }
 
-            // Floating damage numbers (above everything except pause/menu overlays)
+            // Floating damage numbers: render to a top-most overlay canvas so numbers appear above forced overlays
             if (game.damageNumbers && game.damageNumbers.length) {
-                ctx.save();
-                ctx.font = 'bold 18px Arial';
-                ctx.textAlign = 'center';
-                game.damageNumbers.forEach(dn => {
-                    const alpha = Math.max(0, Math.min(1, dn.life / 60));
-                    ctx.globalAlpha = alpha;
-                    ctx.fillStyle = dn.color;
-                    ctx.save();
-                    ctx.translate(dn.x, dn.y);
-                    ctx.scale(dn.scale, dn.scale);
-                    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-                    ctx.lineWidth = 3;
-                    ctx.strokeText(dn.value, 0, 0);
-                    ctx.fillText(dn.value, 0, 0);
-                    ctx.restore();
-                });
-                ctx.restore();
-                ctx.globalAlpha = 1;
+                try {
+                    // Lazily create a dedicated damage overlay canvas above other overlays
+                    let dmgOverlay = document.getElementById('damageOverlayCanvas');
+                    if (!dmgOverlay) {
+                        const baseCanvas = document.getElementById('gameCanvas');
+                        dmgOverlay = document.createElement('canvas');
+                        dmgOverlay.id = 'damageOverlayCanvas';
+                        dmgOverlay.style.cssText = 'position:fixed;left:0;top:0;pointer-events:none;z-index:904;';
+                        document.body.appendChild(dmgOverlay);
+                        const sync = function() {
+                            try {
+                                const rect = baseCanvas.getBoundingClientRect();
+                                // Use CSS pixel dimensions of the displayed canvas so overlay coordinates match
+                                dmgOverlay.width = Math.max(1, Math.round(rect.width));
+                                dmgOverlay.height = Math.max(1, Math.round(rect.height));
+                                dmgOverlay.style.left = rect.left + 'px';
+                                dmgOverlay.style.top = rect.top + 'px';
+                                dmgOverlay.style.width = Math.round(rect.width) + 'px';
+                                dmgOverlay.style.height = Math.round(rect.height) + 'px';
+                                // Mirror any transforms applied to the main canvas (scaling/translate) so overlays remain aligned
+                                try { dmgOverlay.style.transform = baseCanvas.style.transform || ''; dmgOverlay.style.transformOrigin = baseCanvas.style.transformOrigin || 'top left'; } catch(_){}
+                                dmgOverlay._rect = rect;
+                            } catch(_){}
+                        };
+                        window.addEventListener('resize', sync);
+                        window.addEventListener('scroll', sync);
+                        setTimeout(sync, 120);
+                        setInterval(sync, 1500);
+                    }
+                    const dctx = dmgOverlay.getContext('2d');
+                    // Clear the overlay for this frame
+                    try { dctx.clearRect(0,0,dmgOverlay.width || 0, dmgOverlay.height || 0); } catch(_){}
+                    dctx.save();
+                    dctx.font = 'bold 18px Arial';
+                    dctx.textAlign = 'center';
+                    game.damageNumbers.forEach(dn => {
+                        try {
+                            const alpha = Math.max(0, Math.min(1, dn.life / 60));
+                            dctx.globalAlpha = alpha;
+                            dctx.fillStyle = dn.color;
+                            dctx.save();
+                            dctx.translate(dn.x, dn.y);
+                            dctx.scale(dn.scale, dn.scale);
+                            dctx.strokeStyle = 'rgba(0,0,0,0.6)';
+                            dctx.lineWidth = 3;
+                            dctx.strokeText(dn.value, 0, 0);
+                            dctx.fillText(dn.value, 0, 0);
+                            dctx.restore();
+                        } catch(_){}
+                    });
+                    dctx.restore();
+                    try { dctx.globalAlpha = 1; } catch(_){}
+                } catch(_){}
             }
 
             // Enemy bullets: draw last so they are always visible on top
@@ -34675,6 +35138,7 @@ function offerPermanentAbilityChoice() {
                             // mark that we drew a forced overlay this frame so the normal enemy draw won't render
                             // its own magenta fallback on top of this; the draw-time fallback will clear this flag.
                             try { boss._overlayDrawnFrame = (game.frame || 0); } catch(_){ }
+                            try { console.info('[WunderswanSprite][OVERLAY] set overlay frame', { frame: (game && typeof game.frame === 'number') ? game.frame : null, bossType: boss && boss.type, bossX: boss && boss.x, bossY: boss && boss.y, imgSrc: img && img.src, loaded: !!(ws && ws.loaded), hasForcedBitmap: !!(ws && ws._forcedBitmap) }); } catch(_){ }
                             // Draw centered at boss.x/boss.y. Mirror horizontally when player is to the right of boss center.
                             const dx = Math.round(boss.x - drawW/2);
                             const dy = Math.round(boss.y - drawH/2);
@@ -35501,13 +35965,14 @@ function offerPermanentAbilityChoice() {
 
                         function syncSize(){
                             const rect = baseCanvas.getBoundingClientRect();
-                            // match internal pixel size to game canvas pixel size
-                            overlay.width = baseCanvas.width || rect.width || 800;
-                            overlay.height = baseCanvas.height || rect.height || 600;
+                            // Use CSS pixel sizes so overlay canvas coordinates line up with visible canvas
+                            overlay.width = Math.max(1, Math.round(rect.width));
+                            overlay.height = Math.max(1, Math.round(rect.height));
                             overlay.style.left = rect.left + 'px';
                             overlay.style.top = rect.top + 'px';
-                            overlay.style.width = rect.width + 'px';
-                            overlay.style.height = rect.height + 'px';
+                            overlay.style.width = Math.round(rect.width) + 'px';
+                            overlay.style.height = Math.round(rect.height) + 'px';
+                            try { overlay.style.transform = baseCanvas.style.transform || ''; overlay.style.transformOrigin = baseCanvas.style.transformOrigin || 'top left'; } catch(_){}
                             overlay._rect = rect;
                         }
 
@@ -35570,7 +36035,12 @@ function offerPermanentAbilityChoice() {
                                     }
                                 }catch(e){}
                                 // Mark that overlay was drawn this frame so the main enemy draw can skip magenta fallback
-                                try { if (_drew) boss._overlayDrawnFrame = (game.frame || 0); } catch(_) {}
+                                try {
+                                    if (_drew) {
+                                        boss._overlayDrawnFrame = (game.frame || 0);
+                                        try { console.info('[OverlayDebug][DRAW] forced overlay drew', { frame: (game && typeof game.frame === 'number') ? game.frame : null, bossType: boss && boss.type, drew: !!_drew, hasForcedBitmap: !!(gg && gg._forcedBitmap), imgReady: !!(img && (img.naturalWidth || img.width)) }); } catch(_){ }
+                                    }
+                                } catch(_) {}
                                 // (outline removed to avoid visual flashes in normal gameplay)
                                 ctx.restore();
                             }catch(e){ /* ignore frame errors */ }
@@ -35579,6 +36049,324 @@ function offerPermanentAbilityChoice() {
                         drawForced();
                     }catch(e){ console.warn('gg overlay install failed', e); }
                     })();
+            </script>
+
+            <!-- Forced overlay for The Great Beaked One (Quthulu) -->
+            <script>
+                (function(){
+                    try{
+                        if (document.getElementById('quthuluOverlayCanvas')) return;
+                        const baseCanvas = document.getElementById('gameCanvas');
+                        if (!baseCanvas) return;
+                        const overlay = document.createElement('canvas');
+                        overlay.id = 'quthuluOverlayCanvas';
+                        overlay.style.cssText = 'position:fixed;left:0;top:0;pointer-events:none;z-index:902;';
+                        document.body.appendChild(overlay);
+                        const ctx = overlay.getContext('2d');
+
+                        function syncSize(){
+                            const rect = baseCanvas.getBoundingClientRect();
+                            // Use CSS pixel sizes so overlay canvas coordinates line up with visible canvas
+                            overlay.width = Math.max(1, Math.round(rect.width));
+                            overlay.height = Math.max(1, Math.round(rect.height));
+                            overlay.style.left = rect.left + 'px';
+                            overlay.style.top = rect.top + 'px';
+                            overlay.style.width = Math.round(rect.width) + 'px';
+                            overlay.style.height = Math.round(rect.height) + 'px';
+                            try { overlay.style.transform = baseCanvas.style.transform || ''; overlay.style.transformOrigin = baseCanvas.style.transformOrigin || 'top left'; } catch(_){}
+                            overlay._rect = rect;
+                        }
+                        window.addEventListener('resize', syncSize);
+                        window.addEventListener('scroll', syncSize);
+                        setTimeout(syncSize, 200);
+                        setInterval(syncSize, 1500);
+
+                        function drawQ(){
+                            requestAnimationFrame(drawQ);
+                            try{
+                                const q = window.game && game.enemySprites ? (game.enemySprites['The Great Beaked One'] || game.enemySprites.thegreatbeakedone || null) : null;
+                                const boss = (window.game && Array.isArray(game.enemies)) ? game.enemies.find(e => e && (e.type === 'The Great Beaked One' || e._isEldritchFinal)) : null;
+                                if (!q || !boss) { ctx.clearRect(0,0,overlay.width, overlay.height); return; }
+                                const img = q._forcedBitmap || q.image;
+                                if (!img) { ctx.clearRect(0,0,overlay.width, overlay.height); return; }
+
+                                // Decide frame box: pick the same animation frame index the main renderer would use
+                                let box = null;
+                                var _overlayFrameIndex = null;
+                                try {
+                                    const seq = (q && q.anim && Array.isArray(q.anim.frames) && q.anim.frames.length) ? q.anim.frames : ((q && q.frames && Array.isArray(q.frames.seq) && q.frames.seq.length) ? q.frames.seq : null);
+                                    if (seq && seq.length) {
+                                        const nowFrame = (game && typeof game.frame === 'number') ? game.frame : Math.floor(Date.now()/16);
+                                        const frameStep = (q && q.anim && q.anim.frameStep) ? q.anim.frameStep : 6;
+                                        const idx = Math.floor(nowFrame / Math.max(1, frameStep)) % seq.length;
+                                        _overlayFrameIndex = Math.max(0, Math.min(seq.length - 1, idx));
+                                        box = seq[_overlayFrameIndex];
+                                    } else if (q && q.frames && Array.isArray(q.frames.seq) && q.frames.seq.length) {
+                                        box = q.frames.seq[0];
+                                        _overlayFrameIndex = 0;
+                                    }
+                                } catch(_){ }
+                                if (!box || !box.w || !box.h) box = { x:0, y:0, w: (img && (img.naturalWidth||img.width))||0, h: (img && (img.naturalHeight||img.height))||0 };
+
+                                const scale = (q.baseScaleForSize ? q.baseScaleForSize(boss.size) : ((boss.size*2)/(box.h||1)));
+                                const drawW = box.w * scale, drawH = box.h * scale;
+                                const anchorX = (box && typeof box.anchorX === 'number') ? box.anchorX : (box ? box.w/2 : ((img && (img.naturalWidth||img.width))/2));
+                                const anchorY = (box && typeof box.anchorY === 'number') ? box.anchorY : (box ? box.h/2 : ((img && (img.naturalHeight||img.height))/2));
+                                const anchorOffsetX = (anchorX - (box ? box.w/2 : ((img && (img.naturalWidth||img.width))/2))) * scale;
+                                const anchorOffsetY = (anchorY - (box ? box.h/2 : ((img && (img.naturalHeight||img.height))/2))) * scale;
+
+                                ctx.clearRect(0,0,overlay.width, overlay.height);
+                                let _hbForLog = null;
+                                let _hitOffsetX = 0, _hitOffsetY = 0;
+                                try {
+                                    if (q && typeof q.computeHitbox === 'function') {
+                                        const hb = q.computeHitbox(boss) || null;
+                                        if (hb) {
+                                            // If computeHitbox returns offsets (ox/oy), use them directly as center offsets.
+                                            if ('ox' in hb || 'oy' in hb) {
+                                                // computeHitbox returns offsets where ox/oy are typically left/top offsets
+                                                // Add half dimensions to convert to center-relative offsets (matching main draw logic)
+                                                const halfW = (hb.w || 0) / 2;
+                                                const halfH = (hb.h || 0) / 2;
+                                                _hitOffsetX = (typeof hb.ox === 'number' ? hb.ox : 0) + halfW;
+                                                _hitOffsetY = (typeof hb.oy === 'number' ? hb.oy : 0) + halfH;
+                                                _hbForLog = { w: hb.w, h: hb.h, ox: hb.ox, oy: hb.oy };
+                                            // If computeHitbox returned absolute rectangle, convert to center-relative offsets
+                                            } else if ('x' in hb && 'y' in hb) {
+                                                _hitOffsetX = (hb.x + (hb.w||0)/2) - (boss && boss.x || 0);
+                                                _hitOffsetY = (hb.y + (hb.h||0)/2) - (boss && boss.y || 0);
+                                                _hbForLog = { x: hb.x, y: hb.y, w: hb.w, h: hb.h };
+                                            }
+                                        }
+                                    }
+                                } catch(_) {}
+
+                                // Prepare draw-local values in outer scope so logging/debugging can reference them
+                                ctx.save();
+                                // Translate to the sprite-aligned center using hitbox offsets so overlay matches world draw
+                                ctx.translate(boss.x + _hitOffsetX, boss.y + _hitOffsetY);
+                                const _centerX = boss.x + _hitOffsetX;
+                                const _playerOnRight = (game && game.player) ? (game.player.x >= _centerX) : ((boss.facing || 'left') === 'right');
+                                const _facingDir = _playerOnRight ? 'right' : 'left';
+                                try { boss.facing = _facingDir; } catch(_){ }
+
+                                let _drew = false;
+                                // compute mirroring and destination coords up-front
+                                let _mirrored = false;
+                                let destX = -drawW/2 + anchorOffsetX;
+                                let destY = -drawH/2 + anchorOffsetY;
+                                let _drawX = destX;
+                                try{
+                                    _mirrored = !_playerOnRight;
+                                    _drawX = _mirrored ? (-(destX + drawW)) : destX;
+                                    // If we have hitbox dimensions, shift the full sprite so its internal hitbox
+                                    // aligns with the enemy hitbox. drawW may be larger than hb.w, so we
+                                    // offset by half the difference.
+                                    try {
+                                        const hbW = (_hbForLog && (_hbForLog.w || _hbForLog.w === 0)) ? _hbForLog.w : (null);
+                                        if (hbW && typeof hbW === 'number' && isFinite(hbW)) {
+                                            const embedShift = ((drawW - hbW) / 2) || 0;
+                                            _drawX += (_mirrored ? -embedShift : embedShift);
+                                        }
+                                        // Allow a tiny runtime tweak for horizontal alignment (pixels).
+                                        const tweak = (window && typeof window._quthuluOverlayTweakX === 'number') ? window._quthuluOverlayTweakX : 0;
+                                        if (tweak) _drawX += (_mirrored ? -tweak : tweak);
+                                    } catch(_) {}
+                                    const isBitmap = !!q._forcedBitmap;
+                                    const isImgReady = !isBitmap && img && img.complete && ((img.naturalWidth || img.width) > 0) && ((img.naturalHeight || img.height) > 0);
+                                    if (isBitmap) {
+                                        if (_mirrored) ctx.scale(-1,1);
+                                        ctx.drawImage(img, box.x, box.y, box.w, box.h, _drawX, destY, drawW, drawH);
+                                        _drew = true;
+                                    } else if (isImgReady) {
+                                        if (_mirrored) ctx.scale(-1,1);
+                                        ctx.drawImage(img, box.x, box.y, box.w, box.h, _drawX, destY, drawW, drawH);
+                                        _drew = true;
+                                    } else {
+                                        // image not ready; do nothing (avoid ghost outline)
+                                    }
+                                }catch(_){ }
+
+                                try {
+                                    if (_drew) {
+                                        try { boss._overlayDrawnFrame = (game.frame || 0); } catch(_){ }
+                                        try { boss._noFallback = true; } catch(_){ }
+                                        try {
+                                            // worldDrawX / worldDrawY are the top-left corner of the drawn sprite post-translation
+                                            const worldDrawX = (boss.x || 0) + _hitOffsetX + _drawX;
+                                            const worldDrawY = (boss.y || 0) + _hitOffsetY + destY;
+                                            // Draw optional debug rectangle if enabled
+                                            try {
+                                                if (window && window._quthuluOverlayDebug) {
+                                                    try {
+                                                        ctx.restore(); // restore transform so we draw rect in overlay canvas coords
+                                                        const dbgCtx = ctx;
+                                                        dbgCtx.save();
+                                                        dbgCtx.globalAlpha = 0.28;
+                                                        dbgCtx.fillStyle = 'magenta';
+                                                        dbgCtx.fillRect(Math.round(worldDrawX), Math.round(worldDrawY), Math.round(drawW), Math.round(drawH));
+                                                        dbgCtx.globalAlpha = 1.0;
+                                                        dbgCtx.strokeStyle = '#ffffff';
+                                                        dbgCtx.lineWidth = 1;
+                                                        dbgCtx.strokeRect(Math.round(worldDrawX), Math.round(worldDrawY), Math.round(drawW), Math.round(drawH));
+                                                        dbgCtx.restore();
+                                                        // Re-acquire save/restore state for final restore below
+                                                        ctx.save();
+                                                    } catch(_) {}
+                                                }
+                                            } catch(_) {}
+
+                                            // Controlled logging: only print when debug flag enabled or when a one-shot sample is requested
+                                            try {
+                                                const logObj = { frameIndex: _overlayFrameIndex, frame: (game && typeof game.frame === 'number') ? game.frame : null, drew: !!_drew, hasForcedBitmap: !!(q && q._forcedBitmap), imgReady: !!(img && (img.naturalWidth || img.width)), hb: _hbForLog, worldX: Math.round(worldDrawX), worldY: Math.round(worldDrawY), drawW: Math.round(drawW), drawH: Math.round(drawH), bossHitbox: (boss && boss.hitbox) ? boss.hitbox : null };
+                                                if (window && window._quthuluOverlayDebug) {
+                                                    console.info('[QuthuluSprite][OVERLAY] drew overlay', logObj);
+                                                } else if (window && window._quthuluOverlayOneShot) {
+                                                    // Print one sample and clear the one-shot flag so console isn't spammed
+                                                    try { console.info('[QuthuluSprite][OVERLAY] drew overlay (one-shot)', logObj); } catch(_){}
+                                                    try { window._quthuluOverlayOneShot = false; } catch(_){}
+                                                }
+                                            } catch(_){}
+                                        } catch(_){ }
+                                    }
+                                } catch(_){ }
+                                try { ctx.restore(); } catch(_){}
+                            }catch(e){ /* ignore frame errors */ }
+                        }
+
+                        drawQ();
+                    }catch(e){ console.warn('quthulu overlay install failed', e); }
+                })();
+            </script>
+
+            <script>
+                (function(){
+                    try{
+                        if (document.getElementById('quthuluHealthbarCanvas')) return;
+                        const baseCanvas = document.getElementById('gameCanvas');
+                        if (!baseCanvas) return;
+                        const overlay = document.createElement('canvas');
+                        overlay.id = 'quthuluHealthbarCanvas';
+                        overlay.style.cssText = 'position:fixed;left:0;top:0;pointer-events:none;z-index:910;';
+                        document.body.appendChild(overlay);
+                        const ctx = overlay.getContext('2d');
+
+                        function syncSize(){
+                            try {
+                                const rect = baseCanvas.getBoundingClientRect();
+                                overlay.width = baseCanvas.width || Math.round(rect.width) || 800;
+                                overlay.height = baseCanvas.height || Math.round(rect.height) || 600;
+                                overlay.style.left = rect.left + 'px';
+                                overlay.style.top = rect.top + 'px';
+                                overlay.style.width = rect.width + 'px';
+                                overlay.style.height = rect.height + 'px';
+                                overlay._rect = rect;
+                            } catch(_){}
+                        }
+                        window.addEventListener('resize', syncSize);
+                        window.addEventListener('scroll', syncSize);
+                        setTimeout(syncSize, 120);
+                        setInterval(syncSize, 1500);
+
+                        // rounded-rect helper
+                        function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
+                            if (typeof radius === 'undefined') radius = 5;
+                            if (typeof radius === 'number') radius = {tl: radius, tr: radius, br: radius, bl: radius};
+                            ctx.beginPath();
+                            ctx.moveTo(x + radius.tl, y);
+                            ctx.lineTo(x + width - radius.tr, y);
+                            ctx.quadraticCurveTo(x + width, y, x + width, y + radius.tr);
+                            ctx.lineTo(x + width, y + height - radius.br);
+                            ctx.quadraticCurveTo(x + width, y + height, x + width - radius.br, y + height);
+                            ctx.lineTo(x + radius.bl, y + height);
+                            ctx.quadraticCurveTo(x, y + height, x, y + height - radius.bl);
+                            ctx.lineTo(x, y + radius.tl);
+                            ctx.quadraticCurveTo(x, y, x + radius.tl, y);
+                            ctx.closePath();
+                            if (fill) ctx.fill();
+                            if (stroke) ctx.stroke();
+                        }
+
+                        // Draw loop for healthbar
+                        function drawHB(){
+                            requestAnimationFrame(drawHB);
+                            try {
+                                ctx.clearRect(0,0,overlay.width || 0, overlay.height || 0);
+                                const boss = (window.game && Array.isArray(game.enemies)) ? game.enemies.find(e => e && (e.type === 'The Great Beaked One' || e._isEldritchFinal)) : null;
+                                if (!boss || typeof boss.health !== 'number') return;
+                                const max = (typeof boss.maxHealth === 'number' && boss.maxHealth > 0) ? boss.maxHealth : Math.max(1, boss.health);
+                                const pct = Math.max(0, Math.min(1, boss.health / max));
+
+                                // Bar geometry (in overlay canvas pixels)
+                                const w = Math.min(Math.round((overlay.width || 800) * 0.72), 720);
+                                const h = Math.max(18, Math.round((overlay.height || 600) * 0.045));
+                                const x = Math.round(((overlay.width || 800) - w) / 2);
+                                const y = 12; // top margin
+
+                                ctx.save();
+                                ctx.globalAlpha = 0.95;
+                                // background panel
+                                ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                                roundRect(ctx, x - 6, y - 6, w + 12, h + 36, 8, true, false);
+
+                                // border
+                                ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+                                ctx.lineWidth = 1;
+                                roundRect(ctx, x - 6, y - 6, w + 12, h + 36, 8, false, true);
+
+                                // empty bar
+                                ctx.fillStyle = '#222';
+                                roundRect(ctx, x, y, w, h, 6, true, false);
+
+                                // filled portion
+                                ctx.fillStyle = '#e05050';
+                                ctx.fillRect(x, y, Math.max(1, Math.round(w * pct)), h);
+
+                                // label
+                                ctx.font = 'bold ' + Math.max(12, Math.round(h * 0.8)) + 'px Arial';
+                                ctx.textAlign = 'center';
+                                ctx.textBaseline = 'middle';
+                                ctx.fillStyle = '#fff';
+                                ctx.lineWidth = 3;
+                                ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+                                const label = 'The Great Beaked One';
+                                ctx.strokeText(label, x + w/2, y + h/2);
+                                ctx.fillText(label, x + w/2, y + h/2);
+
+                                // numeric health below label
+                                ctx.font = Math.max(11, Math.round(h * 0.6)) + 'px Arial';
+                                const hpText = Math.round(boss.health) + ' / ' + Math.round(max);
+                                ctx.strokeText(hpText, x + w/2, y + h + Math.round(h * 0.8));
+                                ctx.fillText(hpText, x + w/2, y + h + Math.round(h * 0.8));
+
+                                ctx.restore();
+                            } catch(_) {}
+                        }
+
+                        // Expose manual sync helper (resync hitboxes) if not already present
+                        window.syncQuthuluHitboxes = window.syncQuthuluHitboxes || function() {
+                            try {
+                                if (!game || !game.enemySprites) return;
+                                const c = game.enemySprites['The Great Beaked One'] || game.enemySprites.thegreatbeakedone;
+                                if (!c || typeof c.computeHitbox !== 'function') return;
+                                if (!Array.isArray(game.enemies)) return;
+                                for (let i = 0; i < game.enemies.length; i++) {
+                                    try {
+                                        const en = game.enemies[i]; if (!en) continue;
+                                        const t = (en.type || '').toString();
+                                        if (t === 'The Great Beaked One' || en._isEldritchFinal || (t && t.toLowerCase() === 'thegreatbeakedone')) {
+                                            try { en.hitbox = c.computeHitbox(en); } catch(_){}
+                                        }
+                                    } catch(_){}
+                                }
+                                console.info('[QuthuluSprite] syncQuthuluHitboxes completed');
+                            } catch(_) {}
+                        };
+
+                        // Start the healthbar draw loop
+                        drawHB();
+                    } catch(e) { console.warn('quthulu healthbar install failed', e); }
+                })();
             </script>
 
             <script>
