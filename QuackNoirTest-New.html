@@ -1377,7 +1377,7 @@
             screenShake: 0, screenShakeIntensity: 0, paused: false,
             sfxEnabled: true,
             musicEnabled: true,
-            showFps: false,
+            showFps: false, // Disabled for release
             _quackenToastShownRun: false,
             // Potato Mode: aggressively disable non-essential FX for performance
             potatoMode: false,
@@ -3181,6 +3181,163 @@
                             meta._resDmgBoostActive = false;
                             delete meta._resDmgOrig;
                         }
+                    }
+                    // Boomerang behavior (ensured return + chaining + movement bias + wind synergy)
+                    if (meta && meta.boomerang && !isEnemy) {
+                        // If projectile recently ricocheted, delay boomerang behavior for a few frames
+                        if (meta._recentRicochet && meta._recentRicochet > 0) {
+                            meta._recentRicochet--;
+                            // Skip boomerang logic this frame to let ricochet direction take effect
+                            return;
+                        }
+                        // Initialization of boomerang arc parameters
+                        if (!meta._boomInit) {
+                            meta._boomInit = true;
+                            // Store origin and initial forward unit vector
+                            const sp = Math.sqrt(vx[i]*vx[i] + vy[i]*vy[i]) || 1;
+                            meta._boomFx = vx[i] / sp; meta._boomFy = vy[i] / sp;
+                            // Random lateral sign for variety
+                            meta._boomSide = (Math.random() < 0.5 ? -1 : 1);
+                            // Max lateral offset radius (arc width)
+                            meta._boomMaxLat = 90 + Math.random()*30; // px
+                            // Distance before turning back
+                            meta._boomOutboundDist = 180 + Math.random()*40; // slightly shorter to ensure visible return
+                            meta._boomTravel = 0; // accumulated forward distance
+                            meta._boomReturn = false;
+                            meta._boomChained = false; // echo spawn flag
+                            meta._boomOriginX = x[i]; meta._boomOriginY = y[i];
+                            meta._boomAge = 0; // frames alive for safety timeout
+                            meta._boomForced = false; // whether forced return occurred
+                            meta._boomBaseLife = life[i] || 140;
+                        }
+                        meta._boomAge++;
+                        // Compute forward speed magnitude
+                        let speed = Math.sqrt(vx[i]*vx[i] + vy[i]*vy[i]) || 0.01;
+                        // Update forward travel distance using projection onto initial forward vector
+                        const stepForward = (vx[i]*meta._boomFx + vy[i]*meta._boomFy);
+                        // Accumulate more aggressively so high lateral components still progress outbound timer
+                        meta._boomTravel += Math.max(0, stepForward * 0.9);
+                        // Fallback: also measure radial distance from origin; if that exceeds outboundDist * 0.9, trigger return
+                        if (!meta._boomReturn) {
+                            const ox = x[i] - meta._boomOriginX; const oy = y[i] - meta._boomOriginY;
+                            const radial = Math.hypot(ox,oy);
+                            if (radial > meta._boomOutboundDist * 0.95) meta._boomReturn = true;
+                        }
+
+                        // Trigger return when outbound distance met OR if exceeded arena bounds
+                        if (!meta._boomReturn && meta._boomTravel >= meta._boomOutboundDist) {
+                            meta._boomReturn = true;
+                        }
+                        // Safety timeout: if not yet returning by frame 90, force it
+                        if (!meta._boomReturn && meta._boomAge > 90) {
+                            meta._boomReturn = true; meta._boomForced = true;
+                        }
+
+                        // Movement bias: if player currently moving, gently bias lateral side toward movement perpendicular (outbound only)
+                        if (!meta._boomReturn) {
+                            const mvx = (game.keys['d']?1:0) - (game.keys['a']?1:0);
+                            const mvy = (game.keys['s']?1:0) - (game.keys['w']?1:0);
+                            if (mvx || mvy) {
+                                const ml = Math.hypot(mvx,mvy)||1; const nmx = mvx/ml, nmy = mvy/ml;
+                                const cross = (meta._boomFx * nmy - meta._boomFy * nmx); // signed relation
+                                if (Math.abs(cross) > 0.2) {
+                                    meta._boomSide = cross > 0 ? 1 : -1;
+                                }
+                            }
+                        }
+
+                        // Base forward direction: outbound uses initial forward; return aims toward player gradually
+                        let fx = meta._boomFx, fy = meta._boomFy;
+                        if (meta._boomReturn) {
+                            const dxp = game.player.x - x[i];
+                            const dyp = game.player.y - y[i];
+                            const dpl = Math.hypot(dxp,dyp)||1;
+                            const tFx = dxp / dpl, tFy = dyp / dpl;
+                            // Smoothly rotate toward player direction (lerp of unit vectors) stronger when forced
+                            const blend = meta._boomForced ? 0.25 : 0.12;
+                            fx = fx * (1-blend) + tFx * blend; fy = fy * (1-blend) + tFy * blend;
+                            const norm = Math.hypot(fx,fy)||1; fx/=norm; fy/=norm;
+                            meta._boomFx = fx; meta._boomFy = fy;
+                            // Mirror arc side for return for a classic boomerang path
+                            meta._boomSide = meta._boomSide || 1; // safety
+                            meta._boomReturnSide = (typeof meta._boomReturnSide==='number')?meta._boomReturnSide: -meta._boomSide;
+                            // Extend life on entering return so it doesn't vanish prematurely
+                            if (!meta._boomLifeExtended) { life[i] = Math.max(life[i], 60); meta._boomLifeExtended = true; }
+                        }
+
+                        // Lateral progress (0..1) along outbound or return; use sine for graceful arc
+                        const phaseFrac = Math.min(1, meta._boomTravel / meta._boomOutboundDist);
+                        // Ease the lateral amplitude: outbound grows then stabilizes, return decreases
+                        let lateralFrac;
+                        if (!meta._boomReturn) {
+                            lateralFrac = Math.sin(phaseFrac * Math.PI * 0.9); // peaks before full outbound
+                        } else {
+                            lateralFrac = Math.sin((1 - phaseFrac) * Math.PI * 0.9); // fade down
+                        }
+                        lateralFrac = Math.max(0, lateralFrac);
+                        const latMag = meta._boomMaxLat * lateralFrac;
+                        // Perpendicular vector to forward (fx,fy)
+                        const px = -fy, py = fx;
+                        // Determine side: outbound uses _boomSide, return uses mirrored side for a figure
+                        const side = meta._boomReturn ? (meta._boomReturnSide) : meta._boomSide;
+                        // Target lateral position relative to straight-line forward ray
+                        meta._boomLat = latMag * side;
+                        // We convert lateral displacement into a small velocity tweak pulling the projectile outward along perpendicular
+                        // Then speed toward forward direction is slightly reduced near peak arc to curve naturally.
+                        const lateralStrength = 0.12;
+                        const newVx = fx * speed * 0.97 + px * (meta._boomLat/ meta._boomMaxLat) * lateralStrength * speed;
+                        const newVy = fy * speed * 0.97 + py * (meta._boomLat/ meta._boomMaxLat) * lateralStrength * speed;
+                        // Minimum forward speed clamp so it doesn't stall mid-air
+                        const curSpeed = Math.hypot(newVx, newVy) || 0.01;
+                        let finalVx = newVx, finalVy = newVy;
+                        if (curSpeed < 2) {
+                            const boost = (meta._boomReturn ? 1.25 : 1.12);
+                            finalVx = (newVx / curSpeed) * (curSpeed * boost + 0.05);
+                            finalVy = (newVy / curSpeed) * (curSpeed * boost + 0.05);
+                        }
+                        // Slight acceleration on return to ensure timely comeback
+                        if (meta._boomReturn) {
+                            finalVx *= 1.012; finalVy *= 1.012;
+                        }
+                        // Apply to displacement for this frame
+                        dx = finalVx; dy = finalVy;
+                        // Wind synergy: dynamic widening & swirl particles
+                        if (game.player && game.player.abilities && game.player.abilities.includes('Wind Blade')) {
+                            meta._boomMaxLat = Math.min(170, meta._boomMaxLat * 1.004 + 0.05);
+                            if (Math.random() < 0.10) addParticle(x[i] + (Math.random()-0.5)*8, y[i] + (Math.random()-0.5)*8, '#AEEFFF','spark');
+                        }
+                        // Multi-boomerang chaining (echo spawns) during outbound
+                        if (!meta._boomReturn && !meta._boomChained && !meta._boomEcho && meta._boomTravel > meta._boomOutboundDist * 0.50) {
+                            meta._boomChained = true;
+                            const store = game.projectilesSoA && game.projectilesSoA.metaStore;
+                            const echoCount = 1 + (Math.random()<0.45 ? 1 : 0);
+                            for (let e=0;e<echoCount;e++) {
+                                const angJ = (Math.random()-0.5)*0.3;
+                                const baseSpeed = Math.sqrt(vx[i]*vx[i] + vy[i]*vy[i]) * (0.85 - e*0.1);
+                                const ang = Math.atan2(vy[i], vx[i]) + angJ;
+                                const eIdx = game.spawnProjectile({
+                                    x: x[i] + Math.cos(ang)*6,
+                                    y: y[i] + Math.sin(ang)*6,
+                                    vx: Math.cos(ang)*baseSpeed,
+                                    vy: Math.sin(ang)*baseSpeed,
+                                    life: Math.min(160, (life[i]||140)),
+                                    r: Math.max(4, Math.floor(((radius[i])||6)*0.85)),
+                                    damage: Math.max(1, Math.floor((meta.baseDamage||calculateDamage()) * 0.55)),
+                                    damageType: meta.damageType || null
+                                });
+                                if (eIdx>=0 && store) store.set(eIdx,{ boomerang:true, boomerangReturned:false, _boomInit:false, _boomEcho:true, piercing:meta.piercing, pierceCount:meta.pierceCount||0, pierceHits:0, baseDamage: Math.max(1, Math.floor((meta.baseDamage||calculateDamage()) * 0.55)) });
+                                for (let p=0;p<6;p++) addParticle((x[i] + Math.cos(ang)*6) + (Math.random()-0.5)*10, (y[i] + Math.sin(ang)*6) + (Math.random()-0.5)*10, '#FFFFFF','spark');
+                            }
+                        }
+                        // Arrival check (close to player once returning)
+                        const dxp2 = x[i] - game.player.x;
+                        const dyp2 = y[i] - game.player.y;
+                        if (meta._boomReturn && Math.hypot(dxp2,dyp2) < 22) {
+                            for (let k=0;k<5;k++) addParticle(x[i] + (Math.random()-0.5)*8, y[i] + (Math.random()-0.5)*8, '#FFFFFF', 'spark');
+                            life[i] = 0; recycle(i); aIdx--; continue;
+                        }
+                        // Decorative trailing sparkle (subtle) while returning
+                        if (meta._boomReturn && Math.random()<0.18) addParticle(x[i], y[i], '#E0F8FF','spark');
                     }
                     x[i] += dx * dt; y[i] += dy * dt;
 
@@ -7765,8 +7922,9 @@ function showStartingAbilityMenu() {
     } catch(_) {}
 }
 
-// Simple debug enemy spawn overlay (toggle with '9')
-window.ENABLE_ENEMY_SPAWN_DEBUG_MENU = true;
+// Simple debug enemy spawn overlay (toggle with '9') - DISABLED
+// window.ENABLE_ENEMY_SPAWN_DEBUG_MENU = true;
+window.ENABLE_ENEMY_SPAWN_DEBUG_MENU = false;
 let enemySpawnDebugState = null;
 
 function spawnEnemyDebug(typeName, opts) {
@@ -7976,6 +8134,8 @@ function showEnemySpawnDebugMenu() {
     setTimeout(() => { try { filterInput.focus(); } catch(_) {} }, 0);
 }
 
+// Enemy spawn debug menu key handler - DISABLED
+/*
 window.addEventListener('keydown', (e) => {
     if (!window.ENABLE_ENEMY_SPAWN_DEBUG_MENU) return;
     if (e.key === '9') {
@@ -7985,6 +8145,7 @@ window.addEventListener('keydown', (e) => {
         if (enemySpawnDebugState) hideEnemySpawnDebugMenu(); else showEnemySpawnDebugMenu();
     }
 });
+*/
 
 // Bind global hotkey: '0' opens the starting ability picker
 window.addEventListener('keydown', (e) => {
@@ -9657,6 +9818,14 @@ function showTitleScreen() {
 
     // Centralized Act IV unlock handler — use this to ensure runtime flag, persistence, and UI refresh occur together.
     function unlockActIV(source) {
+        // Check if already unlocked - if so, skip notification but still set flags
+        let alreadyUnlocked = false;
+        try { alreadyUnlocked = !!(game && game._actIVUnlocked) || (localStorage && localStorage.getItem && localStorage.getItem('actIVUnlocked') === '1'); } catch(_) { alreadyUnlocked = !!(game && game._actIVUnlocked); }
+        if (alreadyUnlocked) {
+            try { console.info('[Progress] Act IV already unlocked, skipping notification'); } catch(_){}
+            return; // Exit early, don't show notification again
+        }
+        
         try { if (!game) window.game = window.game || {}; } catch(_){}
         try { game._actIVUnlocked = true; } catch(_){}
         try { if (localStorage && localStorage.setItem) localStorage.setItem('actIVUnlocked', '1'); } catch(_){}
@@ -16213,7 +16382,7 @@ function offerPermanentAbilityChoice() {
 
             // Special scripted sequence for District 10, Street 5 (eldritch boss set-piece)
             try {
-                if (game.dungeon === 10 && game.room === 5) {
+                if (game._selectedAct === 'IV' && game.dungeon === 10 && game.room === 5) {
                     // Force a single background (override the random picker)
                     try {
                         window._streetBackgrounds = window._streetBackgrounds || {};
@@ -16765,7 +16934,6 @@ function offerPermanentAbilityChoice() {
             const hasBoss = game.room === 5;
             
             for (let i = 0; i < enemyCount; i++) {
-                if (game.dungeon === 10 && game.room === 5) { console.info('[RoomGen] Regular enemy spawns skipped for District 10 Room 5 (boss-only).'); break; }
                 let x, y, attempts = 0;
                 do {
                     x = 60 + Math.random() * (LOGICAL_W - 120);
@@ -16856,10 +17024,10 @@ function offerPermanentAbilityChoice() {
                             } catch(e) {
                                 console.warn('[RoomGen] Error selecting Act IV boss:', e);
                             }
-                        } else if (game.dungeon === 10) {
+                        } else if (String(game._selectedAct) === 'I' && game.dungeon === 10) {
                             typeName = 'The Big Quack';
-                        // Golden Goose secret (Districts 5-9). High chance for testing: 95%.
                         } else if (game.dungeon >= 5 && game.dungeon <= 9 && !game._goldenGooseSpawned && Math.random() < 0.95 && String(game._selectedAct) !== 'III') {
+                            // Golden Goose secret (Districts 5-9). High chance for testing: 95%.
                             typeName = 'Golden Goose';
                             game._goldenGooseSpawned = true;
                             console.info('[RoomGen] Secret Golden Goose spawned (one-time)');
@@ -16881,6 +17049,14 @@ function offerPermanentAbilityChoice() {
                         } else {
                             typeName = 'Boss Thug';
                         }
+                    // Safety: ensure 'The Great Beaked One' only appears as the Act IV final boss
+                    try {
+                        const isFinalQuthulu = (Number(game.dungeon) === 10 && Number(game.room) === 5 && String(game._selectedAct) === 'IV');
+                        if (typeName === 'The Great Beaked One' && !isFinalQuthulu) {
+                            try { console.info('[RoomGen] Remapping boss "The Great Beaked One" to "The Big Quack" - should only spawn via special sequence'); } catch(_){ }
+                            typeName = 'The Big Quack';
+                        }
+                    } catch(_) {}
                     } else {
                         const quackenMeta = ENEMY_TYPES['The Quacken'];
                         if (quackenMeta && Math.random() < 0.01) {
@@ -17008,6 +17184,11 @@ function offerPermanentAbilityChoice() {
                         }
                     } catch(_){}
                     game.enemies.push(enemyObj);
+                    // If we selected The Big Quack, ensure it spawns alone
+                    if (typeName === 'The Big Quack') {
+                        console.info('[RoomGen] The Big Quack chosen - forcing single spawn');
+                        break;
+                    }
                     if (typeName === 'Wunderswan') {
                         try { console.info('[RoomGen][SPAWN] Wunderswan enemy pushed', enemyObj); } catch(_){}
                     }
@@ -17129,11 +17310,8 @@ function offerPermanentAbilityChoice() {
                     if (i === 0) console.info('[RoomGen] First enemy', { type: typeName, x: +enemyObj.x.toFixed(1), y: +enemyObj.y.toFixed(1) });
                 }
             }
-            if (game.dungeon === 10 && game.room === 5) {
-                console.info('[RoomGen] Enemy spawn fallback suppressed for District 10 Room 5 (boss-only).');
-                game._roomSpawnedEnemies = 0;
-                game.enemies = [];
-            } else if (game.enemies.length === 0) {
+            // Removed clearing for District 10 Room 5 since bosses spawn with breaks to ensure single spawn
+            if (game.enemies.length === 0) {
                 console.warn('[RoomGen] No enemies spawned; injecting fallback.');
                 const fallback = { x: (LOGICAL_W/2)+(Math.random()*160-80), y: (LOGICAL_H/2)+(Math.random()*160-80), type:'Thug', health:40, maxHealth:40, speed:1.1, baseSpeed:1.1, damage:5, color:'#884400', size:20, xp:5, ranged:false, lastAttack:0, poisoned:false, slowed:false, burning:false, wunderScribble:false, wunderScribbleTime:0, wunderScribbleInterval:0, wunderScribbleTickDamage:0, _wunderScribbleTick:0 };
                 game.enemies.push(fallback);
@@ -17623,11 +17801,13 @@ function offerPermanentAbilityChoice() {
             document.addEventListener('keydown', e => {
                 const key = e.key.toLowerCase();
                 game.keys[key] = true;
-                // Toggle gamepad debug overlay with F6 (diagnostics)
+                // Toggle gamepad debug overlay with F6 (diagnostics) - DISABLED
+                /*
                 if (e.key === 'F6') {
                     const dbg = document.getElementById('gpDebug');
                     if (dbg) dbg.style.display = (dbg.style.display === 'none' || !dbg.style.display) ? 'block' : 'none';
                 }
+                */
                 
                 // Handle pause
                 if (key === 'p') {
@@ -17642,9 +17822,12 @@ function offerPermanentAbilityChoice() {
                     togglePause();
                     e.preventDefault();
                 }
+                // Toggle FPS display with 'f' key - DISABLED
+                /*
                 if (key === 'f') {
                     game.showFps = !game.showFps;
                 }
+                */
             });
             
             document.addEventListener('keyup', e => {
@@ -17662,8 +17845,8 @@ function offerPermanentAbilityChoice() {
             try { updateGamepadInput(); } catch(_) {}
             // Allow menu navigation with D-Pad/left stick and confirm with A when overlays are open
             try { handleGamepadMenuNavigation(); } catch(_) {}
-            // Update debug overlay if visible
-            try { updateGpDebug(); } catch(_) {}
+            // Update debug overlay if visible - DISABLED
+            // try { updateGpDebug(); } catch(_) {}
             const returningToTitle = !!(game && game._returningToTitle);
             if (!returningToTitle && !game.paused && !game.gameOver) {
                 update();
@@ -17768,7 +17951,8 @@ function offerPermanentAbilityChoice() {
             try { showTitleScreen(); } catch(err) { console.warn('[QuitToTitle] showTitleScreen failed', err); }
         }
 
-        // --- Minimal gamepad debug overlay ---
+        // --- Minimal gamepad debug overlay --- DISABLED
+        /*
         (function ensureGpDebug(){
             if (document.getElementById('gpDebug')) return;
             const el = document.createElement('div');
@@ -17777,6 +17961,7 @@ function offerPermanentAbilityChoice() {
             el.textContent = 'GP Debug';
             document.body.appendChild(el);
         })();
+        */
         function updateGpDebug(){
             const box = document.getElementById('gpDebug'); if (!box || box.style.display==='none') return;
             const pads = (navigator.getGamepads && navigator.getGamepads()) || [];
@@ -24688,6 +24873,12 @@ function offerPermanentAbilityChoice() {
                 }
                 // Boomerang behavior (ensured return + chaining + movement bias + wind synergy)
                 if (proj.boomerang && !proj.enemy) {
+                    // If projectile recently ricocheted, delay boomerang behavior for a few frames
+                    if (proj._recentRicochet && proj._recentRicochet > 0) {
+                        proj._recentRicochet--;
+                        // Skip boomerang logic this frame to let ricochet direction take effect
+                        return;
+                    }
                     // Initialization of boomerang arc parameters
                     if (!proj._boomInit) {
                         proj._boomInit = true;
@@ -25844,7 +26035,8 @@ function offerPermanentAbilityChoice() {
                 console.info(`[CollisionStats] frame:${c.frame} checks:${c.checks} hits:${c.hits} hitRate:${hitRate}% avgChecks/frame:${avgChecks} avgBuckets/frame:${avgBuckets}`);
             }, 5000);
         })();
-        // Lightweight on-canvas debug overlay for collision hits (optional)
+        // Lightweight on-canvas debug overlay for collision hits (optional) - DISABLED
+        /*
         ;(function injectCollisionDebugHUD(){
             if (game._collisionHUDInjected) return; game._collisionHUDInjected = true;
             const el = document.createElement('div');
@@ -25864,6 +26056,7 @@ function offerPermanentAbilityChoice() {
             }
             requestAnimationFrame(upd);
         })();
+        */
 
         // Utility: Blend a projectile's motion pattern & infusion colors into one representative hex.
         function getProjectileSynergyColor(proj) {
@@ -26534,6 +26727,8 @@ function offerPermanentAbilityChoice() {
                     proj.bounces--;
                     // Extend life a bit so chained ricochets travel meaningful distance
                     proj.life = Math.max(proj.life + 55, proj.life);
+                    // Mark that projectile recently ricocheted (prevents boomerang from overriding for a few frames)
+                    proj._recentRicochet = 8;
                     // Small flash particle at source to indicate energy jump
                     // Light energy arc particle burst
                     for (let k=0;k<6;k++) addParticle(proj.x + (Math.random()-0.5)*14, proj.y + (Math.random()-0.5)*14, '#FFEFAA','spark');
@@ -34039,13 +34234,14 @@ function offerPermanentAbilityChoice() {
                         if (!e || e.health <= 0) return false;
                         const type = (e.type || '').toString().toLowerCase();
                         const name = (e.name || '').toString().toLowerCase();
-                        return type.includes('wunderswan') || type.includes('golden goose') || type.includes('goldengoose') || name.includes('wunderswan') || name.includes('golden goose');
+                        return type.includes('wunderswan') || type.includes('golden goose') || type.includes('goldengoose') || type.includes('the big quack') || type.includes('bigquack') || name.includes('wunderswan') || name.includes('golden goose') || name.includes('the big quack');
                     });
                     let boss = candidates.find(e => {
                         const type = (e.type || '').toString().toLowerCase();
                         const name = (e.name || '').toString().toLowerCase();
                         return type.includes('golden goose') || type.includes('goldengoose') || name.includes('golden goose');
                     });
+                    if (!boss) boss = candidates.find(e => ((e.type || '').toString().toLowerCase().includes('the big quack') || (e.name || '').toString().toLowerCase().includes('the big quack')));
                     if (!boss) boss = candidates.find(e => ((e.type || '').toString().toLowerCase().includes('wunderswan') || (e.name || '').toString().toLowerCase().includes('wunderswan')));
                     if (!boss) {
                         boss = game.enemies.find(e => e && e.health > 0 && (e.isBoss || e.bossSecret));
@@ -34076,6 +34272,8 @@ function offerPermanentAbilityChoice() {
                         const nameLabel = (boss.name || '').toString().toLowerCase();
                         if (typeLabel.includes('golden goose') || typeLabel.includes('goldengoose') || nameLabel.includes('golden goose')) {
                             ctx.fillStyle = '#FFD24D'; // golden fill
+                        } else if (typeLabel.includes('the big quack') || nameLabel.includes('the big quack')) {
+                            ctx.fillStyle = '#8B0000'; // dark red fill for The Big Quack
                         } else {
                             ctx.fillStyle = '#00ff66'; // default green
                         }
@@ -35776,7 +35974,8 @@ function offerPermanentAbilityChoice() {
             
             ctx.restore();
 
-            // FPS / FX overlay (debug) -- drawn after primary scene & overlays
+            // FPS / FX overlay (debug) -- DISABLED
+            /*
             if (game.showFps && game.perf && typeof game.perf.fps === 'number') {
                 ctx.save();
                 ctx.font = '14px Courier New';
@@ -35819,6 +36018,7 @@ function offerPermanentAbilityChoice() {
                 }
                 ctx.restore();
             }
+            */
 
             // Temporary on-screen debug HUD (top-most layer) disabled — no-op to avoid drawing debug overlays.
             try { /* HUD disabled by build */ } catch(_) {}
