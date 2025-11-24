@@ -529,14 +529,11 @@
                 } catch(_) {}
             }
             // Golden tooth sprite (unlocked by defeating Golden Goose)
-            // Defer actual network load until the ability is granted to avoid startup IO overhead.
             const goldToothImg = new Image();
             goldToothImg.onload = ()=>{ goldToothImg._ok = true; };
             goldToothImg.onerror = ()=>{ console.warn('[BulletImage] Failed to load assets/bullets/goldtooth.png'); goldToothImg._broken = true; };
-            goldToothImg._deferredSrc = 'assets/bullets/goldtooth.png';
-            // helper to lazily start loading the gold tooth image
+            goldToothImg.src = 'assets/bullets/goldtooth.png';
             window._bulletImages.goldtooth = goldToothImg;
-            window._bulletImages.loadGoldTooth = function(){ try { if (goldToothImg && !goldToothImg.src) goldToothImg.src = goldToothImg._deferredSrc; } catch(_){} };
             // Wunder Doodle sprite (unlocked by defeating Wunderswan). Defer load until discovered.
             const wunderImg = new Image();
             wunderImg.onload = ()=>{ wunderImg._ok = true; };
@@ -746,9 +743,7 @@
                     if (!name) return;
                     // If Gooster Teeth is discovered/granted in any pathway, start loading its sprite so it's ready when used.
                     if (String(name) === 'Gooster Teeth') {
-                        if (window._bulletImages && typeof window._bulletImages.loadGoldTooth === 'function') {
-                            try { window._bulletImages.loadGoldTooth(); } catch(_){ }
-                        }
+                        // Sprite now loads immediately on startup
                     }
                     if (String(name) === 'Wunder Doodle') {
                         if (window._bulletImages && typeof window._bulletImages.loadWunderDoodle === 'function') {
@@ -1533,6 +1528,15 @@
                     flags[index] = compute(list[index]);
                 }
             };
+            // Boss-specific tentacle sprite (Act IV final boss)
+            try {
+                const bossTentacleImg = new Image();
+                bossTentacleImg.onload = ()=>{ bossTentacleImg._ok = true; };
+                bossTentacleImg.onerror = ()=>{ console.warn('[BulletImage] Failed to load assets/bullets/bosstentacle.png'); bossTentacleImg._broken = true; };
+                bossTentacleImg.src = 'assets/bullets/bosstentacle.png'; // Load immediately
+                window._bulletImages.bosstentacle = bossTentacleImg;
+                window._bulletImages.loadBossTentacle = function(){ try { if (bossTentacleImg && !bossTentacleImg.src) bossTentacleImg.src = bossTentacleImg._deferredSrc; } catch(_){} };
+            } catch(_){}
             Object.defineProperty(store, 'size', { get() { return size; } });
             if (existing && typeof existing.forEach === 'function') {
                 existing.forEach((value, key) => {
@@ -1685,6 +1689,38 @@
                                 }
                             }
                         } catch(_){ }
+                        // Sanitize meta numeric fields to avoid NaN/Infinity leaking into render code.
+                        try {
+                            try { game._metaSanitizeCount = game._metaSanitizeCount || 0; } catch(_){}
+                            if (typeof index === 'number' && index >= 0 && meta) {
+                                try {
+                                    const so = (game && game.projectilesSoA) ? game.projectilesSoA : null;
+                                    let sanitized = false;
+                                    if (meta.vx != null && !isFinite(meta.vx)) {
+                                        meta.vx = so ? (so.vx && typeof so.vx[index] === 'number' ? so.vx[index] : 0) : 0;
+                                        sanitized = true;
+                                    }
+                                    if (meta.vy != null && !isFinite(meta.vy)) {
+                                        meta.vy = so ? (so.vy && typeof so.vy[index] === 'number' ? so.vy[index] : 0) : 0;
+                                        sanitized = true;
+                                    }
+                                    if (meta.life != null && !isFinite(meta.life)) {
+                                        meta.life = so ? (so.life && typeof so.life[index] === 'number' ? so.life[index] : 0) : 0;
+                                        sanitized = true;
+                                    }
+                                    if (sanitized) {
+                                        game._metaSanitizeCount = (game._metaSanitizeCount||0) + 1;
+                                        if (game._metaSanitizeCount < 12) {
+                                            try { console.warn('[metaStore.set] sanitized non-finite meta numerics for idx=', index, meta); } catch(_){ }
+                                        }
+                                        if (game._metaSanitizeCount === 12) {
+                                            try { console.error('[metaStore.set][ERROR] repeated meta sanitization (>=12). Example idx=', index, 'meta=', meta); } catch(_){ }
+                                            try { const st = (new Error()).stack || ''; console.error(st.split('\n').slice(2,8).join('\n')); } catch(_){ }
+                                        }
+                                    }
+                                } catch(_){}
+                            }
+                        } catch(_){}
                         return res;
                     };
                     // also mirror back to game._projMeta reference
@@ -2036,21 +2072,55 @@
                 const safeX = (_hasT && typeof t.x === 'number' && isFinite(t.x)) ? t.x : (_playerX !== null ? _playerX : _canvasCenterX || 0);
                 const safeY = (_hasT && typeof t.y === 'number' && isFinite(t.y)) ? t.y : (_playerY !== null ? _playerY : _canvasCenterY || 0);
                 x[idx] = safeX; y[idx] = safeY;
-                vx[idx] = (_hasT && typeof t.vx === 'number' && isFinite(t.vx)) ? t.vx : 0; vy[idx] = (_hasT && typeof t.vy === 'number' && isFinite(t.vy)) ? t.vy : 0;
+                vx[idx] = (_hasT && typeof t.vx === 'number' && isFinite(t.vx)) ? t.vx : 0;
+                vy[idx] = (_hasT && typeof t.vy === 'number' && isFinite(t.vy)) ? t.vy : 0;
+                // Defensive: ensure numeric SoA entries are finite; throttle warnings to avoid spam
+                try {
+                    game._spawnNaNCount = game._spawnNaNCount || 0;
+                    if (!isFinite(vx[idx]) || !isFinite(vy[idx])) {
+                        game._spawnNaNCount++;
+                        if (game._spawnNaNCount < 12) {
+                            try { console.warn('[spawnProjectile] non-finite vx/vy after assignment', { idx, vx: vx[idx], vy: vy[idx], t }); } catch(_){ }
+                            try { console.warn((new Error()).stack.split('\n').slice(2,6).join('\n')); } catch(_){ }
+                        }
+                        if (game._spawnNaNCount === 12) {
+                            try { console.error('[spawnProjectile][ERROR] persistent non-finite vx/vy detected - further occurrences suppressed', { idx, vx: vx[idx], vy: vy[idx], t }); } catch(_){ }
+                            try { const st=(new Error()).stack||''; console.error(st.split('\n').slice(2,8).join('\n')); } catch(_){ }
+                        }
+                        if (!isFinite(vx[idx])) vx[idx] = 0;
+                        if (!isFinite(vy[idx])) vy[idx] = 0;
+                    }
+                } catch(_){ }
                 // Limited logging to help trace invalid spawn inputs (throttle to avoid spam)
                 try {
                     if (!_hasT || typeof t.x !== 'number' || !isFinite(t.x) || typeof t.y !== 'number' || !isFinite(t.y)) {
                         game._spawnProjectileInvalidCoords = game._spawnProjectileInvalidCoords || 0;
                         if (game._spawnProjectileInvalidCoords < 6) {
                             game._spawnProjectileInvalidCoords++;
-                            try { console.warn('[spawnProjectile] non-finite/undefined spawn coords, using fallback', { idx, t }); } catch(_){}
-                            try { const st = (new Error()).stack || ''; console.warn(st.split('\n').slice(2,6).join('\n')); } catch(_){}
+                            try { console.warn('[spawnProjectile] non-finite/undefined spawn coords, using fallback', { idx, t }); } catch(_){ }
+                            try { const st = (new Error()).stack || ''; console.warn(st.split('\n').slice(2,6).join('\n')); } catch(_){ }
                         }
                     }
-                } catch(_){}
+                } catch(_){ }
                 const r = t.r || t.radius || 3; radius[idx] = r > 255?255:r;
-                const lf = t.life || t.maxLife || 120; life[idx]=lf; lifeMax[idx]=lf;
-                damage[idx] = t.damage || 1;
+                // Defensive life/damage assignment: prefer finite numeric values
+                try {
+                    let lf = (typeof t.life === 'number' && isFinite(t.life)) ? t.life : ((typeof t.maxLife === 'number' && isFinite(t.maxLife)) ? t.maxLife : 120);
+                    if (!isFinite(lf) || typeof lf !== 'number') {
+                        game._spawnNaNCount = game._spawnNaNCount || 0; game._spawnNaNCount++;
+                        if (game._spawnNaNCount < 12) try { console.warn('[spawnProjectile] non-finite life/mmaxLife, using fallback', { idx, lf, t }); } catch(_){ }
+                        if (game._spawnNaNCount === 12) {
+                            try { console.error('[spawnProjectile][ERROR] persistent non-finite life/maxLife detected - further occurrences suppressed', { idx, lf, t }); } catch(_){ }
+                            try { const st=(new Error()).stack||''; console.error(st.split('\n').slice(2,8).join('\n')); } catch(_){ }
+                        }
+                        lf = 120;
+                    }
+                    life[idx] = lf; lifeMax[idx] = lf;
+                } catch(_){ life[idx] = 120; lifeMax[idx] = 120; }
+                try {
+                    const dmgVal = (typeof t.damage === 'number' && isFinite(t.damage)) ? Math.max(0, Math.floor(t.damage)) : 1;
+                    damage[idx] = dmgVal;
+                } catch(_){ damage[idx] = 1; }
                 // compose flags
                 let f=0; if (t.sineWave) f|=FLAG.SINE; if (t.wackyZigzag) f|=FLAG.WACKY; if (t.ekgWave) f|=FLAG.EKG; if (t.spiralPattern) f|=FLAG.SPIRAL; if (t.teleporting) f|=FLAG.TELEPORT; if (t.homing) f|=FLAG.HOMING; if (t.bouncing) f|=FLAG.BOUNCE;
                 flags[idx]=f;
@@ -2066,6 +2136,32 @@
             }
             function recycle(idx){
                 if (!alive[idx]) return;
+                try {
+                    // Diagnostic: log if a slot is being recycled very soon after spawn
+                    const nowTs = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+                    const sTs = (typeof spawnStamp !== 'undefined' && spawnStamp && spawnStamp[idx]) ? spawnStamp[idx] : 0;
+                    // If meta requests a temporary hold, respect it and skip recycling
+                    try {
+                        const mHold = metaList && metaList[idx] ? metaList[idx] : null;
+                        if (mHold && mHold._noRecycleUntil && nowTs < mHold._noRecycleUntil) {
+                            try { console.info('[ProjectilePool] skip recycle due to _noRecycleUntil for idx=', idx); } catch(_){ }
+                            return;
+                        }
+                    } catch(_){}
+                    if (sTs && (nowTs - sTs) < 60) {
+                        try {
+                            const m = metaList[idx];
+                            game._recycleImmediateCount = (game._recycleImmediateCount||0) + 1;
+                            if (game._recycleImmediateCount < 12) {
+                                console.warn('[ProjectilePool][DIAG] recycle called shortly after spawn', { idx, ageMs: nowTs - sTs, spawnStamp: sTs, meta: m });
+                            }
+                            if (game._recycleImmediateCount === 12) {
+                                try { console.error('[ProjectilePool][ERROR] repeated immediate recycle events (>=12). Example idx=', idx, 'ageMs=', nowTs - sTs, 'meta=', m); } catch(_){ }
+                                try { const st=(new Error()).stack||''; console.error(st.split('\n').slice(2,8).join('\n')); } catch(_){ }
+                            }
+                        } catch(_){ }
+                    }
+                } catch(_){ }
                 try {
                     if (game && game._projSpriteByIndex && game._projSpriteByIndex.has && game._projSpriteByIndex.has(idx)) {
                         try {
@@ -4702,7 +4798,7 @@
                         if (store && (!store.quackenTentacle || (store.quackenTentacle && !store.quackenTentacle.src)) && typeof store.loadQuackenTentacle === 'function') {
                             try { store.loadQuackenTentacle(); } catch(_) {}
                         }
-                        const img = store ? store.quackenTentacle : null;
+                        const img = store ? (meta && meta._bossTentacle ? store.bosstentacle || store.quackenTentacle : store.quackenTentacle) : null;
                         const anchorX = (meta._tentacleAnchorPlayer && typeof meta._tentacleAnchorPlayer.x === 'number') ? meta._tentacleAnchorPlayer.x : (typeof meta._tentacleAnchorX === 'number' ? meta._tentacleAnchorX : cx);
                         const anchorY = (meta._tentacleAnchorPlayer && typeof meta._tentacleAnchorPlayer.y === 'number') ? meta._tentacleAnchorPlayer.y : (typeof meta._tentacleAnchorY === 'number' ? meta._tentacleAnchorY : cy);
                         const dxTent = cx - anchorX;
@@ -4710,7 +4806,7 @@
                         let length = Math.hypot(dxTent, dyTent);
                         if (!isFinite(length) || length < 4) length = 4;
                         const angle = Math.atan2(dyTent, dxTent);
-                        const thicknessBase = Math.max(18, (r || 14) * 2.2);
+                        const thicknessBase = Math.max(50, (r || 14) * 2.2);
                         ctx.save();
                         ctx.translate(anchorX, anchorY);
                         if (isFinite(angle)) ctx.rotate(angle);
@@ -4725,8 +4821,8 @@
                             ctx.drawImage(img, 0, -drawH / 2, length, drawH);
                         } else {
                             const grad = ctx.createLinearGradient(0, 0, length, 0);
-                            grad.addColorStop(0, 'rgba(89,72,210,0.95)');
-                            grad.addColorStop(1, 'rgba(61,41,150,0.65)');
+                            grad.addColorStop(0, 'rgba(255,0,0,0.95)');
+                            grad.addColorStop(1, 'rgba(200,0,0,0.65)');
                             ctx.fillStyle = grad;
                             const h = thicknessBase;
                             const radius = Math.min(h * 0.4, 18);
@@ -6070,6 +6166,59 @@
                     // Skip beam projectiles here — beams have their own elongated rendering earlier
                     if (flags & META_FLAG.BEAM) continue;
                     const meta = metaList[i];
+                    // Special-case: draw quacken tentacles for enemy projectiles (boss-spawned)
+                    if (meta && meta.quackenTentacle) {
+                        try {
+                            const store = window._bulletImages;
+                            if (store && (!store.bosstentacle || (store.bosstentacle && !store.bosstentacle.src)) && typeof store.loadBossTentacle === 'function') {
+                                try { store.loadBossTentacle(); } catch(_){}
+                            }
+                            const img = store ? (meta && meta._bossTentacle ? store.bosstentacle || store.quackenTentacle : store.quackenTentacle) : null;
+                            const cx = x[i], cy = y[i]; const r = radius[i];
+                            const anchorX = (meta._tentacleAnchorPlayer && typeof meta._tentacleAnchorPlayer.x === 'number') ? meta._tentacleAnchorPlayer.x : (typeof meta._tentacleAnchorX === 'number' ? meta._tentacleAnchorX : cx);
+                            const anchorY = (meta._tentacleAnchorPlayer && typeof meta._tentacleAnchorPlayer.y === 'number') ? meta._tentacleAnchorPlayer.y : (typeof meta._tentacleAnchorY === 'number' ? meta._tentacleAnchorY : cy);
+                            const dxTent = cx - anchorX;
+                            const dyTent = cy - anchorY;
+                            let length = Math.hypot(dxTent, dyTent);
+                            if (!isFinite(length) || length < 4) length = 4;
+                            const angle = Math.atan2(dyTent, dxTent);
+                            const thicknessBase = Math.max(18, (r || 14) * 2.2);
+                            ctx.save();
+                            ctx.translate(anchorX, anchorY);
+                            if (isFinite(angle)) ctx.rotate(angle);
+                            const flipSign = (meta && meta._tentacleFlipSign === -1) ? -1 : 1;
+                            if (flipSign < 0) ctx.scale(1, -1);
+                            ctx.imageSmoothingEnabled = true;
+                            if (img && img._ok && img.complete && img.naturalWidth) {
+                                const iw = img.naturalWidth;
+                                const ih = img.naturalHeight || 1;
+                                const scaleY = thicknessBase / ih;
+                                const drawH = ih * scaleY;
+                                ctx.drawImage(img, 0, -drawH / 2, length, drawH);
+                            } else {
+                                const grad = ctx.createLinearGradient(0, 0, length, 0);
+                                grad.addColorStop(0, 'rgba(89,72,210,0.95)');
+                                grad.addColorStop(1, 'rgba(61,41,150,0.65)');
+                                ctx.fillStyle = grad;
+                                const h = thicknessBase;
+                                const radiusCorner = Math.min(h * 0.4, 18);
+                                ctx.beginPath();
+                                ctx.moveTo(0, -h / 2);
+                                ctx.lineTo(length - radiusCorner, -h / 2);
+                                ctx.quadraticCurveTo(length, -h / 2, length, -h / 2 + radiusCorner);
+                                ctx.lineTo(length, h / 2 - radiusCorner);
+                                ctx.quadraticCurveTo(length, h / 2, length - radiusCorner, h / 2);
+                                ctx.lineTo(radiusCorner, h / 2);
+                                ctx.quadraticCurveTo(0, h / 2, 0, h / 2 - radiusCorner);
+                                ctx.lineTo(0, -h / 2 + radiusCorner);
+                                ctx.quadraticCurveTo(0, -h / 2, radiusCorner, -h / 2);
+                                ctx.closePath();
+                                ctx.fill();
+                            }
+                            ctx.restore();
+                            continue;
+                        } catch(_){ }
+                    }
                     // If an explicit sprite key is present (e.g. Golden Goose gold tooth), render it here instead of the red orb
                     if (meta && (meta.spriteKey || meta.goldTooth)) {
                         let spriteKey = meta.spriteKey || null;
@@ -6778,6 +6927,17 @@ function loadSeenAbilities(){
                 }
             } catch(_){ }
             Object.assign(game.player._seenAbilities, obj);
+            // Load deferred sprites for seen abilities
+            if (game.player._seenAbilities['Wunder Doodle']) {
+                if (window._bulletImages && typeof window._bulletImages.loadWunderDoodle === 'function') {
+                    try { window._bulletImages.loadWunderDoodle(); } catch(_){ }
+                }
+            }
+            if (game.player._seenAbilities['Release the Quacken!']) {
+                if (window._bulletImages && typeof window._bulletImages.loadQuackenTentacle === 'function') {
+                    try { window._bulletImages.loadQuackenTentacle(); } catch(_){ }
+                }
+            }
             try {
                 const released = localStorage.getItem('quackenReleased');
                 if (released === '1') {
@@ -7678,7 +7838,7 @@ function spawnEnemyDebug(typeName, opts) {
     // Initialize boss-specific cooldowns for debug-spawned final bosses
     try {
         if (typeName === 'The Great Beaked One') {
-            try { enemy._releaseQuackenCd = 120; } catch(_){}
+            try { enemy._releaseQuackenCd = 0; enemy.ranged = true; enemy.rangedCooldown = ENEMY_TYPES && ENEMY_TYPES['The Great Beaked One'] && ENEMY_TYPES['The Great Beaked One'].rangedCooldown || 2200; } catch(_){}  // Start immediately, enable normal ranged
         }
     } catch(_){}
     if (enemy.elite) {
@@ -10728,7 +10888,8 @@ function offerPermanentAbilityChoice() {
     // Act III melee enemy: Swanomaly (non-ranged, Act III exclusive)
     ENEMY_TYPES['Swanomaly'] = { health: 220, speed: 0.52, damage: 18, color: '#E6F4FF', size: 56, xp: 420, ranged: false, armor: 3, act: 'III' };
     // Act IV final boss: The Great Beaked One (stationary eldritch boss that releases tentacles)
-    ENEMY_TYPES['The Great Beaked One'] = { health: 8000, speed: 0.0, damage: 72, color: '#2b1b3a', size: 220, xp: 20000, ranged: true, rangedCooldown: 2200, armor: 12, act: 'IV', boss: true, spawnStreet: 5, bossFinal: true };
+    // Make this boss a bullet-hell source: keep it stationary but fire very rapidly
+    ENEMY_TYPES['The Great Beaked One'] = { health: 8000, speed: 0.0, damage: 72, color: '#2b1b3a', size: 220, xp: 20000, ranged: true, rangedCooldown: 60, armor: 12, act: 'IV', boss: true, spawnStreet: 5, bossFinal: true };
     // Act III ranged enemy: Swan Wick (exclusive to Act III)
     // Uses assets/swans/spritesheets/swanwick-sheet-3-29.png (animated spritesheet, frames 3-29, left/right facing only, mirrors for left).
     // Uses assets/swans/swanwick.png. Default side faces right; left is mirrored.
@@ -15912,6 +16073,7 @@ function offerPermanentAbilityChoice() {
                         window._streetBackgrounds = window._streetBackgrounds || {};
                         const forced = 'assets/streets/eldritch/eldritchboss1.png';
                         window._streetBackgrounds.list = [forced];
+                        try { window._streetBackgrounds._roomForced = true; } catch(_){}
                         window._streetBackgrounds.currentIndex = 0;
                         // Preload and make immediately available for render
                         const bgImg = new Image();
@@ -21514,41 +21676,18 @@ function offerPermanentAbilityChoice() {
 
                 // === Act IV final boss behavior: The Great Beaked One ===
                 try {
+                    console.log('[Boss] Checking boss behavior for', enemy.type);
                     if (String(enemy.type) === 'The Great Beaked One' && !enemy.dead && enemy.health > 0) {
+                        console.log('[Boss] Condition met for', enemy.type);
                         // Stationary boss: ensure it doesn't wander
                         enemy.speed = 0;
-                        // Cooldown in frames for releasing quacken tentacles
-                        enemy._releaseQuackenCd = (typeof enemy._releaseQuackenCd === 'number') ? enemy._releaseQuackenCd : 120;
-                        if (enemy._releaseQuackenCd <= 0) {
-                            // Reset cooldown (2-4s roughly at 60fps)
-                            enemy._releaseQuackenCd = 120 + Math.floor(Math.random() * 120);
-                            // Spawn several tentacle projectiles anchored to the boss location
-                            const tentCount = 3 + (Math.random() < 0.5 ? 0 : 1) + (Math.random() < 0.33 ? 1 : 0); // 3-5
-                            for (let t = 0; t < tentCount; t++) {
-                                const ang = (Math.random() * Math.PI * 2);
-                                const speed = 6 + Math.random() * 2;
-                                const sx = enemy.x + Math.cos(ang) * Math.max(16, enemy.size * 0.18);
-                                const sy = enemy.y + Math.sin(ang) * Math.max(16, enemy.size * 0.18);
-                                const pIdx = game.spawnProjectile({ x: sx, y: sy, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 60000, r: 14, damage: Math.max(8, Math.floor((enemy.damage || 32) * 0.45)) });
-                                if (pIdx >= 0) {
-                                    try {
-                                        const store = game.projectilesSoA && game.projectilesSoA.metaStore;
-                                        if (store) {
-                                            // Anchor tentacle to the boss by providing a lightweight anchor object
-                                            store.set(pIdx, { quackenTentacle: true, _tentacleAnchorPlayer: { x: enemy.x, y: enemy.y }, _tentacleRange: 420, baseDamage: Math.max(6, Math.floor((enemy.damage || 32) * 0.5)), _tentacleExtendFrames: 46 });
-                                        }
-                                    } catch(_){}
-                                }
-                            }
-                            // Visual cue
-                            try { addParticle(enemy.x, enemy.y, '#5B49C8', 'ring'); } catch(_){}
-                        } else {
-                            enemy._releaseQuackenCd--;
-                        }
-                        // Boss does not perform normal AI movement/attacks
-                        return;
+                        enemy.baseSpeed = 0;
+                        // Ensure the boss is allowed to use ranged attacks — do NOT return here.
+                        // Leaving this function allows the shared ranged attack handler (later in the
+                        // enemy update loop) to run and spawn the same red pellets used by Act I/II.
+                        try { enemy.ranged = true; } catch(_){}
                     }
-                } catch(_){}
+                } catch(e) { console.warn('[Boss] Error in boss behavior', e); }
 
                 // Process smooth knockback BEFORE stun/freeze early returns so sliding occurs even if stunned.
                 if (enemy.kbFrames && enemy.kbFrames > 0 && (enemy.kbVX || enemy.kbVY)) {
@@ -21655,12 +21794,29 @@ function offerPermanentAbilityChoice() {
                         enemy._openingDelayApplied = true;
                     }
                 }
-                if (roomAge >= openingDelayMs && !enemy.silenced && enemy.ranged) {
-                    // Allow special long-range behavior for Wunderswan
+                    if (roomAge >= openingDelayMs && !enemy.silenced && enemy.ranged) {
+                    // Allow special long-range behavior for Wunderswan and Great Beaked One
                     let effectiveDetection = detectionRange;
                     if (enemy.type === 'Wunderswan') effectiveDetection = Math.max(effectiveDetection, 1200);
+                    // The Great Beaked One should engage from much farther away
+                    if (enemy.type === 'The Great Beaked One') effectiveDetection = Math.max(effectiveDetection, 2000);
+
+                    // Decide whether this enemy is allowed to fire this frame
+                    let canFire = true;
+                    // Out of range or still on cooldown -> cannot fire
                     if (!(dist < effectiveDetection) || Date.now() - enemy.lastAttack <= enemyCooldown) {
-                        // skip firing this frame if out of range or on cooldown
+                        canFire = false;
+                    }
+                    // Great Beaked One has a special 2s cycle: 1s firing, 1s silence
+                    if (enemy.type === 'The Great Beaked One') {
+                        if (!enemy._gboCycleStart) enemy._gboCycleStart = Date.now();
+                        const cycle = (Date.now() - enemy._gboCycleStart) % 2000; // 2000ms cycle
+                        const inFiringWindow = cycle < 1000; // first 1000ms = firing, next 1000ms = silent
+                        if (!inFiringWindow) canFire = false;
+                    }
+
+                    if (!canFire) {
+                        // skip firing this frame
                     } else {
                     const baseSpeed = 4;
                     const shots = [];
@@ -21693,6 +21849,19 @@ function offerPermanentAbilityChoice() {
                         const baseAng = Math.atan2(dy, dx);
                         const toothSpeed = baseSpeed * 1.45;
                         shots.push({ vx: Math.cos(baseAng)*toothSpeed, vy: Math.sin(baseAng)*toothSpeed, dmgMul: 1, goldTooth: true, life: 220, r: 12, bounces: 3 });
+                    } else if (enemy.type === 'The Great Beaked One') {
+                        // Bullet-hell mode: spawn many red pellets in a rotating dense spread
+                        shots.length = 0;
+                        // Radial-only bullet-hell: emit a rotating dense ring (no aimed clusters)
+                        shots.length = 0;
+                        // Keep a phase so rings rotate and feel dynamic
+                        enemy._gboPhase = (enemy._gboPhase || 0) + 0.28;
+                        const ringCount = 22; // denser ring
+                        const ringSpeed = baseSpeed * 1.05;
+                        for (let p = 0; p < ringCount; p++) {
+                            const theta = ((p / ringCount) * Math.PI * 2) + enemy._gboPhase + (Math.random()-0.5)*0.03;
+                            shots.push({ vx: Math.cos(theta) * ringSpeed, vy: Math.sin(theta) * ringSpeed, dmgMul: 0.75 });
+                        }
                     } else {
                         shots.push({ vx: (dx / dist) * baseSpeed, vy: (dy / dist) * baseSpeed, dmgMul: 0.8 });
                     }
@@ -21836,6 +22005,12 @@ function offerPermanentAbilityChoice() {
                             damage: Math.floor(enemy.damage * s.dmgMul)
                         };
                         if (s.life) projArgs.life = s.life;
+                        // Boss override: force Great Beaked One projectiles to exact damage value
+                        try {
+                            if (enemy && enemy.type === 'The Great Beaked One') {
+                                projArgs.damage = 15;
+                            }
+                        } catch(_){}
                         if (s.goldTooth) {
                             projArgs.damage = 25;
                             projArgs.life = s.life || 240;
@@ -22095,6 +22270,11 @@ function offerPermanentAbilityChoice() {
                     // Occasional ambient charm heart
                     if (Math.random() < 0.04) addParticle(enemy.x + (Math.random()-0.5)*enemy.size, enemy.y - enemy.size/2 - 4, '#FF66BB', 'spark');
                     return; // skip hostile AI
+                }
+
+                // Stationary boss: The Great Beaked One does not move
+                if (enemy.type === 'The Great Beaked One') {
+                    return;
                 }
 
                 if (dist > 30) {
@@ -25038,13 +25218,23 @@ function offerPermanentAbilityChoice() {
 
         function updateParticles() {
             const fast = game.perf && game.perf.lowFx;
-            game.particles = game.particles.filter(particle => {
+            if (!game.particles) game.particles = [];
+            if (!game._particleFree) game._particleFree = [];
+            const next = [];
+            for (let i = 0; i < game.particles.length; i++) {
+                const particle = game.particles[i];
                 particle.x += particle.vx;
                 particle.y += particle.vy;
                 particle.life -= fast ? 2 : 1;
                 particle.alpha = particle.life / particle.maxLife;
-                return particle.life > 0;
-            });
+                if (particle.life > 0) {
+                    next.push(particle);
+                } else {
+                    // recycle into free pool for reuse
+                    try { game._particleFree.push(particle); } catch(_) { /* best-effort */ }
+                }
+            }
+            game.particles = next;
         }
 
         function checkCollisions() {
@@ -26679,6 +26869,7 @@ function offerPermanentAbilityChoice() {
             const radius = (cfg && typeof cfg.radius === 'number') ? cfg.radius : 16;
             const spawnX = (cfg && typeof cfg.x === 'number') ? cfg.x : (game.player ? game.player.x : 0);
             const spawnY = (cfg && typeof cfg.y === 'number') ? cfg.y : (game.player ? game.player.y : 0);
+            console.log('Spawning tentacle at', spawnX, spawnY);
             const idx = game.spawnProjectile({
                 x: spawnX,
                 y: spawnY,
@@ -26687,7 +26878,7 @@ function offerPermanentAbilityChoice() {
                 life,
                 r: radius,
                 damage: damageOut,
-                damageType: 'void'
+                damageType: null
             });
             if (idx < 0) return idx;
             const meta = {
@@ -26724,8 +26915,11 @@ function offerPermanentAbilityChoice() {
                 meta._tentacleAnchorX = spawnX;
                 meta._tentacleAnchorY = spawnY;
             }
+            if (owner && owner.type === 'The Great Beaked One') {
+                meta._bossTentacle = true;
+            }
             const target = cfg && cfg.target;
-            if (target && typeof target === 'object' && target.health > 0 && !target.dead) {
+            if (target && typeof target === 'object' && target.health > 0 && !target.dead && !isNaN(target.x) && !isNaN(target.y)) {
                 meta._tentacleTarget = target;
                 meta._tentacleTargetId = Array.isArray(game.enemies) ? game.enemies.indexOf(target) : -1;
             } else {
@@ -26734,10 +26928,11 @@ function offerPermanentAbilityChoice() {
             }
             const store = game.projectilesSoA && game.projectilesSoA.metaStore;
             if (store) store.set(idx, meta);
+            if (game.projectilesSoA && game.projectilesSoA.metaList) game.projectilesSoA.metaList[idx] = meta;
             if (game.projectilesSoA) {
                 const so = game.projectilesSoA;
                 if (so.radius && so.radius[idx] != null) so.radius[idx] = Math.max(12, radius);
-                if (so.colorIdx) so.colorIdx[idx] = 5;
+                if (so.colorIdx) so.colorIdx[idx] = meta._bossTentacle ? 2 : 5;
             }
             return idx;
         }
@@ -28566,11 +28761,26 @@ function offerPermanentAbilityChoice() {
                 }
                 try {
                     if (window && window._streetBackgrounds) {
+                        // If the previous room set a transient forced background (boss set-piece),
+                        // replace that transient list with the correct per-act pool so restarts
+                        // use the full Act IV background set rather than the boss-only image.
+                        try {
+                            if (window._streetBackgrounds._roomForced) {
+                                try {
+                                    if (game && game._selectedAct && String(game._selectedAct) === 'IV') {
+                                        window._streetBackgrounds.list = (window.ELDRITCH_STREET_BG_PATHS && Array.isArray(window.ELDRITCH_STREET_BG_PATHS)) ? window.ELDRITCH_STREET_BG_PATHS.slice() : (typeof STREET_BG_PATHS !== 'undefined' ? STREET_BG_PATHS.slice() : window._streetBackgrounds.list);
+                                    } else {
+                                        window._streetBackgrounds.list = (typeof STREET_BG_PATHS !== 'undefined' && Array.isArray(STREET_BG_PATHS)) ? STREET_BG_PATHS.slice() : window._streetBackgrounds.list;
+                                    }
+                                } catch(_){}
+                                try { window._streetBackgrounds._roomForced = false; } catch(_){}
+                            }
+                        } catch(_){}
                         // Preserve the configured `list` so act-specific pools (e.g. eldritch)
                         // remain available after a reset/play-again. Clear only transient
                         // runtime state (current image/ready flag) and reset preload so
                         // the list can be re-preloaded when the room/init runs again.
-                        try { window._streetBackgrounds.currentIndex = 0; } catch(_){}
+                        try { window._streetBackgrounds.currentIndex = 0; } catch(_){ }
                         try { window._streetBackgrounds.img = null; } catch(_){}
                         try { window._streetBackgrounds.ready = false; } catch(_){}
                         try { window._streetBackgrounds._preloadPromise = null; } catch(_){}
@@ -28839,28 +29049,47 @@ function offerPermanentAbilityChoice() {
         // (Removed floating Reset Progress button; now in Pause -> Options)
 
         function addParticle(x, y, color, type) {
-            // Cosmetic gating: suppress low-priority particle categories if potato mode is on.
+            // Particle pool + budgeting
             const cosmeticTypes = { spark:1, ambient:1, lightning:1, heal:1, shield:1, damage:1, treasure:1, swirl:1, dust:1 };
             if ((game.potatoMode || game.disableCosmeticParticles) && cosmeticTypes[type]) return;
-            // Probabilistic suppression in low FX mode (only for cosmetic types)
             if (game.perf && game.perf.lowFx && cosmeticTypes[type]) {
                 if (Math.random() < 0.55) return;
             }
+
+            // Lazy init pool and counters
+            if (!game._particlePool) { game._particlePool = []; game._particleFree = []; game._particleStats = { created:0, recycled:0 }; }
             if (!game.particles) game.particles = [];
+
+            // Budget cap (configurable). Keep same caps as existing behavior.
             const cap = (game.potatoMode ? 600 : ((game.perf && game.perf.lowFx) ? 1200 : 2500));
-            if (game.particles.length >= cap) return;
-            const particle = {
-                x: x + (Math.random() - 0.5) * 10,
-                y: y + (Math.random() - 0.5) * 10,
-                vx: (Math.random() - 0.5) * 4,
-                vy: (Math.random() - 0.5) * 4,
-                life: (game.perf && game.perf.lowFx ? 22 : 30) + Math.random() * (game.perf && game.perf.lowFx ? 14 : 20),
-                maxLife: (game.perf && game.perf.lowFx) ? 38 : 50,
-                color: color,
-                type: type,
-                alpha: 1
-            };
-            
+            // Soft budget: if active particle count at or above cap, drop low-priority particles first
+            if (game.particles.length >= cap) {
+                if (cosmeticTypes[type]) return; // drop cosmetic when over budget
+                // If non-cosmetic and over budget, probabilistically drop heavy bursts to avoid stalls
+                if (Math.random() < 0.5) return;
+            }
+
+            // Reuse from free pool when available
+            let particle = null;
+            if (game._particleFree.length) {
+                particle = game._particleFree.pop();
+                game._particleStats.recycled++;
+            } else {
+                particle = {};
+                game._particleStats.created++;
+            }
+
+            // Initialize common fields (with small jitter as before)
+            particle.x = x + (Math.random() - 0.5) * 10;
+            particle.y = y + (Math.random() - 0.5) * 10;
+            particle.vx = (Math.random() - 0.5) * 4;
+            particle.vy = (Math.random() - 0.5) * 4;
+            particle.life = (game.perf && game.perf.lowFx ? 22 : 30) + Math.random() * (game.perf && game.perf.lowFx ? 14 : 20);
+            particle.maxLife = (game.perf && game.perf.lowFx) ? 38 : 50;
+            particle.color = color;
+            particle.type = type;
+            particle.alpha = 1;
+
             // Type-specific properties
             switch (type) {
                 case 'explosion':
@@ -28880,7 +29109,7 @@ function offerPermanentAbilityChoice() {
                     particle.life = 60;
                     break;
             }
-            
+
             game.particles.push(particle);
         }
 
@@ -36117,6 +36346,9 @@ function offerPermanentAbilityChoice() {
                         function drawQ(){
                             requestAnimationFrame(drawQ);
                             try{
+                                // If the game is showing the Game Over screen, clear the overlay so the
+                                // boss overlay doesn't sit above the Game Over visuals.
+                                try { if (window.game && game.gameOver) { ctx.clearRect(0,0,overlay.width, overlay.height); return; } } catch(_){}
                                 const q = window.game && game.enemySprites ? (game.enemySprites['The Great Beaked One'] || game.enemySprites.thegreatbeakedone || null) : null;
                                 const boss = (window.game && Array.isArray(game.enemies)) ? game.enemies.find(e => e && (e.type === 'The Great Beaked One' || e._isEldritchFinal)) : null;
                                 if (!q || !boss) { ctx.clearRect(0,0,overlay.width, overlay.height); return; }
@@ -36324,6 +36556,8 @@ function offerPermanentAbilityChoice() {
                         function drawHB(){
                             requestAnimationFrame(drawHB);
                             try {
+                                // Hide healthbar overlay during Game Over so it doesn't sit above the Game Over screen
+                                try { if (window.game && game.gameOver) { ctx.clearRect(0,0,overlay.width || 0, overlay.height || 0); return; } } catch(_){}
                                 ctx.clearRect(0,0,overlay.width || 0, overlay.height || 0);
                                 const boss = (window.game && Array.isArray(game.enemies)) ? game.enemies.find(e => e && (e.type === 'The Great Beaked One' || e._isEldritchFinal)) : null;
                                 if (!boss || typeof boss.health !== 'number') return;
@@ -36587,6 +36821,11 @@ function offerPermanentAbilityChoice() {
                             const vx = (game && game.projectilesSoA && game.projectilesSoA.vx) ? game.projectilesSoA.vx[idx] : (t && t.vx) || 0;
                             const vy = (game && game.projectilesSoA && game.projectilesSoA.vy) ? game.projectilesSoA.vy[idx] : (t && t.vy) || 0;
                             const ang = Math.atan2(vy || 0, vx || 0) || 0; sprite.rotation = ang;
+                            // Special handling for goldtooth: spin and enlarge
+                            if (key === 'goldtooth') {
+                                sprite._spinRotation = (sprite._spinRotation || 0) + 0.5;
+                                sprite.rotation += sprite._spinRotation;
+                            }
                             // Normalize origin and depth for consistent rendering
                             try { sprite.setOrigin && sprite.setOrigin(0.5, 0.5); } catch(_){}
                             try { sprite.setDepth && sprite.setDepth(1200); } catch(_){}
@@ -36604,6 +36843,7 @@ function offerPermanentAbilityChoice() {
                                     // Slightly enlarge the default (plain) bullet for readability
                                     let dr = desiredR;
                                     try { if (key === 'plain') dr = Math.ceil(desiredR * 1.22); } catch(_){}
+                                    try { if (key === 'goldtooth') dr = Math.ceil(desiredR * 3); } catch(_){}
                                     const scale = (dr * 2) / texW;
                                     if (isFinite(scale) && scale > 0) sprite.setScale(scale);
                                     else sprite.setDisplaySize(dr*2, dr*2);
@@ -36611,6 +36851,7 @@ function offerPermanentAbilityChoice() {
                                     try { sprite.setDisplaySize(desiredR*2, desiredR*2); } catch(_){ }
                                 }
                             } catch(_) { try { sprite.setDisplaySize(desiredR*2, desiredR*2); } catch(_){} }
+                            if (key === 'goldtooth') { try { sprite.setDisplaySize(32, 32); } catch(_){} }
                             sprite._projIdx = idx;
                             game._projSpriteByIndex = game._projSpriteByIndex || new Map();
                             game._projSpriteByIndex.set(idx, sprite);
@@ -36642,6 +36883,12 @@ function offerPermanentAbilityChoice() {
                                                 const vx = game.projectilesSoA.vx[idx] || 0; const vy = game.projectilesSoA.vy[idx] || 0;
                                                 const a = Math.atan2(vy, vx);
                                                 if (isFinite(a)) sprite.rotation = a;
+                                                // Special handling for goldtooth: force size and add spinning
+                                                if (sprite.texture && sprite.texture.key === 'goldtooth') {
+                                                    sprite.setDisplaySize(40, 40);
+                                                    sprite.rotation += (sprite._spinAccum || 0) + 0.3;
+                                                    sprite._spinAccum = (sprite._spinAccum || 0) + 0.3;
+                                                }
                                                 // If sprite was created with a pending key, and texture is now available, apply it
                                                 try {
                                                     const sc = window.__PHASER_BULLET_SCENE__;
