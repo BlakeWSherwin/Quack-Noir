@@ -323,12 +323,8 @@
         }
         if (typeof window.unlockDuckAndCover !== 'function') {
             window.unlockDuckAndCover = function(source){
-                try { if (!window.game) window.game = {}; } catch(_){ }
-                try { game._duckAndCoverUnlocked = true; } catch(_){ }
-                try { if (localStorage && localStorage.setItem) localStorage.setItem('duckAndCoverUnlocked', '1'); } catch(_){ }
-                try { console.info('[Progress-stub] Duck and Cover unlocked (early stub)', source || 'early-stub'); } catch(_){ }
-                try { if (typeof showToast === 'function') showToast('Duck and Cover unlocked!'); } catch(_){ }
-                try { const menu = document.getElementById('titleActMenu'); if (menu && typeof menu._refresh === 'function') menu._refresh(); } catch(_){ }
+                // Early stub unlock removed - Duck and Cover should only unlock after Act III completion
+                try { console.info('[Progress-stub] Duck and Cover unlock attempted but blocked', source || 'blocked'); } catch(_){ }
             };
         }
         if (typeof window.safeUnlockDuckAndCover !== 'function') {
@@ -6650,7 +6646,7 @@ function saveSelectedAct() {
                     const cur = game && game.bgMusic && game.bgMusic.src ? String(game.bgMusic.src) : '';
                     if (cur && cur.includes('GooseGhetto')) {
                         try { if (game.bgMusic) { game._prevMusicSrc = game.bgMusic.src; try { game.bgMusic.pause(); } catch(_){} } } catch(_){ }
-                        game.bgMusic = new Audio('assets/audio/QuackshotChronicles.mp3');
+                        game.bgMusic = new Audio('assets/audio/waves/track1.mp3');
                         game.bgMusic.loop = true; game.bgMusic.volume = 0.55;
                         try { applyMusicPreference(); } catch(_){}
                         try { if (game.musicEnabled) game.bgMusic.play().catch(()=>{}); } catch(_){}
@@ -7547,7 +7543,7 @@ function ensureBackgroundMusic() {
         } catch(_){ }
         if (!game.bgMusic) {
             // Always initialize with default music; act-specific switching handled by ensureActMusic
-            let src = 'assets/audio/QuackshotChronicles.mp3';
+            let src = 'assets/audio/waves/track1.mp3';
             // initializing bgMusic with default source
             const m = new Audio(src);
             m.loop = true; m.volume = 0.55; game.bgMusic = m;
@@ -8679,6 +8675,90 @@ try {
         bioPath: 'assets/dossier/text/goldengoose.md'
     });
 } catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Broodwaddle'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Broodwaddle'] || {}, {
+        image: 'assets/dossier/art/broodwaddle.png',
+        bioPath: 'assets/dossier/text/broodwaddle.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['The Great Beaked One'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['The Great Beaked One'] || {}, {
+        image: 'assets/dossier/art/greatbeakedone.png',
+        bioPath: 'assets/dossier/text/greatbeakedone.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Billnarock the Unhatched'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Billnarock the Unhatched'] || {}, {
+        image: 'assets/dossier/art/billnarock.png',
+        bioPath: 'assets/dossier/text/billnarock.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Downspawn of the Abyss'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Downspawn of the Abyss'] || {}, {
+        image: 'assets/dossier/art/downspawnofabyss.png',
+        bioPath: 'assets/dossier/text/downspawnoftheabyss.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Featheroth the Molten'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Featheroth the Molten'] || {}, {
+        image: 'assets/dossier/art/featheroth.png',
+        bioPath: 'assets/dossier/text/featheroththemolten.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Feathered Sleeper'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Feathered Sleeper'] || {}, {
+        image: 'assets/dossier/art/featheredsleeper.png',
+        bioPath: 'assets/dossier/text/featheredsleeper.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Waddlemancer'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Waddlemancer'] || {}, {
+        image: 'assets/dossier/art/waddlemancer.png',
+        bioPath: 'assets/dossier/text/waddlemancer.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['The Beakoner'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['The Beakoner'] || {}, {
+        image: 'assets/dossier/art/beakoner.png',
+        bioPath: 'assets/dossier/text/beakoner.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Quackos Eternal'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Quackos Eternal'] || {}, {
+        image: 'assets/dossier/art/quackoseternal.png',
+        bioPath: 'assets/dossier/text/quackoseternal.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Mallard of the Mire'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Mallard of the Mire'] || {}, {
+        image: 'assets/dossier/art/mallardofthemire.png',
+        bioPath: 'assets/dossier/text/mallardofthemire.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Plumagorgon'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Plumagorgon'] || {}, {
+        image: 'assets/dossier/art/plumagorgon.png',
+        bioPath: 'assets/dossier/text/plumagorgon.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Molted Menace'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Molted Menace'] || {}, {
+        image: 'assets/dossier/art/moltedmenace.png',
+        bioPath: 'assets/dossier/text/moltedmenace.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Artisanal Sourduck...of Doom'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Artisanal Sourduck...of Doom'] || {}, {
+        image: 'assets/dossier/art/artisanalsourduck.png',
+        bioPath: 'assets/dossier/text/sourduck.md'
+    });
+} catch(_){ }
+try {
+    window.ENEMY_DOSSIER_DATA['Mirequacker'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Mirequacker'] || {}, {
+        image: 'assets/dossier/art/mirequacker.png',
+        bioPath: 'assets/dossier/text/mirequacker.md'
+    });
+} catch(_){ }
 
 function ensureEnemyDossierState() {
     try { if (!window.game) window.game = {}; } catch(_){ }
@@ -8823,7 +8903,7 @@ function showEnemyDossier() {
     detailStats.style.cssText = 'font-size:12px;color:#8fd8a6;margin-top:6px;letter-spacing:0.3px;';
 
     const detailImageWrap = document.createElement('div');
-    detailImageWrap.style.cssText = 'margin-top:12px;height:240px;border-radius:10px;border:1px solid #242731;background:#08090d;display:flex;align-items:center;justify-content:center;overflow:hidden;';
+    detailImageWrap.style.cssText = 'margin-top:12px;height:180px;border-radius:10px;border:1px solid #242731;background:#666666;display:flex;align-items:center;justify-content:center;overflow:hidden;';
     const detailImage = document.createElement('img');
     detailImage.style.cssText = 'max-width:100%;max-height:100%;display:none;image-rendering:auto;';
     const detailImageFallback = document.createElement('div');
@@ -9145,15 +9225,7 @@ function showTitleScreen() {
     try { actIIUnlocked = !!(game && game._actIIUnlocked) || (localStorage && localStorage.getItem && localStorage.getItem('actIIUnlocked') === '1'); } catch(_) { actIIUnlocked = !!(game && game._actIIUnlocked); }
     try { actIIIUnlocked = !!(game && game._actIIIUnlocked) || (localStorage && localStorage.getItem && localStorage.getItem('actIIIUnlocked') === '1'); } catch(_) { actIIIUnlocked = !!(game && game._actIIIUnlocked); }
     try { actIVUnlocked = !!(game && game._actIVUnlocked) || (localStorage && localStorage.getItem && localStorage.getItem('actIVUnlocked') === '1'); } catch(_) { actIVUnlocked = !!(game && game._actIVUnlocked); }
-    // Fallback: if Quacken was defeated but Act IV not unlocked, unlock it now
-    try {
-        if (!actIVUnlocked && ((game && game._quackenDefeated) || (localStorage && localStorage.getItem && localStorage.getItem('quackenDefeated') === '1'))) {
-            actIVUnlocked = true;
-            try { localStorage.setItem('actIVUnlocked', '1'); } catch(_){ }
-            try { if (game) game._actIVUnlocked = true; } catch(_){ }
-            console.info('[Fallback] Act IV unlocked due to previous Quacken defeat');
-        }
-    } catch(_){ }
+    // Removed fallback unlock - Act IV should only unlock when The Quacken is defeated in the current session
     let duckUnlocked = false;
     try { duckUnlocked = !!(game && game._duckAndCoverUnlocked) || (localStorage && localStorage.getItem && localStorage.getItem('duckAndCoverUnlocked') === '1'); } catch(_) { duckUnlocked = !!(game && game._duckAndCoverUnlocked); }
 
@@ -10102,7 +10174,7 @@ function ensureActMusic(actId) {
                 trackSrc = pickDuckWaveTrack();
             }
             if (!trackSrc) {
-                trackSrc = 'assets/audio/QuackshotChronicles.mp3';
+                trackSrc = 'assets/audio/waves/track1.mp3';
             }
 
             const currentSrc = (game && game.bgMusic && game.bgMusic.src) ? String(game.bgMusic.src) : '';
@@ -10117,7 +10189,7 @@ function ensureActMusic(actId) {
                 } catch(_){ }
                 try {
                     const next = new Audio(trackSrc);
-                    next.loop = true;
+                    setupDuckTrackProgression(next);
                     const priorVol = (game && game.bgMusic && typeof game.bgMusic.volume === 'number') ? game.bgMusic.volume : 0.55;
                     next.volume = priorVol;
                     game.bgMusic = next;
@@ -10139,7 +10211,7 @@ function ensureActMusic(actId) {
         }
 
         // Map act to desired source
-        let desired = 'assets/audio/QuackshotChronicles.mp3';
+        let desired = 'assets/audio/waves/track1.mp3';
         if (act === 'II') desired = 'assets/audio/GooseGhetto.mp3';
         else if (act === 'III') desired = 'assets/audio/MetalHeartsCollide.mp3';
         else if (act === 'IV') desired = 'assets/audio/eldritch1.mp3';
@@ -10152,11 +10224,9 @@ function ensureActMusic(actId) {
         if (curHas) {
             try { applyMusicPreference(); } catch(_){}
             try { updateAudioButtons(); } catch(_){}
-            try { game._actMusicSet = (act === 'II' || act === 'III' || act === 'IV'); } catch(_){}
-            if (act !== 'DuckAndCover') {
-                try { if (typeof setDuckNowPlaying === 'function') setDuckNowPlaying(null); } catch(_){ }
-                try { game._duckActiveTrack = null; } catch(_){ }
-            }
+            try { game._actMusicSet = (act === 'II' || act === 'III' || act === 'IV' || act === 'I'); } catch(_){}
+            try { if (typeof setDuckNowPlaying === 'function') setDuckNowPlaying(desired); } catch(_){ }
+            try { game._duckActiveTrack = desired; } catch(_){ }
             return;
         }
 
@@ -10170,9 +10240,9 @@ function ensureActMusic(actId) {
             game.bgMusic = m;
             try { applyMusicPreference(); } catch(_){}
             try { updateAudioButtons(); } catch(_){}
-            try { game._actMusicSet = (act === 'II' || act === 'III' || act === 'IV'); } catch(_){ }
-            try { if (typeof setDuckNowPlaying === 'function') setDuckNowPlaying(null); } catch(_){ }
-            try { game._duckActiveTrack = null; } catch(_){ }
+            try { game._actMusicSet = (act === 'II' || act === 'III' || act === 'IV' || act === 'I'); } catch(_){ }
+            try { if (typeof setDuckNowPlaying === 'function') setDuckNowPlaying(desired); } catch(_){ }
+            try { game._duckActiveTrack = desired; } catch(_){ }
         } catch(e) {
             console.warn('[ensureActMusic] failed to set bgMusic', e);
         }
@@ -10827,7 +10897,7 @@ function offerPermanentAbilityChoice() {
             'Enforcer':  { health: 130, speed: 0.7, damage: 25, color: '#FF4444', size: 34, xp: 35,  ranged: false, armor: 3 },
             'Boss Thug': { health: 350, speed: 0.6, damage: 40, color: '#FFD700', size: 52, xp: 200, ranged: false, armor: 5 },
             'Boss Gangster': { health: 520, speed: 0.65, damage: 50, color: '#4444FF', size: 56, xp: 260, ranged: true, rangedCooldown: 2000, armor: 6 },
-            'The Big Quack': { health: 10000, speed: 0.55, damage: 50, color: '#111111', size: 104, xp: 4000, ranged: true, rangedCooldown: 1600, armor: 10, bossFinal: true }
+            'The Big Quack': { health: 10000, speed: 0.55, damage: 50, color: '#111111', size: 104, xp: 4000, ranged: true, rangedCooldown: 1600, armor: 10, bossSecret: true }
         };
 
     // Act II exclusive enemy: Eggscobar (non-ranged)
@@ -10849,7 +10919,7 @@ function offerPermanentAbilityChoice() {
     ENEMY_TYPES['Goosey Elliot'] = { health: 82, speed: 1.0, damage: 16, color: '#DCEECC', size: 28, xp: 24, ranged: false, armor: 0, act: 'II' };
     ENEMY_TYPES['Fowl Pacino'] = { health: 96, speed: 0.95, damage: 18, color: '#E0D4B8', size: 32, xp: 36, ranged: false, armor: 0, act: 'II' };
     // Rare melee enemy: The Quacken (spawns via special 1% override in any street)
-    ENEMY_TYPES['The Quacken'] = { health: 1000, speed: 0.82, damage: 24, color: '#2F6B68', size: 42, xp: 160, ranged: false, armor: 2, act: 'II' };
+    ENEMY_TYPES['The Quacken'] = { health: 1000, speed: 0.82, damage: 24, color: '#2F6B68', size: 42, xp: 160, ranged: false, armor: 2, act: 'Secret' };
     // Act II ranged grunt: Geese Robbins
     ENEMY_TYPES['Geese Robbins'] = { health: 90, speed: 1.02, damage: 14, color: '#DDE8FF', size: 30, xp: 32, ranged: true, rangedCooldown: 700, armor: 0, act: 'II' };
 
@@ -10889,7 +10959,7 @@ function offerPermanentAbilityChoice() {
     ENEMY_TYPES['Swanomaly'] = { health: 220, speed: 0.52, damage: 18, color: '#E6F4FF', size: 56, xp: 420, ranged: false, armor: 3, act: 'III' };
     // Act IV final boss: The Great Beaked One (stationary eldritch boss that releases tentacles)
     // Make this boss a bullet-hell source: keep it stationary but fire very rapidly
-    ENEMY_TYPES['The Great Beaked One'] = { health: 8000, speed: 0.0, damage: 72, color: '#2b1b3a', size: 220, xp: 20000, ranged: true, rangedCooldown: 60, armor: 12, act: 'IV', boss: true, spawnStreet: 5, bossFinal: true };
+    ENEMY_TYPES['The Great Beaked One'] = { health: 8000, speed: 0.0, damage: 72, color: '#2b1b3a', size: 220, xp: 20000, ranged: true, rangedCooldown: 60, armor: 12, act: 'Secret', boss: true, spawnStreet: 5, bossFinal: true };
     // Act III ranged enemy: Swan Wick (exclusive to Act III)
     // Uses assets/swans/spritesheets/swanwick-sheet-3-29.png (animated spritesheet, frames 3-29, left/right facing only, mirrors for left).
     // Uses assets/swans/swanwick.png. Default side faces right; left is mirrored.
@@ -11202,7 +11272,7 @@ function offerPermanentAbilityChoice() {
             ];
             const PLAYER_TARGET_HEIGHT = 54;
             game.player = game.player || {};
-            game.player.facing = game.player.facing || 'down';
+            game.player.facing = game.player.facing || 'right';
             game.player.animFrame = 0;
             game.player.animTimer = 0;
             game.player.animSpeed = 7;
@@ -11299,6 +11369,37 @@ function offerPermanentAbilityChoice() {
                 game.player.walkAnimations.right = game.player.walkFrames;
             }
 
+            function applyDirectionalIdleFrame(image, direction) {
+                if (!image || !direction) return;
+                // Use the full image bounds for directional idle sprites
+                const bounds = { x: 0, y: 0, w: image.naturalWidth || image.width, h: image.naturalHeight || image.height };
+                
+                // Calculate centering offset for horizontal alignment
+                let xOffset = 0;
+                if (direction === 'down') {
+                    // Shift playerdown.png to the left for better alignment with walking animation
+                    xOffset = Math.round(bounds.w * 0.15); // 15% of image width
+                }
+                
+                const frame = {
+                    image,
+                    x: bounds.x - xOffset, // Shift left by subtracting offset
+                    y: bounds.y,
+                    w: bounds.w + xOffset, // Increase width to compensate for negative offset
+                    h: bounds.h,
+                    visibleHeight: 200, // Match the visibleHeight used by up/down walk frames
+                    visibleWidth: 400   // Match the visibleWidth used by up/down walk frames
+                };
+                // Initialize directionalFrames if it doesn't exist
+                if (!game.player.directionalFrames) {
+                    game.player.directionalFrames = {};
+                }
+                // Set the specific directional frame
+                game.player.directionalFrames[direction] = frame;
+                // Apply scaling based on this frame's visibleHeight
+                applyPlayerScaleFromHeight(200);
+            }
+
             function applyIdleFrame(image) {
                 if (!image) return;
                 let bounds = { ...PLAYER_IDLE_BOUNDS };
@@ -11387,6 +11488,16 @@ function offerPermanentAbilityChoice() {
             game.player.idleImage.onload = () => applyIdleFrame(game.player.idleImage);
             game.player.idleImage.onerror = (err) => { console.warn('[PlayerSprite] idle sprite failed to load', err); };
             game.player.idleImage.src = 'assets/player-side.png';
+
+            if (!game.player.idleUpImage) game.player.idleUpImage = new Image();
+            game.player.idleUpImage.onload = () => applyDirectionalIdleFrame(game.player.idleUpImage, 'up');
+            game.player.idleUpImage.onerror = (err) => { console.warn('[PlayerSprite] idle up sprite failed to load', err); };
+            game.player.idleUpImage.src = 'assets/playerup.png';
+
+            if (!game.player.idleDownImage) game.player.idleDownImage = new Image();
+            game.player.idleDownImage.onload = () => applyDirectionalIdleFrame(game.player.idleDownImage, 'down');
+            game.player.idleDownImage.onerror = (err) => { console.warn('[PlayerSprite] idle down sprite failed to load', err); };
+            game.player.idleDownImage.src = 'assets/playerdown.png';
 
             // Legacy sprite flags kept for fallback detection
             game.sprites = game.sprites || {};
@@ -15304,6 +15415,41 @@ function offerPermanentAbilityChoice() {
             return DUCK_WAVE_TRACKS[idx];
         }
 
+        function setupDuckTrackProgression(audioElement) {
+            if (!audioElement) return;
+            audioElement.loop = false;
+            audioElement.addEventListener('ended', function() {
+                try {
+                    // Pick a new random track
+                    const nextTrack = pickDuckWaveTrack();
+                    if (nextTrack && game && game.bgMusic) {
+                        const nextAudio = new Audio(nextTrack);
+                        nextAudio.loop = false;
+                        nextAudio.volume = audioElement.volume;
+                        
+                        // Set up the next track's progression
+                        setupDuckTrackProgression(nextAudio);
+                        
+                        // Update game state
+                        game._duckActiveTrack = nextTrack;
+                        game.bgMusic = nextAudio;
+                        
+                        // Update now playing display
+                        if (typeof setDuckNowPlaying === 'function') {
+                            setDuckNowPlaying(nextTrack);
+                        }
+                        
+                        // Start playing if music is enabled
+                        if (game.musicEnabled) {
+                            try { nextAudio.play().catch(()=>{}); } catch(_){ }
+                        }
+                    }
+                } catch (err) {
+                    try { console.warn('[DuckMusic] Track progression failed', err); } catch(_){ }
+                }
+            });
+        }
+
         function ensureDuckTrackMetaCache() {
             if (typeof window === 'undefined') {
                 return {};
@@ -16850,6 +16996,7 @@ function offerPermanentAbilityChoice() {
                                 applyMusicPreference();
                                 updateAudioButtons();
                                 game._bossMusicPlaying = true;
+                                try { if (typeof setDuckNowPlaying === 'function') setDuckNowPlaying(null); } catch(_){ }
                             }
                         } catch(e) {}
                     }
@@ -17897,9 +18044,9 @@ function offerPermanentAbilityChoice() {
                 document.body.appendChild(overlay);
                 const close = ()=>{ try{ overlay.remove(); }catch(_){} };
                 btnAch.onclick = ()=>{ try { localStorage.removeItem('achievements_v1'); } catch(_) {} close(); location.reload(); };
-                btnProg.onclick = ()=>{ try { localStorage.removeItem('permanentAbilities'); localStorage.removeItem('seenAbilities_v1'); localStorage.removeItem(ENEMY_DOSSIER_STORAGE_KEY); } catch(_) {} try { if (game) { game._actIIUnlocked = false; game._actIIIUnlocked = false; } } catch(_){} try { if (localStorage && localStorage.removeItem) { localStorage.removeItem('actIIUnlocked'); localStorage.removeItem('actIIIUnlocked'); } } catch(_){} close(); location.reload(); };
+                btnProg.onclick = ()=>{ try { localStorage.removeItem('permanentAbilities'); localStorage.removeItem('seenAbilities_v1'); localStorage.removeItem(ENEMY_DOSSIER_STORAGE_KEY); } catch(_) {} try { if (game) { game._actIIUnlocked = false; game._actIIIUnlocked = false; game._actIVUnlocked = false; game._duckAndCoverUnlocked = false; } } catch(_){} try { if (localStorage && localStorage.removeItem) { localStorage.removeItem('actIIUnlocked'); localStorage.removeItem('actIIIUnlocked'); localStorage.removeItem('actIVUnlocked'); localStorage.removeItem('duckAndCoverUnlocked'); } } catch(_){} close(); location.reload(); };
                 btnPerm.onclick = ()=>{ try { localStorage.removeItem('permanentAbilities'); localStorage.removeItem('seenAbilities_v1'); } catch(_) {} close(); location.reload(); };
-                btnBoth.onclick = ()=>{ try { localStorage.removeItem('achievements_v1'); localStorage.removeItem('permanentAbilities'); localStorage.removeItem('seenAbilities_v1'); localStorage.removeItem(ENEMY_DOSSIER_STORAGE_KEY); } catch(_) {} try { if (game) { game._actIIUnlocked = false; game._actIIIUnlocked = false; } } catch(_){} try { if (localStorage && localStorage.removeItem) { localStorage.removeItem('actIIUnlocked'); localStorage.removeItem('actIIIUnlocked'); } } catch(_){} close(); location.reload(); };
+                btnBoth.onclick = ()=>{ try { localStorage.removeItem('achievements_v1'); localStorage.removeItem('permanentAbilities'); localStorage.removeItem('seenAbilities_v1'); localStorage.removeItem(ENEMY_DOSSIER_STORAGE_KEY); } catch(_) {} try { if (game) { game._actIIUnlocked = false; game._actIIIUnlocked = false; game._actIVUnlocked = false; game._duckAndCoverUnlocked = false; } } catch(_){} try { if (localStorage && localStorage.removeItem) { localStorage.removeItem('actIIUnlocked'); localStorage.removeItem('actIIIUnlocked'); localStorage.removeItem('actIVUnlocked'); localStorage.removeItem('duckAndCoverUnlocked'); } } catch(_){} close(); location.reload(); };
                 btnCancel.onclick = ()=> close();
                 const esc = (e)=>{ if (e.key==='Escape') { e.preventDefault(); btnCancel.click(); window.removeEventListener('keydown', esc, true);} };
                 window.addEventListener('keydown', esc, true);
@@ -19106,13 +19253,16 @@ function offerPermanentAbilityChoice() {
             }
             // Enforce hard boundary for all enemies after every frame of motion/effects
             clampEnemiesToBounds();
-            // Lightweight rescue: if any enemy somehow drifts far outside bounds ( > logical + 200 ), teleport near center.
+            // Lightweight rescue: if any enemy somehow drifts far outside bounds ( > logical + 100 ), teleport near center.
             if (game.enemies && game.enemies.length) {
                 for (const en of game.enemies) {
                     if (!en) continue;
-                    if (en.x < -200 || en.y < -200 || en.x > LOGICAL_W + 200 || en.y > LOGICAL_H + 200) {
-                        en.x = LOGICAL_W/2 + (Math.random()*240 - 120);
-                        en.y = LOGICAL_H/2 + (Math.random()*240 - 120);
+                    if (en.x < -100 || en.y < -100 || en.x > LOGICAL_W + 100 || en.y > LOGICAL_H + 100) {
+                        en.x = LOGICAL_W/2 + (Math.random()*200 - 100);
+                        en.y = LOGICAL_H/2 + (Math.random()*200 - 100);
+                        // Reset knockback velocity to prevent further drifting
+                        if (en.kbVX) en.kbVX = 0;
+                        if (en.kbVY) en.kbVY = 0;
                     }
                 }
             }
@@ -19593,8 +19743,8 @@ function offerPermanentAbilityChoice() {
 
         function clampEnemiesToBounds() {
             if (!game.enemies) return;
-            const w = canvas.width;
-            const h = canvas.height;
+            const w = LOGICAL_W;
+            const h = LOGICAL_H;
             game.enemies.forEach(enemy => {
                 // Determine basic facing for sprite use (horizontal priority when significant, else vertical)
                 if (!enemy.facing) enemy.facing = 'down';
@@ -19607,9 +19757,9 @@ function offerPermanentAbilityChoice() {
                 }
                 if (!enemy) return;
                 const r = enemy.size || 16;
-                // Hard OOB kill: if an enemy somehow gets fully beyond a tolerance outside the canvas, kill it.
+                // Hard OOB kill: if an enemy somehow gets fully beyond a tolerance outside the logical bounds, kill it.
                 // Tolerance allows minor float drift without triggering death.
-                const tol = r * 1.2; // 120% of radius outside view before death
+                const tol = r * 1.5; // Increased tolerance for logical bounds enforcement
                 if (enemy.x < -tol || enemy.x > w + tol || enemy.y < -tol || enemy.y > h + tol) {
                     enemy.health = 0; // will be removed during enemy cleanup
                     return;
@@ -19625,7 +19775,7 @@ function offerPermanentAbilityChoice() {
                 if (enemy.y > maxY) { enemy.y = maxY; if (enemy.kbVY > 0) enemy.kbVY = 0; clamped = true; }
                 // If knockback velocity would push them further outside next frame, damp further
                 if (clamped && (enemy.kbVX || enemy.kbVY)) {
-                    enemy.kbVX *= 0.4; enemy.kbVY *= 0.4;
+                    enemy.kbVX *= 0.3; enemy.kbVY *= 0.3; // Stronger damping
                 }
             });
         }
@@ -19962,7 +20112,7 @@ function offerPermanentAbilityChoice() {
                         if (Math.abs(cosA) > Math.abs(sinA)) game.player.facing = cosA < 0 ? 'left' : 'right'; else game.player.facing = sinA < 0 ? 'up' : 'down';
                     }
                     const speed = wunder ? 14 : 12;
-                    const life = wunder ? 22 : 18;
+                    const life = wunder ? 70 : 60; // Increased lifetime for longer range
                     const radius = wunder ? 5 : 4;
                     const projIdx = game.spawnProjectile({
                         x: game.player.x + cosA * 16,
@@ -19987,6 +20137,10 @@ function offerPermanentAbilityChoice() {
                             }
                         }
                         if (homing) { metaObj.weakHoming = true; }
+                        // Add phasing if player has Phasing Shot ability
+                        if (effectiveAbilities.some(a => ABILITIES[a] && ABILITIES[a].effect.phasing)) {
+                            metaObj.phasing = true;
+                        }
                         if (metaStore) metaStore.set(projIdx, metaObj);
                     }
                     game._lastBeamSpawn = Date.now();
@@ -20009,7 +20163,7 @@ function offerPermanentAbilityChoice() {
                         y: game.player.y + Math.sin(angle) * 16,
                         vx: Math.cos(angle) * speed,
                         vy: Math.sin(angle) * speed,
-                        life: 26, // slightly shorter life; segments will tile densely
+                        life: 80, // Increased lifetime for longer range (was 26)
                         r: 7,
                         damage: Math.floor(base * 1.5) + 6,
                         damageType: 'plasma'
@@ -20026,6 +20180,7 @@ function offerPermanentAbilityChoice() {
                             if (ad.homing) { pMeta.weakHoming = true; }
                             if (ad.wunderDoodle) { wunder = true; pMeta.scribble = true; pMeta.wunderDoodle = true; }
                             if (typeof ad.damageBonus === 'number') pMeta.baseDamage += Math.floor(ad.damageBonus);
+                            if (ad.phasing) { pMeta.phasing = true; }
                         }
                     } catch(_) {}
                     if (wunder) pMeta.damageType = 'fire';
@@ -21009,12 +21164,14 @@ function offerPermanentAbilityChoice() {
                 if (projectile.energyType === 'laser' && game.player.abilities.some(a => ABILITIES[a] && ABILITIES[a].effect.continuous)) {
                     // beam segments are shorter-lived and tile along forward direction while holding fire
                     projectile.size = 8;
-                    projectile.life = 18; // lifespan of each segment (frames)
+                    projectile.life = 60; // Increased lifespan of each segment (frames) for longer range
                     projectile.vx = Math.cos(angle) * 12;
                     projectile.vy = Math.sin(angle) * 12;
                     projectile.beam = true;
                     projectile.beamOwner = 'player';
                     projectile.damage = calculateDamage();
+                    // Add phasing if player has Phasing Shot ability
+                    projectile.phasing = game.player.abilities.some(a => ABILITIES[a] && ABILITIES[a].effect.phasing);
                     // Beam pattern blending: inherit motion flags for visual modulation, not trajectory displacement
                     projectile.sineWave = projectile.sineWave || game.player.abilities.some(a=>ABILITIES[a]&&ABILITIES[a].effect.sineWave);
                     projectile.wackyZigzag = projectile.wackyZigzag || game.player.abilities.some(a=>ABILITIES[a]&&ABILITIES[a].effect.wackyZigzag);
@@ -21040,7 +21197,7 @@ function offerPermanentAbilityChoice() {
                         ekgWave: game.player.abilities.some(a=>ABILITIES[a]&&ABILITIES[a].effect.ekgWave),
                         spiralPattern: game.player.abilities.some(a=>ABILITIES[a]&&ABILITIES[a].effect.spiralPattern)
                     });
-                    if (metaStore && idx >= 0) metaStore.set(idx, { beam:true, particleBeam:true, beamOwner:'player', baseDamage:dmgBase, energyType:'particle', _beamPatternPhase:0, infusionElements: (game.player.infusions && game.player.infusions.length) ? game.player.infusions.map(i=>({type:i.type,potency:i.potency})) : null });
+                    if (metaStore && idx >= 0) metaStore.set(idx, { beam:true, particleBeam:true, beamOwner:'player', baseDamage:dmgBase, energyType:'particle', _beamPatternPhase:0, phasing: game.player.abilities.some(a => ABILITIES[a] && ABILITIES[a].effect.phasing), infusionElements: (game.player.infusions && game.player.infusions.length) ? game.player.infusions.map(i=>({type:i.type,potency:i.potency})) : null });
                 }
 
                 // Pulse Rifle: emit a short burst of 3 shots quickly instead of single projectile
@@ -21708,10 +21865,10 @@ function offerPermanentAbilityChoice() {
                     const decay = enemy._kbDecay || 0.88;
                     enemy.kbVX *= decay; enemy.kbVY *= decay;
                     enemy.kbFrames--;
-                    // Edge clamp handled globally after all movement; local failsafe (hard clamp to canvas bounds using size)
+                    // Edge clamp handled globally after all movement; local failsafe (hard clamp to logical bounds using size)
                     const r = enemy.size || 16;
-                    const minX = r; const maxX = canvas.width - r;
-                    const minY = r; const maxY = canvas.height - r;
+                    const minX = r; const maxX = LOGICAL_W - r;
+                    const minY = r; const maxY = LOGICAL_H - r;
                     if (enemy.x < minX) { enemy.x = minX; if (enemy.kbVX < 0) enemy.kbVX = 0; }
                     if (enemy.x > maxX) { enemy.x = maxX; if (enemy.kbVX > 0) enemy.kbVX = 0; }
                     if (enemy.y < minY) { enemy.y = minY; if (enemy.kbVY < 0) enemy.kbVY = 0; }
@@ -22001,7 +22158,8 @@ function offerPermanentAbilityChoice() {
                             vx: s.vx,
                             vy: s.vy,
                             life: 140,
-                            r: s.r || (enemy.type === 'The Big Quack' ? 5 : 3),
+                            // Make Act IV final boss projectiles a touch smaller — easier to dodge
+                            r: s.r || (enemy.type === 'The Big Quack' ? 5 : (enemy.type === 'The Great Beaked One' ? 2 : 3)),
                             damage: Math.floor(enemy.damage * s.dmgMul)
                         };
                         if (s.life) projArgs.life = s.life;
@@ -22539,6 +22697,7 @@ function offerPermanentAbilityChoice() {
                         game.bgMusic = new Audio('assets/audio/Cleansing.mp3');
                         game.bgMusic.loop = true;
                         try { game.bgMusic.play().catch(()=>{}); } catch(e) {}
+                        try { if (typeof setDuckNowPlaying === 'function') setDuckNowPlaying(null); } catch(_){ }
                     } catch(e) {}
                     // Display ending image overlay
                     if (!document.getElementById('endingOverlay')) {
@@ -28192,8 +28351,8 @@ function offerPermanentAbilityChoice() {
                         if (Math.random() < 0.035) {
                             const tx = enemy.x + (Math.random()-0.5) * 120;
                             const ty = enemy.y + (Math.random()-0.5) * 120;
-                            enemy.x = Math.max(40, Math.min(tx, canvas.width - 40));
-                            enemy.y = Math.max(40, Math.min(ty, canvas.height - 40));
+                            enemy.x = Math.max(40, Math.min(tx, LOGICAL_W - 40));
+                            enemy.y = Math.max(40, Math.min(ty, LOGICAL_H - 40));
                             addParticle(enemy.x, enemy.y, '#FFFFFF', 'spark');
                         }
                     }
@@ -28832,12 +28991,12 @@ function offerPermanentAbilityChoice() {
                                     const picked = pickDuckWaveTrack();
                                     if (picked) {
                                         game.bgMusic = new Audio(picked);
-                                        game.bgMusic.loop = true;
+                                        setupDuckTrackProgression(game.bgMusic);
                                         try { game._actMusicSet = true; } catch(_){ }
                                         game._duckActiveTrack = picked;
                                         setDuckNowPlaying(picked);
                                     } else {
-                                        game.bgMusic = new Audio('assets/audio/QuackshotChronicles.mp3');
+                                        game.bgMusic = new Audio('assets/audio/waves/track1.mp3');
                                         try { game._actMusicSet = false; } catch(_){ }
                                         game._duckActiveTrack = null;
                                         setDuckNowPlaying(null);
@@ -28846,26 +29005,31 @@ function offerPermanentAbilityChoice() {
                                     // Preserve Act III music when restarting from Act III
                                     game.bgMusic = new Audio('assets/audio/MetalHeartsCollide.mp3');
                                     try { game._actMusicSet = true; } catch(_){ }
-                                    game._duckActiveTrack = null;
-                                    setDuckNowPlaying(null);
+                                    game._duckActiveTrack = 'assets/audio/MetalHeartsCollide.mp3';
+                                    setDuckNowPlaying('assets/audio/MetalHeartsCollide.mp3');
                                 } else if (game && game._selectedAct && String(game._selectedAct) === 'II') {
                                     game.bgMusic = new Audio('assets/audio/GooseGhetto.mp3');
                                     try { game._actMusicSet = true; } catch(_){ }
-                                    game._duckActiveTrack = null;
-                                    setDuckNowPlaying(null);
+                                    game._duckActiveTrack = 'assets/audio/GooseGhetto.mp3';
+                                    setDuckNowPlaying('assets/audio/GooseGhetto.mp3');
                                 } else if (game && game._selectedAct && String(game._selectedAct) === 'IV') {
                                     game.bgMusic = new Audio('assets/audio/eldritch1.mp3');
                                     try { game._actMusicSet = true; } catch(_){ }
-                                    game._duckActiveTrack = null;
-                                    setDuckNowPlaying(null);
+                                    game._duckActiveTrack = 'assets/audio/eldritch1.mp3';
+                                    setDuckNowPlaying('assets/audio/eldritch1.mp3');
+                                } else if (game && game._selectedAct && String(game._selectedAct) === 'I') {
+                                    game.bgMusic = new Audio('assets/audio/waves/track1.mp3');
+                                    try { game._actMusicSet = true; } catch(_){ }
+                                    game._duckActiveTrack = 'assets/audio/waves/track1.mp3';
+                                    setDuckNowPlaying('assets/audio/waves/track1.mp3');
                                 } else {
-                                    game.bgMusic = new Audio('assets/audio/QuackshotChronicles.mp3');
+                                    game.bgMusic = new Audio('assets/audio/waves/track1.mp3');
                                     try { game._actMusicSet = false; } catch(_){ }
-                                    game._duckActiveTrack = null;
-                                    setDuckNowPlaying(null);
+                                    game._duckActiveTrack = 'assets/audio/waves/track1.mp3';
+                                    setDuckNowPlaying('assets/audio/waves/track1.mp3');
                                 }
                             } catch(_) {
-                                game.bgMusic = new Audio('assets/audio/QuackshotChronicles.mp3');
+                                game.bgMusic = new Audio('assets/audio/waves/track1.mp3');
                                 try { game._actMusicSet = false; } catch(_){ }
                                 game._duckActiveTrack = null;
                                 setDuckNowPlaying(null);
@@ -28892,8 +29056,8 @@ function offerPermanentAbilityChoice() {
             game.player = {
                 x: 320, y: 240, health: 100, maxHealth: 100,
                 abilities: [], permanentAbilities: [],
-                facing: 'down',
-                lastDirection: { x: 0, y: 1 },
+                facing: 'right',
+                lastDirection: { x: 1, y: 0 },
                 invulnerable: false, invulnTime: 0,
                 speed: 2.5,
                 // Animation state
@@ -35064,7 +35228,9 @@ function offerPermanentAbilityChoice() {
                         const drawH = Math.max(24, Math.min(64, ih));
                         const lscale = drawH / Math.max(1, ih);
                         const drawW = Math.round(iw * lscale);
-                        const yOffset = 10; // nudge under feet
+                        // nudge under feet; move slightly lower in boss fights so player stands centered
+                        // shifted additional 8px downward per request (14 -> 22)
+                        const yOffset = 22;
                         ctx.save();
                         ctx.globalAlpha = 0.98;
                         ctx.drawImage(img, px - drawW/2, py - drawH/2 + yOffset, drawW, drawH);
@@ -35955,8 +36121,8 @@ function offerPermanentAbilityChoice() {
                     if (auraText !== lastAuraText) { elAura.textContent = auraText; lastAuraText = auraText; }
                 }
 
-                const nowPlayingInfo = (duckMode && game._duckNowPlaying && game._duckNowPlaying.display) ? game._duckNowPlaying.display : '';
-                const showNowPlaying = !!(duckMode && nowPlayingInfo);
+                const nowPlayingInfo = (game._duckNowPlaying && game._duckNowPlaying.display) ? game._duckNowPlaying.display : '';
+                const showNowPlaying = !!(nowPlayingInfo);
                 if (elNowPlayingWrap) {
                     const displayStyle = showNowPlaying ? 'flex' : 'none';
                     if (displayStyle !== lastNowPlayingVisible) {
