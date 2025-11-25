@@ -1399,7 +1399,23 @@
             _duckStageInitialized: false,
             _duckInitialChestsPlaced: false,
             _duckWaveSpawning: false,
-            _duckWaveBannerTimer: null
+            _duckWaveBannerTimer: null,
+            creditsScene: false,
+            creditsEnemies: [],
+            creditsIndex: 0,
+            creditsState: 'fade_black',
+            creditsFade: 0,
+            creditsBgImg: null,
+            creditsBgLoaded: false,
+            creditsEnemyX: 0,
+            creditsEnemySpeed: 2,
+            creditsStopX: 0,
+            creditsStopTime: 0,
+            creditsFlashTime: 0,
+            creditsName: '',
+            creditsEnemyFrame: 0,
+            creditsFrameTimer: 0,
+            creditsMusic: null
         };
         try {
             if (localStorage && localStorage.getItem && localStorage.getItem('duckAndCoverUnlocked') === '1') {
@@ -3341,7 +3357,38 @@
                     }
                     x[i] += dx * dt; y[i] += dy * dt;
 
-                    // Gold tooth travelling-side sparkles and small AoE tick
+                    // SoA Sine Wave lateral oscillation
+                    if (meta && meta.sineWave && !isBeam && !isEnemy) {
+                        // Ensure basis vectors
+                        if (!meta._agg || meta._agg.baseSpeed == null) {
+                            const sp = Math.sqrt(vx[i]*vx[i] + vy[i]*vy[i]) || 0.0001;
+                            meta._agg = meta._agg || {};
+                            meta._agg.baseSpeed = sp;
+                            meta._agg.fwX = vx[i] / sp;
+                            meta._agg.fwY = vy[i] / sp;
+                            if (Math.random() < 0.5) { meta._agg.px = -meta._agg.fwY; meta._agg.py = meta._agg.fwX; }
+                            else { meta._agg.px = meta._agg.fwY; meta._agg.py = -meta._agg.fwX; }
+                        }
+                        // Sine wave lateral oscillation
+                        if (!meta._sineInit) {
+                            meta._sineInit = true;
+                            meta._fwx = meta._agg.fwX; meta._fwy = meta._agg.fwY;
+                            meta._px = meta._agg.px; meta._py = meta._agg.py;
+                            const ampBase = 14 + Math.random()*8;
+                            const baseSp = meta._agg.baseSpeed;
+                            meta._sineAmp = Math.min(26, ampBase + baseSp*1.2);
+                            meta._sineFreq = 0.18 + Math.random()*0.10;
+                            meta._sinePhase = Math.random() * Math.PI * 2;
+                            meta._lastOffset = 0;
+                            meta._baseSpeed = meta._agg.baseSpeed;
+                        }
+                        meta._sinePhase += meta._sineFreq;
+                        const offset = Math.sin(meta._sinePhase) * meta._sineAmp;
+                        const delta = offset - meta._lastOffset;
+                        meta._lastOffset = offset;
+                        x[i] += meta._px * delta;
+                        y[i] += meta._py * delta;
+                    }
                     try {
                         const meta = metaList[i];
                         if (meta && meta.goldTooth && life[i] > 0) {
@@ -8351,7 +8398,34 @@ function preloadActSprites(actId, timeoutMs){
                         const variants = [t, t.toLowerCase(), t.replace(/\s+/g,''), t.toLowerCase().replace(/\s+/g,'')];
                         let cont = null;
                         for (let v of variants){ if (game.enemySprites && game.enemySprites[v]) { cont = game.enemySprites[v]; break; } }
-                        if (!cont) { res(); return; }
+                        if (!cont) {
+                            // Load the sprite if not present
+                            let path = 'assets/enemies/' + t.toLowerCase().replace(/\s+/g,'') + '.png';
+                            if (t === 'Golden Goose') path = 'assets/enemies/goldengoose.png';
+                            if (t === 'The Great Beaked One') path = 'assets/enemies/thegreatbeakedone.png';
+                            if (t === 'Cardi Beak') path = 'assets/enemies/cardiBeak.png';
+                            if (t === 'The Quacken') path = 'assets/enemies/quacken.png';
+                            const img = new Image();
+                            let loaded = false;
+                            img.onload = () => {
+                                loaded = true;
+                                if (!game.enemySprites) game.enemySprites = {};
+                                game.enemySprites[variants[0]] = { image: img, loaded: true };
+                            };
+                            img.src = path;
+                            // Wait for loaded or timeout
+                            const iv = setInterval(() => {
+                                if (loaded) {
+                                    clearInterval(iv);
+                                    res();
+                                }
+                            }, 80);
+                            setTimeout(() => {
+                                clearInterval(iv);
+                                res();
+                            }, timeoutMs || 3000);
+                            return;
+                        }
                         // Consider the sprite ready if loaded flag set, fallback bitmap present, or image decoded (naturalWidth available)
                         const isImgReady = (cont.image && (cont.image.naturalWidth || cont.image.width));
                         if (cont.loaded || cont._forcedBitmap || isImgReady) { res(); return; }
@@ -8398,7 +8472,7 @@ function preloadActSprites(actId, timeoutMs){
                         const onCheck = ()=>{ try{ if (done) return; const rdy = (cont.loaded || cont._forcedBitmap || (cont.image && (cont.image.naturalWidth || cont.image.width))); if (rdy) finish(); }catch(_){} };
                         const iv = setInterval(onCheck, 80);
                         // timeout fallback
-                        setTimeout(()=>{ try{ if (done) return; finish(); }catch(_){ try{ res(); }catch(_){} } }, timeoutMs || 1600);
+                        setTimeout(()=>{ try{ if (done) return; finish(); }catch(_){ try{ res(); }catch(_){} } }, timeoutMs || 3000);
                     } catch(e){ res(); }
                 });
             });
@@ -8515,13 +8589,13 @@ function showActTransition(actId, options){
             } catch(e){ try { resolve(); } catch(_){} }
         });
     }
-    const minMs = typeof options.minMs === 'number' ? options.minMs : 2000;
-    const preloadTimeout = typeof options.preloadTimeout === 'number' ? options.preloadTimeout : 1800;
+    const minMs = typeof options.minMs === 'number' ? options.minMs : 2500;
+    const preloadTimeout = typeof options.preloadTimeout === 'number' ? options.preloadTimeout : 3000;
     if (String(actId) === 'IV') {
         // Play the Act IV two-step intro before showing the standard transition overlay
         return showActIVCutscene().then(() => {
             const ov = _createActTransitionOverlay(); const txt = document.getElementById('actTransitionOverlayText');
-            const label = 'Marsh of the Unfathomallard';
+            const label = 'Marsh of a Thousand Quacks';
             if (txt) txt.textContent = label;
             try { console.info('[ActTransition] show', actId, label); } catch(_){ }
             ov.style.pointerEvents = 'auto'; ov.style.opacity = '1';
@@ -8604,7 +8678,7 @@ function showActTransition(actId, options){
         });
     } else {
         try { const ov = _createActTransitionOverlay(); const txt = document.getElementById('actTransitionOverlayText');
-        const label = (''+actId) === 'I' ? 'New Quack City' : ((''+actId) === 'II' ? 'Goose Ghetto' : ((''+actId) === 'III' ? 'Wunderswan\'s Domain' : ((''+actId) === 'IV' ? 'Marsh of the Unfathomallard' : ((''+actId) === 'DuckAndCover' ? 'Duck and Cover' : (''+actId)))));
+        const label = (''+actId) === 'I' ? 'New Quack City' : ((''+actId) === 'II' ? 'Goose Ghetto' : ((''+actId) === 'III' ? 'Wunderswan\'s Domain' : ((''+actId) === 'IV' ? 'Marsh of a Thousand Quacks' : ((''+actId) === 'DuckAndCover' ? 'Duck and Cover' : (''+actId)))));
             if (txt) txt.textContent = label;
             try { console.info('[ActTransition] show', actId, label); } catch(_){ }
             ov.style.pointerEvents = 'auto'; ov.style.opacity = '1';
@@ -8640,7 +8714,7 @@ const ENEMY_DOSSIER_ACT_LABELS = {
     'I': 'Act I — New Quack City',
     'II': 'Act II — Goose Ghetto',
     'III': 'Act III — Wunderswan\'s Domain',
-    'IV': 'Act IV — Marsh of the Unfathomallard',
+    'IV': 'Act IV — Marsh of a Thousand Quacks',
     'Secret': 'Classified Encounters'
 };
 
@@ -9394,7 +9468,7 @@ function showTitleScreen() {
             { id: 'I', label: 'Act I: New Quack City', locked: false }, 
             { id: 'II', label: 'Act II: Goose Ghetto', locked: !actIIUnlocked, lockReason: 'Find and defeat the Golden Goose' }, 
             { id: 'III', label: 'Act III: Wunderswan\'s domain', locked: !actIIIUnlocked, lockReason: 'Survive the Wunderswan' },
-            { id: 'IV', label: 'Act IV: Marsh of the Unfathomallard', locked: !actIVUnlocked, lockReason: 'Defeat The Quacken' },
+            { id: 'IV', label: 'Act IV: Marsh of a Thousand Quacks', locked: !actIVUnlocked, lockReason: 'Defeat The Quacken' },
             { id: 'DuckAndCover', label: 'Duck and Cover', locked: !duckUnlocked, lockReason: 'Complete Act III to unlock' }
         ];
     const items = [];
@@ -10090,25 +10164,8 @@ function showTitleScreen() {
 
     // Lightweight on-screen developer event log to survive console spam.
     function devLog(msg) {
-        try {
-            if (!window._devLogEl) {
-                const el = document.createElement('div');
-                el.id = 'devEventLog';
-                el.style.cssText = 'position:fixed;right:12px;top:12px;max-width:34vw;min-width:220px;max-height:40vh;overflow:auto;padding:8px 10px;background:rgba(6,6,8,0.85);color:#ffd;border:1px solid rgba(255,255,255,0.06);border-radius:8px;font-family:monospace;font-size:12px;line-height:1.25;z-index:20002;box-shadow:0 6px 30px rgba(0,0,0,0.6);backdrop-filter: blur(3px);';
-                el.innerHTML = '<div style="font-weight:700;margin-bottom:6px;color:#fff">DEV LOG</div>';
-                document.body.appendChild(el);
-                window._devLogEl = el;
-            }
-            const el = window._devLogEl;
-            const row = document.createElement('div');
-            row.style.cssText = 'padding:3px 0;border-top:1px dashed rgba(255,255,255,0.03);font-size:12px;color:#ffd;';
-            const time = new Date().toISOString().replace('T',' ').replace('Z','');
-            row.textContent = time + ' — ' + String(msg || '');
-            el.appendChild(row);
-            // keep last 30 entries
-            while (el.children.length > 35) el.removeChild(el.children[1]);
-            try { el.scrollTop = el.scrollHeight; } catch(_){}
-        } catch(_){}
+        // DevEventLog popups removed - function now does nothing
+        return;
     }
 
     // Developer hotkey: Ctrl+Alt+U to force-unlock Act III for testing
@@ -10673,13 +10730,44 @@ function showAbilityChoiceUI(options) {
             document.body.removeChild(overlay);
             // Clear intervals
             flairIntervals.forEach(id=>clearInterval(id));
-            if (game && game._bigQuackDefeated) {
-                if (!document.getElementById('postFinalPlayAgain')) {
+            if (game && (game._bigQuackDefeated || game._actIIUnlocked || game._actIIIUnlocked)) {
+                if (!document.getElementById('postFinalPlayAgain') && !document.getElementById('continueButton')) {
                     const btn = document.createElement('button');
-                    btn.id = 'postFinalPlayAgain';
-                    btn.textContent = 'Play Again';
+                    btn.id = game._bigQuackDefeated ? 'postFinalPlayAgain' : 'continueButton';
+                    btn.textContent = game._bigQuackDefeated ? 'Play Again' : 'Main Menu';
                     btn.style.cssText = 'position:fixed;bottom:40px;left:50%;transform:translateX(-50%);padding:12px 28px;font-size:18px;background:#222;color:#fff;border:2px solid #666;border-radius:6px;z-index:30010;cursor:pointer;';
-                    btn.onclick = () => { btn.remove(); resetGame(); };
+                    btn.onclick = () => { 
+                        btn.remove(); 
+                        if (game._bigQuackDefeated) {
+                            resetGame(); 
+                        } else {
+                            // For Act I/II/III completion, return to title screen and stop music
+                            try { 
+                                if (game && game.bgMusic) game.bgMusic.pause(); 
+                                game._titleMusicSuppressed = true;
+                            } catch(_){ }
+                            try {
+                                // Properly end the current run and return to title screen
+                                resetGame({ suppressMusic: true, skipRoomInit: true });
+                                game._returningToTitle = true;
+                                game._started = false;
+                                game.paused = false;
+                                game.gameOver = true; // End the current game run
+                                // Clear the canvas to prevent flashing
+                                if (ctx) {
+                                    ctx.save();
+                                    ctx.setTransform(1, 0, 0, 1, 0, 0);
+                                    ctx.fillStyle = '#000';
+                                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                                    ctx.restore();
+                                }
+                                showTitleScreen();
+                            } catch(err) { 
+                                console.warn('[Main Menu] Failed to return to title screen', err); 
+                                resetGame(); 
+                            }
+                        }
+                    };
                     btn.setAttribute('data-gp-focus','1');
                     document.body.appendChild(btn);
                     // Initialize uiNav guard state for the Play Again button so holding A won't immediately activate it
@@ -10801,8 +10889,7 @@ function showRainbowAbilityPicker(onSelect) {
         const q = (search.value||'').trim().toLowerCase();
         grid.innerHTML='';
         let keys = Object.keys(ABILITIES);
-        // Exclude problematic or disabled abilities from rainbow picker (do not offer Umbrella Shot)
-        keys = keys.filter(k => k !== 'Umbrella Shot');
+        // Exclude problematic or disabled abilities from rainbow picker
         if (onlyNewChk.checked) keys = keys.filter(k => !game.player.abilities.includes(k));
         keys = keys.filter(k => {
             // Hide secret/unlocked-only abilities unless they have been discovered via their unlock path
@@ -11046,7 +11133,6 @@ function offerPermanentAbilityChoice() {
             'Echo Bloom': { desc: 'Echo catches up & bursts', effect: { echoBloom: true }, tier: 2 },
             'Toenail Clibbins': { desc: 'Thats a biggin', effect: { toenailClibbins: true }, tier: 2 },
             'Popcorn': { desc: 'Fires a kernel that pops into several flying puffs', effect: { popcornKernel: true }, tier: 1 },
-            'Umbrella Shot': { desc: 'Primary shot splits forward into two arcing halves that curve overhead then return past you', effect: { umbrellaShot: true }, tier: 2 },
             'Duck Dynasty': { desc: 'Summon your ancestors', effect: { duckDynasty: true }, tier: 2 },
             // Crowd Control / Utility
             'Rizz': { desc: 'Every 5s magnetically gathers enemies near you then Fears them for 3s', effect: { rizzAbility: true }, tier: 3 },
@@ -15990,7 +16076,7 @@ function offerPermanentAbilityChoice() {
                     if ((dxs * dxs + dys * dys) < exclusionR2) continue;
                     if (isWall(x, y)) continue;
                     if (game.chests.some(ch => Math.hypot(ch.x - x, ch.y - y) < 64)) continue;
-                    const pool = Object.keys(ABILITIES).filter(a => !game.player.abilities.includes(a) && a !== 'Umbrella Shot');
+                    const pool = Object.keys(ABILITIES).filter(a => !game.player.abilities.includes(a));
                     let chosenAbility = null;
                     if (pool.length) {
                         const weighted = [];
@@ -16648,6 +16734,8 @@ function offerPermanentAbilityChoice() {
                                                                         try { game._eldritchBossSpawned = true; } catch(_){ }
                                                                         console.info('[Eldritch] The Great Beaked One spawned at', bossEnemy.x, bossEnemy.y);
                                                                     }
+                                                                    // Increment spawned counter for room clear logic
+                                                                    game._roomSpawnedEnemies = (game._roomSpawnedEnemies || 0) + 1;
                                                                 } catch(_){ }
                                                             }, halfMs);
                                                         } catch(_){ }
@@ -16933,7 +17021,11 @@ function offerPermanentAbilityChoice() {
             // Add boss enemy every 5th room. Final boss only appears in district 10 room 5.
             const hasBoss = game.room === 5;
             
-            for (let i = 0; i < enemyCount; i++) {
+            // Skip enemy spawning in Act IV District 10 Street 5 - only The Great Beaked One should spawn via delayed sequence
+            if (String(game._selectedAct) === 'IV' && game.dungeon === 10 && game.room === 5) {
+                console.info('[RoomGen] Skipping enemy spawns in Act IV D10 R5 - eldritch boss sequence handles spawning');
+            } else {
+                for (let i = 0; i < enemyCount; i++) {
                 let x, y, attempts = 0;
                 do {
                     x = 60 + Math.random() * (LOGICAL_W - 120);
@@ -16968,7 +17060,7 @@ function offerPermanentAbilityChoice() {
                             } catch(_) {
                                 if (!game._wunderswanSpawned) { typeName = 'Wunderswan'; game._wunderswanSpawned = true; }
                             }
-                        } else if (game._selectedAct === 'II' && !game._wunderswanSpawned && Math.random() < 0.05) {
+                        } else if (game._selectedAct === 'II' && game.dungeon !== 10 && !game._wunderswanSpawned && Math.random() < 0.05) {
                             typeName = 'Wunderswan';
                             game._wunderswanSpawned = true;
                             console.info('[RoomGen] Secret Wunderswan spawned (one-time)');
@@ -17317,6 +17409,7 @@ function offerPermanentAbilityChoice() {
                 game.enemies.push(fallback);
                 if (typeof game._roomSpawnedEnemies === 'number') game._roomSpawnedEnemies++;
             }
+            }
             // Clamp any enemies that may have landed outside logical bounds due to future logic changes.
             for (const en of game.enemies) {
                 if (!en) continue;
@@ -17389,7 +17482,7 @@ function offerPermanentAbilityChoice() {
                     const isRainbow = Math.random() < 0.02;
                     // Preselect an ability for this chest now so variant can reflect rarity.
                     // Choose from abilities the player does NOT yet have.
-                    const pool = Object.keys(ABILITIES).filter(a => !game.player.abilities.includes(a));
+                    const pool = Object.keys(ABILITIES).filter(a => !game.player.abilities.includes(a) && a !== 'Umbrella Shot');
                     let chosenAbility = null;
                     if (pool.length > 0) {
                         // Weight by inverse tier (common more likely) but with slight bias for variety.
@@ -17833,6 +17926,124 @@ function offerPermanentAbilityChoice() {
             document.addEventListener('keyup', e => {
                 game.keys[e.key.toLowerCase()] = false;
             });
+        }
+
+        function updateCredits() {
+            if (game.creditsState === 'fade_black') {
+                game.creditsFade += 0.02;
+                if (game.creditsFade >= 1) {
+                    game.creditsFade = 1;
+                    game.creditsState = 'fade_in_bg';
+                }
+            } else if (game.creditsState === 'fade_in_bg') {
+                if (game.creditsBgLoaded) {
+                    game.creditsFade -= 0.02;
+                    if (game.creditsFade <= 0) {
+                        game.creditsFade = 0;
+                        game.creditsState = 'walking';
+                        game.creditsName = (window.ENEMY_DOSSIER_DATA && window.ENEMY_DOSSIER_DATA[game.creditsEnemies[game.creditsIndex]] && window.ENEMY_DOSSIER_DATA[game.creditsEnemies[game.creditsIndex]].displayName) || game.creditsEnemies[game.creditsIndex];
+                        game.creditsEnemyX = LOGICAL_W + 100;
+                    }
+                }
+            } else if (game.creditsState === 'walking') {
+                game.creditsEnemyX -= game.creditsEnemySpeed;
+                game.creditsFrameTimer++;
+                if (game.creditsFrameTimer >= 4) {
+                    game.creditsFrameTimer = 0;
+                    const sprite = game.enemySprites && game.enemySprites[game.creditsEnemies[game.creditsIndex]];
+                    game.creditsEnemyFrame = (game.creditsEnemyFrame + 1) % (sprite && sprite.frames ? sprite.frames.length : 4);
+                }
+                if (game.creditsEnemyX <= game.creditsStopX) {
+                    game.creditsEnemyX = game.creditsStopX;
+                    game.creditsState = 'stop';
+                    game.creditsStopTime = 120; // 2 seconds at 60fps
+                }
+            } else if (game.creditsState === 'stop') {
+                game.creditsStopTime--;
+                if (game.creditsStopTime <= 0) {
+                    game.creditsState = 'flash';
+                    game.creditsFlashTime = 10;
+                }
+            } else if (game.creditsState === 'flash') {
+                game.creditsFlashTime--;
+                if (game.creditsFlashTime <= 0) {
+                    game.creditsState = 'continue';
+                }
+            } else if (game.creditsState === 'continue') {
+                game.creditsEnemyX -= game.creditsEnemySpeed;
+                game.creditsFrameTimer++;
+                if (game.creditsFrameTimer >= 4) {
+                    game.creditsFrameTimer = 0;
+                    const sprite = game.enemySprites && game.enemySprites[game.creditsEnemies[game.creditsIndex]];
+                    game.creditsEnemyFrame = (game.creditsEnemyFrame + 1) % (sprite && sprite.frames ? sprite.frames.length : 4);
+                }
+                if (game.creditsEnemyX < -100) {
+                    game.creditsIndex++;
+                    if (game.creditsIndex >= game.creditsEnemies.length) {
+                        game.creditsState = 'done';
+                    } else {
+                        game.creditsState = 'walking';
+                        game.creditsName = (window.ENEMY_DOSSIER_DATA && window.ENEMY_DOSSIER_DATA[game.creditsEnemies[game.creditsIndex]] && window.ENEMY_DOSSIER_DATA[game.creditsEnemies[game.creditsIndex]].displayName) || game.creditsEnemies[game.creditsIndex];
+                        game.creditsEnemyX = LOGICAL_W + 100;
+                        game.creditsEnemyFrame = 0;
+                        game.creditsFrameTimer = 0;
+                    }
+                }
+            } else if (game.creditsState === 'done') {
+                game._returningToTitle = true;
+                game.creditsScene = false;
+                if (game.creditsMusic) {
+                    game.creditsMusic.pause();
+                    game.creditsMusic = null;
+                }
+            }
+        }
+
+        function renderCredits() {
+            ctx.save();
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            if (game.creditsState === 'fade_black') {
+                ctx.globalAlpha = game.creditsFade;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            } else if (game.creditsState === 'fade_in_bg' || game.creditsState === 'walking' || game.creditsState === 'stop' || game.creditsState === 'flash' || game.creditsState === 'continue') {
+                if (game.creditsBgLoaded) {
+                    ctx.globalAlpha = 1 - game.creditsFade;
+                    ctx.drawImage(game.creditsBgImg, 0, 0, LOGICAL_W, LOGICAL_H);
+                }
+                const enemyName = game.creditsEnemies[game.creditsIndex];
+                const sprite = game.enemySprites && game.enemySprites[enemyName];
+                if (sprite && sprite.image && sprite.image.complete) {
+                    const y = LOGICAL_H / 2;
+                    ctx.globalAlpha = 1;
+                    if (sprite.frames && sprite.frames.length > 0) {
+                        const frame = sprite.frames[game.creditsEnemyFrame % sprite.frames.length];
+                        ctx.drawImage(sprite.image, frame.x, frame.y, frame.w, frame.h, game.creditsEnemyX - frame.w/2, y - frame.h/2, frame.w, frame.h);
+                    } else {
+                        // Fallback: assume horizontal spritesheet with 4 frames
+                        const numFrames = 4;
+                        const frameW = sprite.image.width / numFrames;
+                        const frameH = sprite.image.height;
+                        const frameIndex = game.creditsEnemyFrame % numFrames;
+                        const sx = frameIndex * frameW;
+                        const sy = 0;
+                        ctx.drawImage(sprite.image, sx, sy, frameW, frameH, game.creditsEnemyX - frameW/2, y - frameH/2, frameW, frameH);
+                    }
+                }
+                if (game.creditsName) {
+                    ctx.globalAlpha = 1;
+                    ctx.fillStyle = 'white';
+                    ctx.font = '24px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(game.creditsName, LOGICAL_W / 2, LOGICAL_H - 50);
+                }
+                if (game.creditsState === 'flash') {
+                    ctx.globalAlpha = 0.5;
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
+            }
+            ctx.restore();
         }
 
         function gameLoop() {
@@ -19205,6 +19416,10 @@ function offerPermanentAbilityChoice() {
         }
 
         function update() {
+            if (game.creditsScene) {
+                updateCredits();
+                return;
+            }
             // Global frame counter (needed for timed mechanics like meteor detonation)
             if (typeof game.frame !== 'number') game.frame = 0;
             game.frame++;
@@ -23017,6 +23232,24 @@ function offerPermanentAbilityChoice() {
                                     // Log and show toast for non-final-spawn kills so the player sees the unlock immediately
                                     try { if (enemy && enemy.finalBoss) {
                                         safeUnlockActII('Golden Goose defeat;final-boss');
+                                        // Restore act music after final boss defeat
+                                        try {
+                                            if (game._bossMusicPlaying) {
+                                                game._bossMusicPlaying = false;
+                                                // Restore Act II music
+                                                try {
+                                                    if (game.bgMusic) { try { game.bgMusic.pause(); } catch(e) {} }
+                                                    game.bgMusic = new Audio('assets/audio/GooseGhetto.mp3');
+                                                    game.bgMusic.loop = true;
+                                                    applyMusicPreference();
+                                                    updateAudioButtons();
+                                                    try { game._actMusicSet = true; } catch(_){ }
+                                                    game._duckActiveTrack = 'assets/audio/GooseGhetto.mp3';
+                                                    setDuckNowPlaying('assets/audio/GooseGhetto.mp3');
+                                                    try { if (game.musicEnabled) game.bgMusic.play().catch(()=>{}); } catch(_){ }
+                                                } catch(e) { console.warn('[GoldenGoose] music restoration failed', e); }
+                                            }
+                                        } catch(e) { console.warn('[GoldenGoose] music restoration setup failed', e); }
                                     } else {
                                         try { if (typeof devLog === 'function') devLog('[GoldenGoose] unlocking Act II (normal spawn)'); } catch(_){}
                                         try { if (typeof showToast === 'function') showToast('Act II unlocked!'); } catch(_){}
@@ -28807,7 +29040,7 @@ function offerPermanentAbilityChoice() {
                 }
             }
             if (!newAbility) {
-                    const pool = Object.keys(ABILITIES).filter(a => isAbilityOfferable(a) && a !== 'Umbrella Shot');
+                    const pool = Object.keys(ABILITIES).filter(a => isAbilityOfferable(a));
                 if (pool.length > 0) newAbility = pool[Math.floor(Math.random()*pool.length)];
             }
                 if (newAbility) {
@@ -29075,14 +29308,47 @@ function offerPermanentAbilityChoice() {
                     <p><strong>Total Kills:</strong> ${game.totalKills}</p>
                     <p><strong>Streets Cleared:</strong> ${game.roomsCleared}</p>
                     <p><strong>Chests Opened:</strong> ${game.chestsOpened}</p>
-                    <button onclick="this.parentElement.parentElement.remove(); (window.game&&Array.isArray(window.game.duckFlocks))&&(window.game.duckFlocks.length=0); if (window.game) window.game.nextDuckFlockFrame=0; resetGame();" 
+                    <button id="victoryButton" onclick="resetGame();" 
                             style="margin-top: 20px; padding: 10px 20px; font-size: 16px; 
                                    background: #333; color: white; border: 2px solid #666; 
                                    border-radius: 5px; cursor: pointer;">
-                        Play Again
+                        ${game && game._actIIIUnlocked ? 'Main Menu' : 'Play Again'}
                     </button>
                 </div>
 `;
+            // Set up the victory button onclick handler
+            setTimeout(() => {
+                const victoryButton = overlay.querySelector('#victoryButton');
+                if (victoryButton) {
+                    victoryButton.onclick = () => {
+                        overlay.remove();
+                        (window.game&&Array.isArray(window.game.duckFlocks))&&(window.game.duckFlocks.length=0);
+                        if (window.game) window.game.nextDuckFlockFrame=0;
+                        if (game && game._actIIIUnlocked) {
+                            // Main Menu logic for Act III completion
+                            try { 
+                                if (game && game.bgMusic) game.bgMusic.pause(); 
+                                game._titleMusicSuppressed = true;
+                            } catch(_){ }
+                            resetGame({ suppressMusic: true, skipRoomInit: true });
+                            game._returningToTitle = true;
+                            game._started = false;
+                            game.paused = false;
+                            game.gameOver = true;
+                            if (ctx) {
+                                ctx.save();
+                                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                                ctx.fillStyle = '#000';
+                                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                                ctx.restore();
+                            }
+                            showTitleScreen();
+                        } else {
+                            resetGame();
+                        }
+                    };
+                }
+            }, 0);
             // Only offer permanent ability if not already done (flagged elsewhere via Space key path)
             if (!game._finalAbilityOffered) {
                 offerPermanentAbilityChoice();
@@ -29670,6 +29936,10 @@ function offerPermanentAbilityChoice() {
                 ctx.fillStyle = '#000';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.restore();
+                return;
+            }
+            if (game.creditsScene) {
+                renderCredits();
                 return;
             }
             // Handle screen shake
@@ -35887,8 +36157,38 @@ function offerPermanentAbilityChoice() {
                 d.intensity *= 0.93; if (d.time<=0) d.intensity = 0;
             }
 
+            // Check for credits scene trigger
+            if (game.roomCleared && !isDuckAndCoverMode() && String(game._selectedAct) === 'IV' && game.dungeon === 10 && game.room === 5) {
+                if (!game.creditsScene) {
+                    game.creditsScene = true;
+                    game.creditsEnemies = Object.keys(window.ENEMY_DOSSIER_DATA || {}).sort();
+                    game.creditsIndex = 0;
+                    game.creditsState = 'fade_black';
+                    game.creditsFade = 0;
+                    game.creditsBgImg = new Image();
+                    game.creditsBgImg.src = 'assets/prison.png';
+                    game.creditsBgLoaded = false;
+                    game.creditsBgImg.onload = () => { game.creditsBgLoaded = true; };
+                    game.creditsEnemyX = LOGICAL_W + 100;
+                    game.creditsEnemySpeed = 2;
+                    game.creditsStopX = LOGICAL_W / 2;
+                    game.creditsStopTime = 0;
+                    game.creditsFlashTime = 0;
+                    game.creditsName = '';
+                    game.creditsEnemyFrame = 0;
+                    game.creditsFrameTimer = 0;
+                    try { if (game.bgMusic && typeof game.bgMusic.pause === 'function') game.bgMusic.pause(); } catch(_) {}
+                    if (game.musicEnabled && !game.creditsMusic) {
+                        game.creditsMusic = new Audio('assets/audio/waves/track17.mp3');
+                        game.creditsMusic.loop = true;
+                        game.creditsMusic.volume = 0.5;
+                        game.creditsMusic.play().catch(() => {});
+                    }
+                }
+            }
+
             // Room cleared overlay
-            if (game.roomCleared && !isDuckAndCoverMode()) {
+            if (game.roomCleared && !isDuckAndCoverMode() && !game.creditsScene) {
                 // NOTE: removed the heavy fullscreen dim so leftover chests and items remain visible.
                 // If readability of the text becomes an issue, consider adding a small outline or
                 // a faint translucent panel behind the text only instead of dimming the whole scene.
@@ -36241,6 +36541,24 @@ function offerPermanentAbilityChoice() {
                     lastHealthBarColor = colorKey;
                 }
 
+                // Now Playing display - update immediately (music feedback is critical)
+                const nowPlayingInfo = (game._duckNowPlaying && game._duckNowPlaying.display) ? game._duckNowPlaying.display : '';
+                const showNowPlaying = !!(nowPlayingInfo);
+                if (elNowPlayingWrap) {
+                    const displayStyle = showNowPlaying ? 'flex' : 'none';
+                    if (displayStyle !== lastNowPlayingVisible) {
+                        elNowPlayingWrap.style.display = displayStyle;
+                        lastNowPlayingVisible = displayStyle;
+                    }
+                }
+                if (elNowPlayingText) {
+                    const textOut = showNowPlaying ? nowPlayingInfo : '';
+                    if (textOut !== lastNowPlayingText) {
+                        elNowPlayingText.textContent = textOut;
+                        lastNowPlayingText = textOut;
+                    }
+                }
+
                 const now = performance.now();
                 if (now - lastUIUpdate < UI_INTERVAL) {
                     if (minimapRefresh) {
@@ -36321,22 +36639,6 @@ function offerPermanentAbilityChoice() {
                     if (auraText !== lastAuraText) { elAura.textContent = auraText; lastAuraText = auraText; }
                 }
 
-                const nowPlayingInfo = (game._duckNowPlaying && game._duckNowPlaying.display) ? game._duckNowPlaying.display : '';
-                const showNowPlaying = !!(nowPlayingInfo);
-                if (elNowPlayingWrap) {
-                    const displayStyle = showNowPlaying ? 'flex' : 'none';
-                    if (displayStyle !== lastNowPlayingVisible) {
-                        elNowPlayingWrap.style.display = displayStyle;
-                        lastNowPlayingVisible = displayStyle;
-                    }
-                }
-                if (elNowPlayingText) {
-                    const textOut = showNowPlaying ? nowPlayingInfo : '';
-                    if (textOut !== lastNowPlayingText) {
-                        elNowPlayingText.textContent = textOut;
-                        lastNowPlayingText = textOut;
-                    }
-                }
                 if (minimapRefresh) {
                     try { updateMinimap(); } catch(_){ }
                 }
