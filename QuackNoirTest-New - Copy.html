@@ -255,8 +255,6 @@
                     if (typeof window.unlockActII === 'function' && window._safeUnlockActII_flushing === false) {
                         try { window.unlockActII(source); return; } catch(e) { /* fallthrough to queue */ }
                     }
-                    // Force mirroring when actors must face left so all sprites face left while moving left
-                    if (mustFaceLeft) mirrored = true;
                 } catch(_){}
                 try { window._unlockActIIQueue.push(source || 'queued'); } catch(_){}
             };
@@ -1419,102 +1417,11 @@
             creditsFrameTimer: 0,
             creditsMusic: null
         };
-            // Credits debug overlay toggle (useful for diagnosing per-sprite issues)
-            try { game.creditsDebugOverlay = false; } catch(_){}
         try {
             if (localStorage && localStorage.getItem && localStorage.getItem('duckAndCoverUnlocked') === '1') {
                 game._duckAndCoverUnlocked = true;
             }
         } catch(_){ }
-
-        // Helper: start the credits sequence (reusable by triggers and debug keys)
-        try {
-            game.startCreditsSequence = game.startCreditsSequence || function(){
-                try { if (game.creditsScene) return; } catch(_){}
-                try { game.creditsScene = true; } catch(_){}
-
-                // Hide right-hand stats panel during credits and save previous state
-                try {
-                    const stats = document.getElementById('statsPanelWrapper');
-                    if (stats) {
-                        stats.dataset._creditsSavedDisplay = stats.style.display || '';
-                        stats.style.display = 'none';
-                    }
-                    const cvEl = document.getElementById('gameCanvas');
-                    const outer = document.getElementById('gameOuter') || document.getElementById('gameContainer');
-                    if (cvEl) { cvEl.dataset._creditsSavedZ = cvEl.style.zIndex || ''; cvEl.style.zIndex = '10100'; }
-                    if (outer) { outer.dataset._creditsSavedZ = outer.style.zIndex || ''; outer.style.zIndex = '10100'; }
-                } catch(_){}
-
-                // Build credits entries (dossier keys) and a deterministic mapping to sprite keys
-                try {
-                    game.creditsEnemies = Object.keys(window.ENEMY_DOSSIER_DATA || {}).sort();
-                } catch(_) { game.creditsEnemies = (window.ENEMY_DOSSIER_DATA) ? Object.keys(window.ENEMY_DOSSIER_DATA) : []; }
-
-                game.creditsEnemyKey = [];
-                try {
-                    const sprites = game.enemySprites || {};
-                    const normMap = {};
-                    Object.keys(sprites).forEach(k => {
-                        try {
-                            const kn = String(k||'').toLowerCase().replace(/[^a-z0-9]+/g,'');
-                            if (!kn) return; if (!normMap[kn]) normMap[kn] = [];
-                            normMap[kn].push(k);
-                        } catch(_){}
-                    });
-                    const keys = Object.keys(sprites);
-                    function resolveSpriteKey(displayName){
-                        if (!displayName) return null;
-                        if (sprites[displayName]) return displayName;
-                        const norm = String(displayName||'').toLowerCase().replace(/[^a-z0-9]+/g,'');
-                        if (normMap[norm] && normMap[norm].length) return normMap[norm][0];
-                        for (let i=0;i<keys.length;i++){
-                            const k = keys[i];
-                            const kn = String(k||'').toLowerCase().replace(/[^a-z0-9]+/g,'');
-                            if (!kn) continue; if (kn.indexOf(norm) >= 0 || norm.indexOf(kn) >= 0) return k;
-                        }
-                        for (let i=0;i<keys.length;i++){
-                            try { const img = (sprites[keys[i]] && sprites[keys[i]].image && sprites[keys[i]].image.src) ? String(sprites[keys[i]].image.src).toLowerCase() : ''; if (img && img.indexOf(norm) >= 0) return keys[i]; } catch(_){}
-                        }
-                        return null;
-                    }
-                    for (let i=0;i<game.creditsEnemies.length;i++){
-                        try { game.creditsEnemyKey.push(resolveSpriteKey(game.creditsEnemies[i])); } catch(_) { game.creditsEnemyKey.push(null); }
-                    }
-                } catch(_) {
-                    game.creditsEnemyKey = (game.creditsEnemies||[]).map(()=>null);
-                }
-
-                // Initialize state
-                try { game.creditsIndex = 0; } catch(_){}
-                try { game.creditsState = 'fade_black'; } catch(_){}
-                try { game.creditsFade = 0; } catch(_){}
-                try { game.creditsBgImg = new Image(); game.creditsBgImg.src = 'assets/prison.png'; game.creditsBgLoaded = false; game.creditsBgImg.onload = ()=>{ try { game.creditsBgLoaded = true; } catch(_){} }; } catch(_){}
-                try { game.creditsEnemyX = LOGICAL_W + 100; } catch(_){}
-                try { game.creditsEnemySpeed = 2; } catch(_){}
-                // Stop closer to the left side (smaller fraction => nearer left edge)
-                // Move stop point slightly right so characters pause a touch farther from the edge
-                try { game.creditsStopX = Math.round(LOGICAL_W * 0.12); } catch(_){}
-                try { game.creditsStopTime = 0; } catch(_){}
-                try { game.creditsFlashTime = 0; } catch(_){}
-                try { game.creditsName = ''; } catch(_){}
-                try { game.creditsEnemyFrame = 0; game.creditsFrameTimer = 0; game.creditsTick = 0; } catch(_){}
-                // Visual tuning: small reduction in scale and keep Y offset default
-                try { game.creditsSizeScale = 0.86; } catch(_){}
-                try { game.creditsYOffset = 0; } catch(_){}
-
-                // Pause/stop regular music, optionally start credits music
-                try { if (game.bgMusic && typeof game.bgMusic.pause === 'function') game.bgMusic.pause(); } catch(_){}
-                try {
-                    if (game.musicEnabled && !game.creditsMusic) {
-                        try {
-                            game.creditsMusic = new Audio('assets/audio/waves/track17.mp3');
-                            game.creditsMusic.loop = true; game.creditsMusic.volume = 0.5; game.creditsMusic.play().catch(()=>{});
-                        } catch(_) { game.creditsMusic = null; }
-                    }
-                } catch(_){}
-            };
-        } catch(_){}
 
         // Debug helper: dump enemies near a given point (calls from console)
         try {
@@ -17995,14 +17902,6 @@ function offerPermanentAbilityChoice() {
                 }
                 */
                 
-                // Debug shortcut: jump straight to credits with the '7' key (useful for testing)
-                if (key === '7') {
-                    try { if (typeof game.startCreditsSequence === 'function') game.startCreditsSequence(); else game.creditsScene = true; } catch(_) { game.creditsScene = true; }
-                }
-                if (key === '8') {
-                    try { game.creditsDebugOverlay = !game.creditsDebugOverlay; } catch(_){ }
-                }
-
                 // Handle pause
                 if (key === 'p') {
                     // If typing in an input/textarea/contentEditable or an ability modal is open,
@@ -18030,17 +17929,6 @@ function offerPermanentAbilityChoice() {
         }
 
         function updateCredits() {
-            // Advance a credits-local tick to drive animation frames while credits are active
-            // IMPORTANT: when the credits actor is in the 'stop' state we WANT animation to pause.
-            // Only increment the credits tick when we're not stopped so sequenceIndex freezes during the pause.
-            try {
-                if (game.creditsState === 'stop') {
-                    // Ensure the tick exists but do not advance it to freeze any animation-driven sequences
-                    if (typeof game.creditsTick !== 'number') game.creditsTick = 0;
-                } else {
-                    game.creditsTick = (typeof game.creditsTick === 'number') ? (game.creditsTick + 1) : 1;
-                }
-            } catch(_) { game.creditsTick = 1; }
             if (game.creditsState === 'fade_black') {
                 game.creditsFade += 0.02;
                 if (game.creditsFade >= 1) {
@@ -18062,19 +17950,8 @@ function offerPermanentAbilityChoice() {
                 game.creditsFrameTimer++;
                 if (game.creditsFrameTimer >= 4) {
                     game.creditsFrameTimer = 0;
-                    try {
-                        const key = (game.creditsEnemyKey && game.creditsEnemyKey[game.creditsIndex]) || game.creditsEnemies[game.creditsIndex];
-                        const sprite = (game.enemySprites && game.enemySprites[key]) ? game.enemySprites[key] : (game.enemySprites && game.enemySprites[game.creditsEnemies[game.creditsIndex]]) || null;
-                        let frameCount = 4;
-                        if (sprite) {
-                            if (Array.isArray(sprite.frames)) frameCount = sprite.frames.length || frameCount;
-                            else if (sprite.frames && typeof sprite.frames === 'object') {
-                                if (Array.isArray(sprite.frames.left)) frameCount = sprite.frames.left.length || frameCount;
-                                else if (Array.isArray(sprite.frames.right)) frameCount = sprite.frames.right.length || frameCount;
-                            } else if (sprite.anim && sprite.anim.frames && Array.isArray(sprite.anim.frames)) frameCount = sprite.anim.frames.length || frameCount;
-                        }
-                        game.creditsEnemyFrame = (game.creditsEnemyFrame + 1) % Math.max(1, frameCount);
-                    } catch(_) { game.creditsEnemyFrame = (game.creditsEnemyFrame + 1) % 4; }
+                    const sprite = game.enemySprites && game.enemySprites[game.creditsEnemies[game.creditsIndex]];
+                    game.creditsEnemyFrame = (game.creditsEnemyFrame + 1) % (sprite && sprite.frames ? sprite.frames.length : 4);
                 }
                 if (game.creditsEnemyX <= game.creditsStopX) {
                     game.creditsEnemyX = game.creditsStopX;
@@ -18097,19 +17974,8 @@ function offerPermanentAbilityChoice() {
                 game.creditsFrameTimer++;
                 if (game.creditsFrameTimer >= 4) {
                     game.creditsFrameTimer = 0;
-                    try {
-                        const key = (game.creditsEnemyKey && game.creditsEnemyKey[game.creditsIndex]) || game.creditsEnemies[game.creditsIndex];
-                        const sprite = (game.enemySprites && game.enemySprites[key]) ? game.enemySprites[key] : (game.enemySprites && game.enemySprites[game.creditsEnemies[game.creditsIndex]]) || null;
-                        let frameCount = 4;
-                        if (sprite) {
-                            if (Array.isArray(sprite.frames)) frameCount = sprite.frames.length || frameCount;
-                            else if (sprite.frames && typeof sprite.frames === 'object') {
-                                if (Array.isArray(sprite.frames.left)) frameCount = sprite.frames.left.length || frameCount;
-                                else if (Array.isArray(sprite.frames.right)) frameCount = sprite.frames.right.length || frameCount;
-                            } else if (sprite.anim && sprite.anim.frames && Array.isArray(sprite.anim.frames)) frameCount = sprite.anim.frames.length || frameCount;
-                        }
-                        game.creditsEnemyFrame = (game.creditsEnemyFrame + 1) % Math.max(1, frameCount);
-                    } catch(_) { game.creditsEnemyFrame = (game.creditsEnemyFrame + 1) % 4; }
+                    const sprite = game.enemySprites && game.enemySprites[game.creditsEnemies[game.creditsIndex]];
+                    game.creditsEnemyFrame = (game.creditsEnemyFrame + 1) % (sprite && sprite.frames ? sprite.frames.length : 4);
                 }
                 if (game.creditsEnemyX < -100) {
                     game.creditsIndex++;
@@ -18125,22 +17991,9 @@ function offerPermanentAbilityChoice() {
                 }
             } else if (game.creditsState === 'done') {
                 game._returningToTitle = true;
-                // Restore any UI or z-index modifications we made at start
-                try {
-                    const stats = document.getElementById('statsPanelWrapper');
-                    if (stats && stats.dataset && typeof stats.dataset._creditsSavedDisplay !== 'undefined') {
-                        stats.style.display = stats.dataset._creditsSavedDisplay || '';
-                        delete stats.dataset._creditsSavedDisplay;
-                    }
-                    const cvEl = document.getElementById('gameCanvas');
-                    const outer = document.getElementById('gameOuter') || document.getElementById('gameContainer');
-                    if (cvEl && cvEl.dataset && typeof cvEl.dataset._creditsSavedZ !== 'undefined') { cvEl.style.zIndex = cvEl.dataset._creditsSavedZ || ''; delete cvEl.dataset._creditsSavedZ; }
-                    if (outer && outer.dataset && typeof outer.dataset._creditsSavedZ !== 'undefined') { outer.style.zIndex = outer.dataset._creditsSavedZ || ''; delete outer.dataset._creditsSavedZ; }
-                } catch(_){}
-                try { game.creditsTick = 0; } catch(_){}
                 game.creditsScene = false;
                 if (game.creditsMusic) {
-                    try { game.creditsMusic.pause(); } catch(_){}
+                    game.creditsMusic.pause();
                     game.creditsMusic = null;
                 }
             }
@@ -18159,131 +18012,22 @@ function offerPermanentAbilityChoice() {
                     ctx.drawImage(game.creditsBgImg, 0, 0, LOGICAL_W, LOGICAL_H);
                 }
                 const enemyName = game.creditsEnemies[game.creditsIndex];
-                let chosenKey = (game.creditsEnemyKey && game.creditsEnemyKey[game.creditsIndex]) || enemyName;
-                let sprite = (game.enemySprites && game.enemySprites[chosenKey]) || (game.enemySprites && game.enemySprites[enemyName]) || null;
-                // Fuzzy fallback: if we couldn't find a sprite container, try a heuristic search
-                if (!sprite && game.enemySprites) {
-                    try {
-                        const normTarget = String(enemyName || '').toLowerCase().replace(/[^a-z0-9]+/g,'');
-                        const keys = Object.keys(game.enemySprites || {});
-                        for (let i=0;i<keys.length;i++){
-                            const k = keys[i];
-                            const kn = String(k||'').toLowerCase().replace(/[^a-z0-9]+/g,'');
-                            if (!kn) continue;
-                            if (kn.indexOf(normTarget) >= 0 || normTarget.indexOf(kn) >= 0) {
-                                sprite = game.enemySprites[k]; chosenKey = k; break;
-                            }
-                        }
-                    } catch(_) { /* ignore */ }
-                }
-                // If the sprite container is present, allow drawing if either the Image reports
-                // complete OR the loader marked the container as loaded / has a fallback bitmap.
-                if (sprite && ((sprite.image && sprite.image.complete) || sprite.loaded || sprite._forcedBitmap)) {
-                    const y = (LOGICAL_H / 2) + (game.creditsYOffset || 0);
-                    const scale = (typeof game.creditsSizeScale === 'number') ? game.creditsSizeScale : 1;
+                const sprite = game.enemySprites && game.enemySprites[enemyName];
+                if (sprite && sprite.image && sprite.image.complete) {
+                    const y = LOGICAL_H / 2;
                     ctx.globalAlpha = 1;
-                    // Track last drawn bounding box for debug overlay
-                    let lastDraw = null;
-
-                    // Choose the best sequence for full animations (prefer defaultAnimation -> anim.sequence -> frames.seq -> frames.left/right -> frames[])
-                    const mustFaceLeft = ['walking','continue','stop','flash'].includes(game.creditsState);
-                    let sequenceEntry = null; // { frames: [...], frameStep: N }
-                    try {
-                        if (sprite.defaultAnimation && Array.isArray(sprite.defaultAnimation.frames) && sprite.defaultAnimation.frames.length) {
-                            // defaultAnimation is assumed to be right-facing by default
-                            sequenceEntry = { frames: sprite.defaultAnimation.frames, frameStep: sprite.defaultAnimation.frameStep || (sprite.anim && sprite.anim.frameStep) || 6, mirrorIfRight:true };
-                        } else if (sprite.anim && Array.isArray(sprite.anim.sequence) && sprite.anim.sequence.length) {
-                            // anim.sequence generally represents right-facing animation; mark so credits can mirror when needed
-                            sequenceEntry = { frames: sprite.anim.sequence, frameStep: sprite.anim.frameStep || 8, mirrorIfRight:true };
-                        } else if (sprite.anim && Array.isArray(sprite.anim.frames) && sprite.anim.frames.length) {
-                            // Many containers attach their frame arrays under anim.frames rather than anim.sequence.
-                            // Prefer anim.frames if present (this resolves Big Quack / other atlas usage)
-                            sequenceEntry = { frames: sprite.anim.frames, frameStep: sprite.anim.frameStep || 8, mirrorIfRight:true };
-                        } else if (sprite.frames && Array.isArray(sprite.frames) && sprite.frames.length) {
-                            // flat array of frames; assume they are right-facing unless explicitly left
-                            sequenceEntry = { frames: sprite.frames, frameStep: (sprite.anim && sprite.anim.frameStep) || 5, mirrorIfRight:true };
-                        } else if (sprite.frames && typeof sprite.frames === 'object') {
-                            // Try seq first (common atlas style), then prefer explicit left, then right
-                            if (Array.isArray(sprite.frames.seq) && sprite.frames.seq.length) sequenceEntry = { frames: sprite.frames.seq, frameStep: (sprite.anim && sprite.anim.frameStep) || 5, mirrorIfRight:true };
-                            else if (Array.isArray(sprite.frames.left) && sprite.frames.left.length) sequenceEntry = { frames: sprite.frames.left, frameStep: (sprite.anim && sprite.anim.frameStep) || 5, isLeft:true };
-                            else if (Array.isArray(sprite.frames.right) && sprite.frames.right.length) sequenceEntry = { frames: sprite.frames.right, frameStep: (sprite.anim && sprite.anim.frameStep) || 5, mirrorIfRight:true };
-                            else {
-                                const props = Object.keys(sprite.frames || {});
-                                for (let i=0;i<props.length;i++){
-                                    const v = sprite.frames[props[i]];
-                                    if (Array.isArray(v) && v.length) { sequenceEntry = { frames: v, frameStep: (sprite.anim && sprite.anim.frameStep) || 5, mirrorIfRight:true }; break; }
-                                }
-                            }
-                        }
-                    } catch(_) { sequenceEntry = null; }
-
-                    // Draw chosen animation sequence when available (use global game.frame & frameStep so we use full animation and atlas frames)
-                    if (sequenceEntry && Array.isArray(sequenceEntry.frames) && sequenceEntry.frames.length) {
-                        const seq = sequenceEntry.frames;
-                        const frameStep = Math.max(1, sequenceEntry.frameStep || 5);
-                        const nowFrame = (typeof game.creditsTick === 'number') ? Math.floor(game.creditsTick) : ((typeof game.frame === 'number') ? Math.floor(game.frame) : Math.floor((Date.now()/16) || 0));
-                        const idx = Math.floor(nowFrame / frameStep) % Math.max(1, seq.length);
-                        const frame = seq[idx] || {};
-                        // Determine mirroring: always mirror when actors move left (default facing is right),
-                        // or respect explicit frame mirror flag otherwise.
-                        let mirrored = !!mustFaceLeft || !!frame.mirrorX || false;
-                        // If frame looks like an object with dims
-                        try {
-                            if (frame.canvas || frame.bitmap) {
-                                const src = frame.canvas || frame.bitmap;
-                                const dw = (src.width || frame.w || LOGICAL_W*0.25) * scale;
-                                const dh = (src.height || frame.h || LOGICAL_H*0.25) * scale;
-                                const dx = game.creditsEnemyX - dw/2;
-                                const dy = y - dh/2;
-                                if (mirrored) {
-                                    ctx.save(); ctx.translate(dx + dw/2, 0); ctx.scale(-1,1); ctx.drawImage(src, -dw/2, dy, dw, dh); ctx.restore();
-                                } else {
-                                    ctx.drawImage(src, dx, dy, dw, dh);
-                                }
-                                lastDraw = { dx, dy, dw, dh, mirrored, frameIndex: idx, seqLen: seq.length, key: chosenKey };
-                            } else if (typeof frame.x === 'number' && typeof frame.y === 'number' && typeof frame.w === 'number' && typeof frame.h === 'number') {
-                                const dw = frame.w * scale; const dh = frame.h * scale;
-                                const dx = game.creditsEnemyX - dw/2; const dy = y - dh/2;
-                                if (mirrored) { ctx.save(); ctx.translate(dx + dw/2, 0); ctx.scale(-1,1); ctx.drawImage(sprite.image, frame.x, frame.y, frame.w, frame.h, -dw/2, dy, dw, dh); ctx.restore(); }
-                                else { ctx.drawImage(sprite.image, frame.x, frame.y, frame.w, frame.h, dx, dy, dw, dh); }
-                                lastDraw = { dx, dy, dw, dh, mirrored, frameIndex: idx, seqLen: seq.length, key: chosenKey };
-                            } else {
-                                // No frame object; fallback to 4-frame horizontal split
-                                const numFrames = 4;
-                                const frameW = Math.max(1, Math.round(sprite.image.width / numFrames));
-                                const frameH = sprite.image.height || frameW;
-                                const frameIndex = game.creditsEnemyFrame % numFrames;
-                                const sx = frameIndex * frameW;
-                                const sy = 0;
-                                const dw = frameW * scale; const dh = frameH * scale;
-                                const dx = game.creditsEnemyX - dw/2; const dy = y - dh/2;
-                                if (mirrored) { ctx.save(); ctx.translate(dx + dw/2, 0); ctx.scale(-1,1); ctx.drawImage(sprite.image, sx, sy, frameW, frameH, -dw/2, dy, dw, dh); ctx.restore(); }
-                                else ctx.drawImage(sprite.image, sx, sy, frameW, frameH, dx, dy, dw, dh);
-                                lastDraw = { dx, dy, dw, dh, mirrored, frameIndex: idx, seqLen: seq.length, key: chosenKey };
-                            }
-                        } catch(_) {
-                            // Drawing failed for some reason; silently ignore to avoid breaking render
-                        }
+                    if (sprite.frames && sprite.frames.length > 0) {
+                        const frame = sprite.frames[game.creditsEnemyFrame % sprite.frames.length];
+                        ctx.drawImage(sprite.image, frame.x, frame.y, frame.w, frame.h, game.creditsEnemyX - frame.w/2, y - frame.h/2, frame.w, frame.h);
                     } else {
-                        // No frames array found - fallback to horizontal split.
-                        try {
-                            const numFrames = 4;
-                            const frameW = Math.max(1, Math.round(sprite.image.width / numFrames));
-                            const frameH = sprite.image.height || frameW;
-                            const frameIndex = game.creditsEnemyFrame % numFrames;
-                            const sx = frameIndex * frameW;
-                            const sy = 0;
-                            const dw = frameW * scale; const dh = frameH * scale;
-                            const dx = game.creditsEnemyX - dw/2; const dy = y - dh/2;
-                            // Mirror fallback frames if we need to force a left-facing visual
-                            if (mustFaceLeft) { ctx.save(); ctx.translate(dx + dw/2, 0); ctx.scale(-1,1); ctx.drawImage(sprite.image, sx, sy, frameW, frameH, -dw/2, dy, dw, dh); ctx.restore(); }
-                            else ctx.drawImage(sprite.image, sx, sy, frameW, frameH, dx, dy, dw, dh);
-                            // compute frame index for fallback using creditsTick so we use smooth animation timing
-                            const fallbackFrameStep = 5;
-                            const fallbackNow = (typeof game.creditsTick === 'number') ? Math.floor(game.creditsTick) : ((typeof game.frame === 'number') ? Math.floor(game.frame) : Math.floor(Date.now()/16));
-                            const fbIdx = Math.floor(fallbackNow / fallbackFrameStep) % Math.max(1, numFrames);
-                            lastDraw = { dx, dy, dw, dh, mirrored: mustFaceLeft, frameIndex: fbIdx, seqLen: numFrames, key: chosenKey };
-                        } catch(_){}
+                        // Fallback: assume horizontal spritesheet with 4 frames
+                        const numFrames = 4;
+                        const frameW = sprite.image.width / numFrames;
+                        const frameH = sprite.image.height;
+                        const frameIndex = game.creditsEnemyFrame % numFrames;
+                        const sx = frameIndex * frameW;
+                        const sy = 0;
+                        ctx.drawImage(sprite.image, sx, sy, frameW, frameH, game.creditsEnemyX - frameW/2, y - frameH/2, frameW, frameH);
                     }
                 }
                 if (game.creditsName) {
@@ -36416,7 +36160,30 @@ function offerPermanentAbilityChoice() {
             // Check for credits scene trigger
             if (game.roomCleared && !isDuckAndCoverMode() && String(game._selectedAct) === 'IV' && game.dungeon === 10 && game.room === 5) {
                 if (!game.creditsScene) {
-                    try { if (typeof game.startCreditsSequence === 'function') game.startCreditsSequence(); else game.creditsScene = true; } catch(_) { game.creditsScene = true; }
+                    game.creditsScene = true;
+                    game.creditsEnemies = Object.keys(window.ENEMY_DOSSIER_DATA || {}).sort();
+                    game.creditsIndex = 0;
+                    game.creditsState = 'fade_black';
+                    game.creditsFade = 0;
+                    game.creditsBgImg = new Image();
+                    game.creditsBgImg.src = 'assets/prison.png';
+                    game.creditsBgLoaded = false;
+                    game.creditsBgImg.onload = () => { game.creditsBgLoaded = true; };
+                    game.creditsEnemyX = LOGICAL_W + 100;
+                    game.creditsEnemySpeed = 2;
+                    game.creditsStopX = LOGICAL_W / 2;
+                    game.creditsStopTime = 0;
+                    game.creditsFlashTime = 0;
+                    game.creditsName = '';
+                    game.creditsEnemyFrame = 0;
+                    game.creditsFrameTimer = 0;
+                    try { if (game.bgMusic && typeof game.bgMusic.pause === 'function') game.bgMusic.pause(); } catch(_) {}
+                    if (game.musicEnabled && !game.creditsMusic) {
+                        game.creditsMusic = new Audio('assets/audio/waves/track17.mp3');
+                        game.creditsMusic.loop = true;
+                        game.creditsMusic.volume = 0.5;
+                        game.creditsMusic.play().catch(() => {});
+                    }
                 }
             }
 
@@ -37116,28 +36883,8 @@ function offerPermanentAbilityChoice() {
                     try{
                         if (document.getElementById('ggOverlayCanvas')) return;
                         const baseCanvas = document.getElementById('gameCanvas');
-                        lastDraw = { dx, dy, dw, dh, mirrored, frameIndex: game.creditsEnemyFrame % numFrames, seqLen: numFrames, key: chosenKey };
                         if (!baseCanvas) return; // game not present yet
                         const overlay = document.createElement('canvas');
-                // Credits debug overlay (shows sprite-key, frame index, frames count and bounding box)
-                if (game.creditsDebugOverlay && lastDraw) {
-                    try {
-                        ctx.save();
-                        ctx.globalAlpha = 0.85;
-                        const infoX = 8, infoY = 8, infoW = 420; const infoH = 80;
-                        ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(infoX, infoY, infoW, infoH);
-                        ctx.fillStyle = '#fff'; ctx.font = '12px Courier New'; ctx.textAlign = 'left';
-                        const ks = `idx:${game.creditsIndex} name:${String(game.creditsName||'').slice(0,36)}`;
-                        const kd = `key:${String(lastDraw.key||'').slice(0,36)} mirrored:${lastDraw.mirrored} frame:${lastDraw.frameIndex}/${lastDraw.seqLen}`;
-                        const pos = `x:${Math.round(game.creditsEnemyX)} stopX:${game.creditsStopX}`;
-                        ctx.fillText(ks, infoX+8, infoY+20);
-                        ctx.fillText(kd, infoX+8, infoY+38);
-                        ctx.fillText(pos, infoX+8, infoY+56);
-                        // Draw bounds
-                        ctx.strokeStyle = 'lime'; ctx.lineWidth = 2; ctx.globalAlpha = 0.9; ctx.strokeRect(lastDraw.dx, lastDraw.dy, lastDraw.dw, lastDraw.dh);
-                        ctx.restore();
-                    } catch(_){}
-                }
                         overlay.id = 'ggOverlayCanvas';
                         // Keep the overlay above the game canvas but below UI overlays like pause (z-index 1000)
                         overlay.style.cssText = 'position:fixed;left:0;top:0;pointer-events:none;z-index:900;';
