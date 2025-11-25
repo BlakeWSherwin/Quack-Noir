@@ -17986,6 +17986,7 @@ function offerPermanentAbilityChoice() {
         function setupControls() {
             document.addEventListener('keydown', e => {
                 const key = e.key.toLowerCase();
+                const code = (e.code || '').toString();
                 game.keys[key] = true;
                 // Toggle gamepad debug overlay with F6 (diagnostics) - DISABLED
                 /*
@@ -17999,8 +18000,13 @@ function offerPermanentAbilityChoice() {
                 if (key === '7') {
                     try { if (typeof game.startCreditsSequence === 'function') game.startCreditsSequence(); else game.creditsScene = true; } catch(_) { game.creditsScene = true; }
                 }
-                if (key === '8') {
-                    try { game.creditsDebugOverlay = !game.creditsDebugOverlay; } catch(_){ }
+                // Toggle credits debug overlay using top-row '6' (Digit6), numpad '6' (Numpad6)
+                // and keep '8' as a tolerant fallback.
+                if (key === '6' || code === 'Digit6' || code === 'Numpad6' || key === '8') {
+                    try {
+                        game.creditsDebugOverlay = !game.creditsDebugOverlay;
+                        console.info('[CreditsDebugOverlay] now', !!game.creditsDebugOverlay);
+                    } catch(_){ }
                 }
 
                 // Handle pause
@@ -18176,46 +18182,59 @@ function offerPermanentAbilityChoice() {
                         }
                     } catch(_) { /* ignore */ }
                 }
-                // If the sprite container is present, allow drawing if either the Image reports
+                // Choose the best sequence for full animations early so we can compute frame dims
+                // even when sprite.image hasn't finished loading (useful for placeholder overlay).
+                const mustFaceLeft = ['walking','continue','stop','flash'].includes(game.creditsState);
+                let sequenceEntry = null; // { frames: [...], frameStep: N, isLeft?, mirrorIfRight? }
+                try {
+                    if (sprite && sprite.defaultAnimation && Array.isArray(sprite.defaultAnimation.frames) && sprite.defaultAnimation.frames.length) {
+                        sequenceEntry = { frames: sprite.defaultAnimation.frames, frameStep: sprite.defaultAnimation.frameStep || (sprite.anim && sprite.anim.frameStep) || 6, mirrorIfRight:true };
+                    } else if (sprite && sprite.anim && Array.isArray(sprite.anim.sequence) && sprite.anim.sequence.length) {
+                        sequenceEntry = { frames: sprite.anim.sequence, frameStep: sprite.anim.frameStep || 8, mirrorIfRight:true };
+                    } else if (sprite && sprite.anim && Array.isArray(sprite.anim.frames) && sprite.anim.frames.length) {
+                        sequenceEntry = { frames: sprite.anim.frames, frameStep: sprite.anim.frameStep || 8, mirrorIfRight:true };
+                    } else if (sprite && sprite.frames && Array.isArray(sprite.frames) && sprite.frames.length) {
+                        sequenceEntry = { frames: sprite.frames, frameStep: (sprite.anim && sprite.anim.frameStep) || 5, mirrorIfRight:true };
+                    } else if (sprite && sprite.frames && typeof sprite.frames === 'object') {
+                        if (Array.isArray(sprite.frames.seq) && sprite.frames.seq.length) sequenceEntry = { frames: sprite.frames.seq, frameStep: (sprite.anim && sprite.anim.frameStep) || 5, mirrorIfRight:true };
+                        else if (Array.isArray(sprite.frames.left) && sprite.frames.left.length) sequenceEntry = { frames: sprite.frames.left, frameStep: (sprite.anim && sprite.anim.frameStep) || 5, isLeft:true };
+                        else if (Array.isArray(sprite.frames.right) && sprite.frames.right.length) sequenceEntry = { frames: sprite.frames.right, frameStep: (sprite.anim && sprite.anim.frameStep) || 5, mirrorIfRight:true };
+                        else {
+                            const props = Object.keys(sprite.frames || {});
+                            for (let i=0;i<props.length;i++){
+                                const v = sprite.frames[props[i]];
+                                if (Array.isArray(v) && v.length) { sequenceEntry = { frames: v, frameStep: (sprite.anim && sprite.anim.frameStep) || 5, mirrorIfRight:true }; break; }
+                            }
+                        }
+                    }
+                } catch(_) { sequenceEntry = null; }
                 // complete OR the loader marked the container as loaded / has a fallback bitmap.
+                // If we have a container but it isn't reporting an image load yet, try a targeted fallback
+                // for The Great Beaked One: the eldritch sheets live in game._eldritchSprites.quthulu and
+                // may be available even if the container image wasn't fully decoded when credits started.
+                try {
+                    if (sprite && !(sprite.image && sprite.image.complete) && !sprite.loaded && !sprite._forcedBitmap) {
+                        const cn = String(chosenKey || '').toLowerCase();
+                        if ((cn.indexOf('beaked') >= 0 || cn.indexOf('quthulu') >= 0 || cn.indexOf('thegreatbeakedone') >= 0) && game && game._eldritchSprites && game._eldritchSprites.quthulu) {
+                            try {
+                                const qb = game._eldritchSprites.quthulu;
+                                if (qb) { sprite.image = qb; sprite.loaded = !!qb._ok; }
+                            } catch(_){}
+                        }
+                    }
+                } catch(_){}
+
+                // Ensure lastDraw is declared in this scope so the debug overlay can't reference an undefined
+                // variable even when no sprite is present.
+                let lastDraw = null;
                 if (sprite && ((sprite.image && sprite.image.complete) || sprite.loaded || sprite._forcedBitmap)) {
                     const y = (LOGICAL_H / 2) + (game.creditsYOffset || 0);
                     const scale = (typeof game.creditsSizeScale === 'number') ? game.creditsSizeScale : 1;
                     ctx.globalAlpha = 1;
-                    // Track last drawn bounding box for debug overlay
-                    let lastDraw = null;
+                    // Track last drawn bounding box for debug overlay (value already declared above)
+                    lastDraw = null;
 
-                    // Choose the best sequence for full animations (prefer defaultAnimation -> anim.sequence -> frames.seq -> frames.left/right -> frames[])
-                    const mustFaceLeft = ['walking','continue','stop','flash'].includes(game.creditsState);
-                    let sequenceEntry = null; // { frames: [...], frameStep: N }
-                    try {
-                        if (sprite.defaultAnimation && Array.isArray(sprite.defaultAnimation.frames) && sprite.defaultAnimation.frames.length) {
-                            // defaultAnimation is assumed to be right-facing by default
-                            sequenceEntry = { frames: sprite.defaultAnimation.frames, frameStep: sprite.defaultAnimation.frameStep || (sprite.anim && sprite.anim.frameStep) || 6, mirrorIfRight:true };
-                        } else if (sprite.anim && Array.isArray(sprite.anim.sequence) && sprite.anim.sequence.length) {
-                            // anim.sequence generally represents right-facing animation; mark so credits can mirror when needed
-                            sequenceEntry = { frames: sprite.anim.sequence, frameStep: sprite.anim.frameStep || 8, mirrorIfRight:true };
-                        } else if (sprite.anim && Array.isArray(sprite.anim.frames) && sprite.anim.frames.length) {
-                            // Many containers attach their frame arrays under anim.frames rather than anim.sequence.
-                            // Prefer anim.frames if present (this resolves Big Quack / other atlas usage)
-                            sequenceEntry = { frames: sprite.anim.frames, frameStep: sprite.anim.frameStep || 8, mirrorIfRight:true };
-                        } else if (sprite.frames && Array.isArray(sprite.frames) && sprite.frames.length) {
-                            // flat array of frames; assume they are right-facing unless explicitly left
-                            sequenceEntry = { frames: sprite.frames, frameStep: (sprite.anim && sprite.anim.frameStep) || 5, mirrorIfRight:true };
-                        } else if (sprite.frames && typeof sprite.frames === 'object') {
-                            // Try seq first (common atlas style), then prefer explicit left, then right
-                            if (Array.isArray(sprite.frames.seq) && sprite.frames.seq.length) sequenceEntry = { frames: sprite.frames.seq, frameStep: (sprite.anim && sprite.anim.frameStep) || 5, mirrorIfRight:true };
-                            else if (Array.isArray(sprite.frames.left) && sprite.frames.left.length) sequenceEntry = { frames: sprite.frames.left, frameStep: (sprite.anim && sprite.anim.frameStep) || 5, isLeft:true };
-                            else if (Array.isArray(sprite.frames.right) && sprite.frames.right.length) sequenceEntry = { frames: sprite.frames.right, frameStep: (sprite.anim && sprite.anim.frameStep) || 5, mirrorIfRight:true };
-                            else {
-                                const props = Object.keys(sprite.frames || {});
-                                for (let i=0;i<props.length;i++){
-                                    const v = sprite.frames[props[i]];
-                                    if (Array.isArray(v) && v.length) { sequenceEntry = { frames: v, frameStep: (sprite.anim && sprite.anim.frameStep) || 5, mirrorIfRight:true }; break; }
-                                }
-                            }
-                        }
-                    } catch(_) { sequenceEntry = null; }
+                    // sequenceEntry was computed above
 
                     // Draw chosen animation sequence when available (use global game.frame & frameStep so we use full animation and atlas frames)
                     if (sequenceEntry && Array.isArray(sequenceEntry.frames) && sequenceEntry.frames.length) {
@@ -18228,8 +18247,21 @@ function offerPermanentAbilityChoice() {
                         // or respect explicit frame mirror flag otherwise.
                         let mirrored = !!mustFaceLeft || !!frame.mirrorX || false;
                         // If frame looks like an object with dims
+                        // Defensive: avoid drawing a pre-rendered canvas/bitmap if it appears to be a full-sheet
+                        // capture (equal to the sprite.image size) because that would render the whole sheet at once
+                        // and cause tiled/stacked visuals. Prefer cropping the canonical sprite.image when possible.
+                        let useCanvasDirectly = true;
                         try {
-                            if (frame.canvas || frame.bitmap) {
+                            if ((frame.canvas || frame.bitmap) && sprite && sprite.image && sprite.image.width && sprite.image.height) {
+                                const srcW = (frame.canvas && frame.canvas.width) || (frame.bitmap && frame.bitmap.width) || 0;
+                                const srcH = (frame.canvas && frame.canvas.height) || (frame.bitmap && frame.bitmap.height) || 0;
+                                if (srcW === sprite.image.width && srcH === sprite.image.height) {
+                                    useCanvasDirectly = false;
+                                }
+                            }
+                        } catch(_) { useCanvasDirectly = true; }
+                        try {
+                            if ((frame.canvas || frame.bitmap) && useCanvasDirectly) {
                                 const src = frame.canvas || frame.bitmap;
                                 const dw = (src.width || frame.w || LOGICAL_W*0.25) * scale;
                                 const dh = (src.height || frame.h || LOGICAL_H*0.25) * scale;
@@ -18240,13 +18272,17 @@ function offerPermanentAbilityChoice() {
                                 } else {
                                     ctx.drawImage(src, dx, dy, dw, dh);
                                 }
-                                lastDraw = { dx, dy, dw, dh, mirrored, frameIndex: idx, seqLen: seq.length, key: chosenKey };
+                                lastDraw = { dx, dy, dw, dh, mirrored, frameIndex: idx, seqLen: seq.length, key: chosenKey,
+                                    imageW: sprite.image && sprite.image.width, imageH: sprite.image && sprite.image.height,
+                                    spriteLoaded: !!sprite.loaded, sampleFrame: (frame && typeof frame === 'object') ? JSON.stringify({x:frame.x,y:frame.y,w:frame.w,h:frame.h}).slice(0,140) : String(frame) };
                             } else if (typeof frame.x === 'number' && typeof frame.y === 'number' && typeof frame.w === 'number' && typeof frame.h === 'number') {
                                 const dw = frame.w * scale; const dh = frame.h * scale;
                                 const dx = game.creditsEnemyX - dw/2; const dy = y - dh/2;
                                 if (mirrored) { ctx.save(); ctx.translate(dx + dw/2, 0); ctx.scale(-1,1); ctx.drawImage(sprite.image, frame.x, frame.y, frame.w, frame.h, -dw/2, dy, dw, dh); ctx.restore(); }
                                 else { ctx.drawImage(sprite.image, frame.x, frame.y, frame.w, frame.h, dx, dy, dw, dh); }
-                                lastDraw = { dx, dy, dw, dh, mirrored, frameIndex: idx, seqLen: seq.length, key: chosenKey };
+                                lastDraw = { dx, dy, dw, dh, mirrored, frameIndex: idx, seqLen: seq.length, key: chosenKey,
+                                    imageW: sprite.image && sprite.image.width, imageH: sprite.image && sprite.image.height,
+                                    spriteLoaded: !!sprite.loaded, sampleFrame: (frame && typeof frame === 'object') ? JSON.stringify({x:frame.x,y:frame.y,w:frame.w,h:frame.h}).slice(0,140) : String(frame) };
                             } else {
                                 // No frame object; fallback to 4-frame horizontal split
                                 const numFrames = 4;
@@ -18259,11 +18295,30 @@ function offerPermanentAbilityChoice() {
                                 const dx = game.creditsEnemyX - dw/2; const dy = y - dh/2;
                                 if (mirrored) { ctx.save(); ctx.translate(dx + dw/2, 0); ctx.scale(-1,1); ctx.drawImage(sprite.image, sx, sy, frameW, frameH, -dw/2, dy, dw, dh); ctx.restore(); }
                                 else ctx.drawImage(sprite.image, sx, sy, frameW, frameH, dx, dy, dw, dh);
-                                lastDraw = { dx, dy, dw, dh, mirrored, frameIndex: idx, seqLen: seq.length, key: chosenKey };
+                                lastDraw = { dx, dy, dw, dh, mirrored, frameIndex: idx, seqLen: seq.length, key: chosenKey,
+                                    imageW: sprite.image && sprite.image.width, imageH: sprite.image && sprite.image.height,
+                                    spriteLoaded: !!sprite.loaded, sampleFrame: (frame && typeof frame === 'object') ? JSON.stringify({x:frame.x,y:frame.y,w:frame.w,h:frame.h}).slice(0,140) : String(frame) };
                             }
                         } catch(_) {
                             // Drawing failed for some reason; silently ignore to avoid breaking render
                         }
+                    } else if (sprite) {
+                        // Sprite container exists but image/frame data not yet ready — render a placeholder so
+                        // the debug overlay has meaningful bounds and shows the sprite isn't loaded.
+                        try {
+                            const seq = (sequenceEntry && sequenceEntry.frames) ? sequenceEntry.frames : null;
+                            const sample = (seq && seq.length) ? seq[0] : (Array.isArray(sprite.frames) ? sprite.frames[0] : null);
+                            // Compute reasonable dimensions from sample frame or reference dims
+                            let srcW = (sample && typeof sample.w === 'number') ? sample.w : (sprite.referenceWidth || 256);
+                            let srcH = (sample && typeof sample.h === 'number') ? sample.h : (sprite.referenceHeight || 256);
+                            const dw = Math.max(8, srcW * scale);
+                            const dh = Math.max(8, srcH * scale);
+                            const dx = game.creditsEnemyX - dw/2;
+                            const dy = y - dh/2;
+                            // Draw translucent magenta placeholder to make missing asset obvious and set lastDraw
+                            ctx.save(); ctx.globalAlpha = 0.45; ctx.fillStyle = 'magenta'; ctx.fillRect(dx, dy, dw, dh); ctx.globalAlpha = 1; ctx.lineWidth = 2; ctx.strokeStyle = '#ff00ff'; ctx.strokeRect(dx, dy, dw, dh); ctx.restore();
+                            lastDraw = { dx, dy, dw, dh, mirrored: mustFaceLeft, frameIndex: 0, seqLen: seq ? seq.length : 1, key: chosenKey, imageW: (sprite.image && sprite.image.width) || 0, imageH: (sprite.image && sprite.image.height) || 0, spriteLoaded: !!sprite.loaded, sampleFrame: (sample && typeof sample === 'object') ? JSON.stringify(sample).slice(0,140) : '' };
+                        } catch(_){}
                     } else {
                         // No frames array found - fallback to horizontal split.
                         try {
@@ -18282,7 +18337,9 @@ function offerPermanentAbilityChoice() {
                             const fallbackFrameStep = 5;
                             const fallbackNow = (typeof game.creditsTick === 'number') ? Math.floor(game.creditsTick) : ((typeof game.frame === 'number') ? Math.floor(game.frame) : Math.floor(Date.now()/16));
                             const fbIdx = Math.floor(fallbackNow / fallbackFrameStep) % Math.max(1, numFrames);
-                            lastDraw = { dx, dy, dw, dh, mirrored: mustFaceLeft, frameIndex: fbIdx, seqLen: numFrames, key: chosenKey };
+                            lastDraw = { dx, dy, dw, dh, mirrored: mustFaceLeft, frameIndex: fbIdx, seqLen: numFrames, key: chosenKey,
+                                imageW: sprite.image && sprite.image.width, imageH: sprite.image && sprite.image.height, spriteLoaded: !!sprite.loaded,
+                                sampleFrame: (Array.isArray(seq) && seq[fbIdx]) ? JSON.stringify(seq[fbIdx]).slice(0,140) : '' };
                         } catch(_){}
                     }
                 }
@@ -18297,6 +18354,33 @@ function offerPermanentAbilityChoice() {
                     ctx.globalAlpha = 0.5;
                     ctx.fillStyle = 'white';
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
+
+                // In-canvas debug overlay (draw on main canvas so it's always visible on top of DOM layers)
+                    // Export a copy of lastDraw to window so any DOM-based overlays can use it too
+                    try { window._creditsLastDraw = lastDraw; } catch(_){}
+                    if (game.creditsDebugOverlay && lastDraw) {
+                    try {
+                        ctx.save();
+                        ctx.globalAlpha = 0.9;
+                        const infoX = 8, infoY = 8, infoW = Math.min(520, LOGICAL_W - 16);
+                        const infoH = 110;
+                        ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(infoX, infoY, infoW, infoH);
+                        ctx.fillStyle = '#fff'; ctx.font = '14px Courier New'; ctx.textAlign = 'left';
+                        const ks = `idx:${game.creditsIndex} name:${String(game.creditsName||'').slice(0,36)}`;
+                        const kd = `key:${String(lastDraw.key||'').slice(0,36)} mir:${lastDraw.mirrored} frame:${lastDraw.frameIndex}/${lastDraw.seqLen}`;
+                        const pos = `x:${Math.round(game.creditsEnemyX)} stopX:${game.creditsStopX}`;
+                        ctx.fillText(ks, infoX+8, infoY+22);
+                        ctx.fillText(kd, infoX+8, infoY+44);
+                        ctx.fillText(pos, infoX+8, infoY+66);
+                        const extra = `img:${(lastDraw.imageW||0)}x${(lastDraw.imageH||0)} loaded:${lastDraw.spriteLoaded ? 'yes' : 'no'}`;
+                        ctx.fillText(extra, infoX+8, infoY+88);
+                        // highlight draw bounds if sensible
+                        if (Number.isFinite(lastDraw.dx) && Number.isFinite(lastDraw.dy) && Number.isFinite(lastDraw.dw) && Number.isFinite(lastDraw.dh)) {
+                            ctx.lineWidth = 2; ctx.strokeStyle = 'lime'; ctx.strokeRect(lastDraw.dx, lastDraw.dy, lastDraw.dw, lastDraw.dh);
+                        }
+                        ctx.restore();
+                    } catch(_){}
                 }
             }
             ctx.restore();
@@ -37116,7 +37200,7 @@ function offerPermanentAbilityChoice() {
                     try{
                         if (document.getElementById('ggOverlayCanvas')) return;
                         const baseCanvas = document.getElementById('gameCanvas');
-                        lastDraw = { dx, dy, dw, dh, mirrored, frameIndex: game.creditsEnemyFrame % numFrames, seqLen: numFrames, key: chosenKey };
+                        lastDraw = { dx:dx||0, dy:dy||0, dw:dw||0, dh:dh||0, mirrored:!!mirrored, frameIndex: game.creditsEnemyFrame % numFrames, seqLen: numFrames, key: chosenKey, imageW: (sprite && sprite.image && sprite.image.width) || 0, imageH: (sprite && sprite.image && sprite.image.height) || 0, spriteLoaded: !!(sprite && sprite.loaded), sampleFrame: '' };
                         if (!baseCanvas) return; // game not present yet
                         const overlay = document.createElement('canvas');
                 // Credits debug overlay (shows sprite-key, frame index, frames count and bounding box)
@@ -37124,7 +37208,7 @@ function offerPermanentAbilityChoice() {
                     try {
                         ctx.save();
                         ctx.globalAlpha = 0.85;
-                        const infoX = 8, infoY = 8, infoW = 420; const infoH = 80;
+                        const infoX = 8, infoY = 8, infoW = 420; const infoH = 100;
                         ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(infoX, infoY, infoW, infoH);
                         ctx.fillStyle = '#fff'; ctx.font = '12px Courier New'; ctx.textAlign = 'left';
                         const ks = `idx:${game.creditsIndex} name:${String(game.creditsName||'').slice(0,36)}`;
@@ -37133,6 +37217,11 @@ function offerPermanentAbilityChoice() {
                         ctx.fillText(ks, infoX+8, infoY+20);
                         ctx.fillText(kd, infoX+8, infoY+38);
                         ctx.fillText(pos, infoX+8, infoY+56);
+                        // Extra diagnostic line: image dimensions, loaded flag and a short sampleFrame snippet
+                        try {
+                            const extra = `img:${(lastDraw.imageW||0)}x${(lastDraw.imageH||0)} loaded:${lastDraw.spriteLoaded ? 'yes' : 'no'} sample:${String(lastDraw.sampleFrame||'').slice(0,40)}`;
+                            ctx.fillText(extra, infoX+8, infoY+76);
+                        } catch(_){ }
                         // Draw bounds
                         ctx.strokeStyle = 'lime'; ctx.lineWidth = 2; ctx.globalAlpha = 0.9; ctx.strokeRect(lastDraw.dx, lastDraw.dy, lastDraw.dw, lastDraw.dh);
                         ctx.restore();
