@@ -1415,6 +1415,7 @@
             creditsStopTime: 0,
             creditsFlashTime: 0,
             creditsName: '',
+            creditsText: '',
             creditsEnemyFrame: 0,
             creditsFrameTimer: 0,
             creditsMusic: null
@@ -1513,6 +1514,26 @@
                         } catch(_) { game.creditsMusic = null; }
                     }
                 } catch(_){}
+            };
+        } catch(_){}
+
+        // Helper: load credits text for an enemy
+        try {
+            game.loadCreditsText = async function(index) {
+                const enemy = game.creditsEnemies[index];
+                const data = window.ENEMY_DOSSIER_DATA && window.ENEMY_DOSSIER_DATA[enemy];
+                if (data && data.bioPath) {
+                    try {
+                        game.creditsText = 'Loading bio...';
+                        const response = await fetch(data.bioPath);
+                        const text = await response.text();
+                        game.creditsText = text;
+                    } catch (e) {
+                        game.creditsText = 'Failed to load bio.';
+                    }
+                } else {
+                    game.creditsText = '';
+                }
             };
         } catch(_){}
 
@@ -8818,273 +8839,273 @@ try {
     window.ENEMY_DOSSIER_DATA['Thug'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Thug'] || {}, {
         displayName: 'Flapper Capizzi',
         image: 'assets/dossier/art/flappercapizzi.png',
-        bioPath: 'assets/dossier/text/flappercapizzi.md'
+        bioPath: 'assets/dossier/inmate/flappercapizzi.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Street Dog'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Street Dog'] || {}, {
         displayName: 'Tony "Breadsticks" Quackano',
         image: 'assets/dossier/art/tonybreadsticksquackano.png',
-        bioPath: 'assets/dossier/text/tonybreadsticksquackano.md'
+        bioPath: 'assets/dossier/inmate/tonybreadsticksquackano.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Punk'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Punk'] || {}, {
         displayName: 'Jimmy "Two Wings" Malone',
         image: 'assets/dossier/art/jimmytwowingsmalone.png',
-        bioPath: 'assets/dossier/text/jimmytwowingsmalone.md'
+        bioPath: 'assets/dossier/inmate/jimmytwowingsmalone.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Gangster'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Gangster'] || {}, {
         displayName: 'Machine Bill Kelly',
         image: 'assets/dossier/art/machinebillkelly.png',
-        bioPath: 'assets/dossier/text/machinebillkelly.md'
+        bioPath: 'assets/dossier/inmate/machinebillkelly.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Dealer'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Dealer'] || {}, {
         displayName: 'Bugsy Mallard',
         image: 'assets/dossier/art/bugsymallard.png',
-        bioPath: 'assets/dossier/text/bugsymallard.md'
+        bioPath: 'assets/dossier/inmate/bugsymallard.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Enforcer'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Enforcer'] || {}, {
         displayName: 'Big Beak Bruno',
         image: 'assets/dossier/art/bigbeakbruno.png',
-        bioPath: 'assets/dossier/text/bigbeakbruno.md'
+        bioPath: 'assets/dossier/inmate/bigbeakbruno.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Boss Thug'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Boss Thug'] || {}, {
         displayName: 'Don Quackleone',
         image: 'assets/dossier/art/donquackleone.png',
-        bioPath: 'assets/dossier/text/donquackleone.md'
+        bioPath: 'assets/dossier/inmate/donquackleone.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Boss Gangster'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Boss Gangster'] || {}, {
         displayName: 'Al Quackpone',
         image: 'assets/dossier/art/alquackpone.png',
-        bioPath: 'assets/dossier/text/alquackpone.md'
+        bioPath: 'assets/dossier/inmate/alquackpone.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['The Big Quack'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['The Big Quack'] || {}, {
         image: 'assets/dossier/art/thebigquack.png',
-        bioPath: 'assets/dossier/text/thebigquack.md'
+        bioPath: 'assets/dossier/inmate/bigquack.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Eggscobar'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Eggscobar'] || {}, {
         image: 'assets/dossier/art/eggscobar.png',
-        bioPath: 'assets/dossier/text/eggscobar.md'
+        bioPath: 'assets/dossier/inmate/eggscobar.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Big Bill'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Big Bill'] || {}, {
         image: 'assets/dossier/art/bigbill.png',
-        bioPath: 'assets/dossier/text/bigbill.md'
+        bioPath: 'assets/dossier/inmate/bigbill.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Goose Willis'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Goose Willis'] || {}, {
         image: 'assets/dossier/art/goosewillis.png',
-        bioPath: 'assets/dossier/text/goosewillis.md'
+        bioPath: 'assets/dossier/inmate/goosewillis.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Goosey Smalls'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Goosey Smalls'] || {}, {
         image: 'assets/dossier/art/gooseysmalls.png',
-        bioPath: 'assets/dossier/text/gooseysmalls.md'
+        bioPath: 'assets/dossier/inmate/gooseysmalls.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Lil Goosey'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Lil Goosey'] || {}, {
         image: 'assets/dossier/art/lilgoosey.png',
-        bioPath: 'assets/dossier/text/lilgoosey.md'
+        bioPath: 'assets/dossier/inmate/lilgoosey.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Goosey Elliot'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Goosey Elliot'] || {}, {
         image: 'assets/dossier/art/gooseyelliot.png',
-        bioPath: 'assets/dossier/text/gooseyelliot.md'
+        bioPath: 'assets/dossier/inmate/gooseyelliot.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Fowl Pacino'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Fowl Pacino'] || {}, {
         image: 'assets/dossier/art/fowlpacino.png',
-        bioPath: 'assets/dossier/text/fowlpacino.md'
+        bioPath: 'assets/dossier/inmate/fowlpacino.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['The Quacken'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['The Quacken'] || {}, {
         image: 'assets/dossier/art/quacken.png',
-        bioPath: 'assets/dossier/text/quacken.md'
+        bioPath: 'assets/dossier/inmate/quacken.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Geese Robbins'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Geese Robbins'] || {}, {
         image: 'assets/dossier/art/geeserobbins.png',
-        bioPath: 'assets/dossier/text/geeserobbins.md'
+        bioPath: 'assets/dossier/inmate/geeserobbins.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['2Honk Shakur'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['2Honk Shakur'] || {}, {
         image: 'assets/dossier/art/2honkshakur.png',
-        bioPath: 'assets/dossier/text/2honkshakur.md'
+        bioPath: 'assets/dossier/inmate/2honkshakur.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Cardi Beak'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Cardi Beak'] || {}, {
         image: 'assets/dossier/art/cardibeak.png',
-        bioPath: 'assets/dossier/text/cardibeak.md'
+        bioPath: 'assets/dossier/inmate/cardibeak.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Feather Krueger'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Feather Krueger'] || {}, {
         image: 'assets/dossier/art/featherkrueger.png',
-        bioPath: 'assets/dossier/text/featherkrueger.md'
+        bioPath: 'assets/dossier/inmate/featherkrueger.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Honkutus of Cygnus'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Honkutus of Cygnus'] || {}, {
         image: 'assets/dossier/art/honkutusofcygnus.png',
-        bioPath: 'assets/dossier/text/honkutusofcygnus.md'
+        bioPath: 'assets/dossier/inmate/honkutusofcygnus.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Mr Gosling'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Mr Gosling'] || {}, {
         image: 'assets/dossier/art/mrgosling.png',
-        bioPath: 'assets/dossier/text/mrgosling.md'
+        bioPath: 'assets/dossier/inmate/mrgosling.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Cygnus Prime'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Cygnus Prime'] || {}, {
         image: 'assets/dossier/art/cygnusprime.png',
-        bioPath: 'assets/dossier/text/cygnusprime.md'
+        bioPath: 'assets/dossier/inmate/cygnusprime.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['The Honkinator'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['The Honkinator'] || {}, {
         image: 'assets/dossier/art/honkinator.png',
-        bioPath: 'assets/dossier/text/honkinator.md'
+        bioPath: 'assets/dossier/inmate/honkinator.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Swanomaly'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Swanomaly'] || {}, {
         image: 'assets/dossier/art/swanomaly.png',
-        bioPath: 'assets/dossier/text/swanomaly.md'
+        bioPath: 'assets/dossier/inmate/swanomaly.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Swan Wick'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Swan Wick'] || {}, {
         image: 'assets/dossier/art/swanwick.png',
-        bioPath: 'assets/dossier/text/swanwick.md'
+        bioPath: 'assets/dossier/inmate/swanwick.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Swandroid 18'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Swandroid 18'] || {}, {
         image: 'assets/dossier/art/swandroid18.png',
-        bioPath: 'assets/dossier/text/swandroid18.md'
+        bioPath: 'assets/dossier/inmate/swandroid18.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Wunderswan'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Wunderswan'] || {}, {
         image: 'assets/dossier/art/wunderswan.png',
-        bioPath: 'assets/dossier/text/wunderswan.md'
+        bioPath: 'assets/dossier/inmate/wunderswan.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Golden Goose'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Golden Goose'] || {}, {
         displayName: 'The Golden Goose',
         image: 'assets/dossier/art/goldengoose.png',
-        bioPath: 'assets/dossier/text/goldengoose.md'
+        bioPath: 'assets/dossier/inmate/goldengoose.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Broodwaddle'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Broodwaddle'] || {}, {
         image: 'assets/dossier/art/broodwaddle.png',
-        bioPath: 'assets/dossier/text/broodwaddle.md'
+        bioPath: 'assets/dossier/inmate/broodwaddle.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['The Great Beaked One'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['The Great Beaked One'] || {}, {
         image: 'assets/dossier/art/greatbeakedone.png',
-        bioPath: 'assets/dossier/text/greatbeakedone.md'
+        bioPath: 'assets/dossier/inmate/greatbeakedone.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Billnarock the Unhatched'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Billnarock the Unhatched'] || {}, {
         image: 'assets/dossier/art/billnarock.png',
-        bioPath: 'assets/dossier/text/billnarock.md'
+        bioPath: 'assets/dossier/inmate/billnarock.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Downspawn of the Abyss'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Downspawn of the Abyss'] || {}, {
         image: 'assets/dossier/art/downspawnofabyss.png',
-        bioPath: 'assets/dossier/text/downspawnoftheabyss.md'
+        bioPath: 'assets/dossier/inmate/downspawn.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Featheroth the Molten'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Featheroth the Molten'] || {}, {
         image: 'assets/dossier/art/featheroth.png',
-        bioPath: 'assets/dossier/text/featheroththemolten.md'
+        bioPath: 'assets/dossier/inmate/featheroth.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Feathered Sleeper'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Feathered Sleeper'] || {}, {
         image: 'assets/dossier/art/featheredsleeper.png',
-        bioPath: 'assets/dossier/text/featheredsleeper.md'
+        bioPath: 'assets/dossier/inmate/featheredsleeper.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Waddlemancer'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Waddlemancer'] || {}, {
         image: 'assets/dossier/art/waddlemancer.png',
-        bioPath: 'assets/dossier/text/waddlemancer.md'
+        bioPath: 'assets/dossier/inmate/waddlemancer.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['The Beakoner'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['The Beakoner'] || {}, {
         image: 'assets/dossier/art/beakoner.png',
-        bioPath: 'assets/dossier/text/beakoner.md'
+        bioPath: 'assets/dossier/inmate/thebeakoner.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Quackos Eternal'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Quackos Eternal'] || {}, {
         image: 'assets/dossier/art/quackoseternal.png',
-        bioPath: 'assets/dossier/text/quackoseternal.md'
+        bioPath: 'assets/dossier/inmate/quackoseternal.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Mallard of the Mire'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Mallard of the Mire'] || {}, {
         image: 'assets/dossier/art/mallardofthemire.png',
-        bioPath: 'assets/dossier/text/mallardofthemire.md'
+        bioPath: 'assets/dossier/inmate/mallardofthemire.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Plumagorgon'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Plumagorgon'] || {}, {
         image: 'assets/dossier/art/plumagorgon.png',
-        bioPath: 'assets/dossier/text/plumagorgon.md'
+        bioPath: 'assets/dossier/inmate/plumagorgon.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Molted Menace'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Molted Menace'] || {}, {
         image: 'assets/dossier/art/moltedmenace.png',
-        bioPath: 'assets/dossier/text/moltedmenace.md'
+        bioPath: 'assets/dossier/inmate/moltedmenace.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Artisanal Sourduck...of Doom'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Artisanal Sourduck...of Doom'] || {}, {
         image: 'assets/dossier/art/artisanalsourduck.png',
-        bioPath: 'assets/dossier/text/sourduck.md'
+        bioPath: 'assets/dossier/inmate/artisanalsourduck.md'
     });
 } catch(_){ }
 try {
     window.ENEMY_DOSSIER_DATA['Mirequacker'] = Object.assign({}, window.ENEMY_DOSSIER_DATA['Mirequacker'] || {}, {
         image: 'assets/dossier/art/mirequacker.png',
-        bioPath: 'assets/dossier/text/mirequacker.md'
+        bioPath: 'assets/dossier/inmate/mirequacker.md'
     });
 } catch(_){ }
 
@@ -18060,6 +18081,7 @@ function offerPermanentAbilityChoice() {
                         game.creditsFade = 0;
                         game.creditsState = 'walking';
                         game.creditsName = (window.ENEMY_DOSSIER_DATA && window.ENEMY_DOSSIER_DATA[game.creditsEnemies[game.creditsIndex]] && window.ENEMY_DOSSIER_DATA[game.creditsEnemies[game.creditsIndex]].displayName) || game.creditsEnemies[game.creditsIndex];
+                        game.loadCreditsText(game.creditsIndex);
                         game.creditsEnemyX = LOGICAL_W + 100;
                     }
                 }
@@ -18124,6 +18146,7 @@ function offerPermanentAbilityChoice() {
                     } else {
                         game.creditsState = 'walking';
                         game.creditsName = (window.ENEMY_DOSSIER_DATA && window.ENEMY_DOSSIER_DATA[game.creditsEnemies[game.creditsIndex]] && window.ENEMY_DOSSIER_DATA[game.creditsEnemies[game.creditsIndex]].displayName) || game.creditsEnemies[game.creditsIndex];
+                        game.loadCreditsText(game.creditsIndex);
                         game.creditsEnemyX = LOGICAL_W + 100;
                         game.creditsEnemyFrame = 0;
                         game.creditsFrameTimer = 0;
@@ -18343,12 +18366,21 @@ function offerPermanentAbilityChoice() {
                         } catch(_){}
                     }
                 }
-                if (game.creditsName) {
+                if (game.creditsText) {
                     ctx.globalAlpha = 1;
                     ctx.fillStyle = 'white';
-                    ctx.font = '24px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.fillText(game.creditsName, LOGICAL_W / 2, LOGICAL_H - 50);
+                    ctx.font = '16px Arial';
+                    const lines = game.creditsText.split('\n');
+                    const lineHeight = 18;
+                    const enemyY = (LOGICAL_H / 2) + (game.creditsYOffset || 0);
+                    const startY = enemyY + 100;
+                    // Calculate max width for centering the block
+                    ctx.textAlign = 'left';
+                    const maxWidth = Math.max(...lines.map(line => ctx.measureText(line).width));
+                    const x = LOGICAL_W / 2 - maxWidth / 2;
+                    lines.forEach((line, i) => {
+                        ctx.fillText(line, x, startY + i * lineHeight);
+                    });
                 }
                 if (game.creditsState === 'flash') {
                     ctx.globalAlpha = 0.5;
