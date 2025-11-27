@@ -1452,6 +1452,33 @@
                     game.creditsEnemies = Object.keys(window.ENEMY_DOSSIER_DATA || {}).sort();
                 } catch(_) { game.creditsEnemies = (window.ENEMY_DOSSIER_DATA) ? Object.keys(window.ENEMY_DOSSIER_DATA) : []; }
 
+                // If the Great Beaked One will appear in credits, ensure we pre-load its eldritch
+                // spritesheet so the credits renderer can display the boss sprite immediately.
+                try {
+                    const hasQuthulu = (game.creditsEnemies || []).some(e => { try { const s = String(e||'').toLowerCase(); return s.indexOf('beaked')>=0 || s.indexOf('quthulu')>=0 || s.indexOf('thegreatbeakedone')>=0; } catch(_) { return false } });
+                    if (hasQuthulu) {
+                        try {
+                            game._eldritchSprites = game._eldritchSprites || {};
+                            if (!game._eldritchSprites.quthulu) {
+                                const qImg = new Image(); qImg.onload = ()=>{ qImg._ok = true; };
+                                qImg.onerror = ()=>{ console.warn('[CreditsPreload] Failed to load quthulu sheet'); qImg._broken = true; };
+                                qImg.src = 'assets/eldritch/spritesheets/quthulu-sheet-1-19.png';
+                                game._eldritchSprites.quthulu = qImg;
+                                // Build atlas (8x4 grid, 32 frames) so renderer can pick frames 1..19
+                                try {
+                                    const full = [];
+                                    for (let i = 0; i < 32; i++) {
+                                        const row = Math.floor(i / 8);
+                                        const col = i % 8;
+                                        full.push({ x: col * 256, y: row * 256, w: 256, h: 256 });
+                                    }
+                                    game._eldritchSprites.quthuluAtlas = full;
+                                } catch(_){}
+                            }
+                        } catch(_){ }
+                    }
+                } catch(_){ }
+
                 game.creditsEnemyKey = [];
                 try {
                     const sprites = game.enemySprites || {};
@@ -18078,6 +18105,35 @@ function offerPermanentAbilityChoice() {
                 if (key === '7') {
                     try { if (typeof game.startCreditsSequence === 'function') game.startCreditsSequence(); else game.creditsScene = true; } catch(_) { game.creditsScene = true; }
                 }
+                // Quick-test shortcut: jump to credits entry for The Great Beaked One (key '5')
+                if (key === '5' || code === 'Digit5' || code === 'Numpad5') {
+                    try {
+                        if (typeof game.startCreditsSequence === 'function') game.startCreditsSequence(); else game.creditsScene = true;
+                    } catch(_) { try { game.creditsScene = true; } catch(_){} }
+                    // Small async delay so startCreditsSequence can initialize creditsEnemies / keys
+                    setTimeout(()=>{
+                        try {
+                            const enemies = Array.isArray(game.creditsEnemies) ? game.creditsEnemies : (window.ENEMY_DOSSIER_DATA ? Object.keys(window.ENEMY_DOSSIER_DATA).sort() : []);
+                            const target = enemies.findIndex(e => (e||'').toString().toLowerCase().replace(/[^a-z0-9]+/g,'').indexOf('thegreatbeakedone'.toLowerCase().replace(/[^a-z0-9]+/g,'')) >= 0 || (e||'').toString().toLowerCase().indexOf('quthulu') >= 0 || (e||'').toString().toLowerCase().indexOf('beaked') >= 0 );
+                            if (target >= 0) {
+                                try {
+                                    game.creditsIndex = target;
+                                    // reset state so the entry will play from fade/intro
+                                    game.creditsState = 'fade_black';
+                                    game.creditsFade = 0;
+                                    game.creditsEnemyFrame = 0;
+                                    game.creditsFrameTimer = 0;
+                                    game.creditsEnemyX = LOGICAL_W + 100;
+                                    // Force next load of text for this index
+                                    try { if (typeof game.loadCreditsText === 'function') game.loadCreditsText(game.creditsIndex); } catch(_){ }
+                                    console.info('[CreditsShortcut] Jumped to The Great Beaked One at creditsIndex', target);
+                                } catch(_){ }
+                            } else {
+                                console.info('[CreditsShortcut] Could not find The Great Beaked One in creditsEnemies');
+                            }
+                        } catch(_){ }
+                    }, 60);
+                }
                 // Toggle credits debug overlay using top-row '6' (Digit6), numpad '6' (Numpad6)
                 // and keep '8' as a tolerant fallback.
                 if (key === '6' || code === 'Digit6' || code === 'Numpad6' || key === '8') {
@@ -18267,6 +18323,33 @@ function offerPermanentAbilityChoice() {
                 const mustFaceLeft = ['walking','continue','stop','flash'].includes(game.creditsState);
                 let sequenceEntry = null; // { frames: [...], frameStep: N, isLeft?, mirrorIfRight? }
                 try {
+                    // Special-case: if this entry is The Great Beaked One and we have the
+                    // quthulu spritesheet preloaded, draw it directly from the sheet to
+                    // avoid placeholder fallbacks when sprite containers are missing.
+                    try {
+                        const cn = String(chosenKey || '').toLowerCase();
+                        const isBeaked = (cn.indexOf('beaked') >= 0 || cn.indexOf('quthulu') >= 0 || cn.indexOf('thegreatbeakedone') >= 0);
+                        const qbImg = (game && game._eldritchSprites && game._eldritchSprites.quthulu) ? game._eldritchSprites.quthulu : null;
+                        const qbAtlas = (game && game._eldritchSprites && game._eldritchSprites.quthuluAtlas && Array.isArray(game._eldritchSprites.quthuluAtlas)) ? game._eldritchSprites.quthuluAtlas.slice() : null;
+                        if (isBeaked && qbImg && ((qbImg.complete) || qbImg._ok) && qbAtlas && qbAtlas.length) {
+                            // pick frames 1..19 (inclusive)
+                            const seq = qbAtlas.slice(1, 20);
+                            if (Array.isArray(seq) && seq.length) {
+                                const frameStep = 6;
+                                const nowFrame = (typeof game.creditsTick === 'number') ? Math.floor(game.creditsTick) : ((typeof game.frame === 'number') ? Math.floor(game.frame) : Math.floor((Date.now()/16) || 0));
+                                const idx = Math.floor(nowFrame / frameStep) % Math.max(1, seq.length);
+                                const frame = seq[idx] || seq[0];
+                                const y = (LOGICAL_H / 2) + (game.creditsYOffset || 0);
+                                const scale = (typeof game.creditsSizeScale === 'number') ? game.creditsSizeScale : 1;
+                                const dw = frame.w * scale; const dh = frame.h * scale;
+                                const dx = game.creditsEnemyX - dw/2; const dy = y - dh/2;
+                                try {
+                                    ctx.drawImage(qbImg, frame.x, frame.y, frame.w, frame.h, dx, dy, dw, dh);
+                                    lastDraw = { dx, dy, dw, dh, mirrored: true, frameIndex: idx, seqLen: seq.length, key: chosenKey, imageW: qbImg && (qbImg.naturalWidth||qbImg.width), imageH: qbImg && (qbImg.naturalHeight||qbImg.height), spriteLoaded: true, sampleFrame: JSON.stringify(frame).slice(0,140) };
+                                } catch(_) {}
+                            }
+                        }
+                    } catch(_){}
                     if (sprite && sprite.defaultAnimation && Array.isArray(sprite.defaultAnimation.frames) && sprite.defaultAnimation.frames.length) {
                         sequenceEntry = { frames: sprite.defaultAnimation.frames, frameStep: sprite.defaultAnimation.frameStep || (sprite.anim && sprite.anim.frameStep) || 6, mirrorIfRight:true };
                     } else if (sprite && sprite.anim && Array.isArray(sprite.anim.sequence) && sprite.anim.sequence.length) {
@@ -18293,6 +18376,29 @@ function offerPermanentAbilityChoice() {
                 // for The Great Beaked One: the eldritch sheets live in game._eldritchSprites.quthulu and
                 // may be available even if the container image wasn't fully decoded when credits started.
                 try {
+                    // If we don't have a registered sprite container for The Great Beaked One
+                    // but the eldritch spritesheet (quthulu) is available, create a temporary
+                    // sprite-like object using that sheet so the credits can render the boss.
+                    if (!sprite) {
+                        try {
+                            const cn = String(chosenKey || '').toLowerCase();
+                            if ((cn.indexOf('beaked') >= 0 || cn.indexOf('quthulu') >= 0 || cn.indexOf('thegreatbeakedone') >= 0) && game && game._eldritchSprites && game._eldritchSprites.quthulu) {
+                                const qbImg = game._eldritchSprites.quthulu;
+                                const qbAtlas = (game._eldritchSprites.quthuluAtlas && Array.isArray(game._eldritchSprites.quthuluAtlas)) ? game._eldritchSprites.quthuluAtlas.slice() : null;
+                                const seq = qbAtlas ? qbAtlas.slice(1, 20) : null; // frames 1..19
+                                sprite = {
+                                    image: qbImg,
+                                    loaded: !!qbImg._ok,
+                                    frames: { seq: seq || [] },
+                                    anim: { frames: seq || [], frameStep: 6, loop: true },
+                                    referenceWidth: 256,
+                                    referenceHeight: 256
+                                };
+                                // mark chosenKey so debug/overlays identify the fallback
+                                chosenKey = chosenKey || 'The Great Beaked One (quthulu)';
+                            }
+                        } catch(_) { /* fail silently, continue without sprite */ }
+                    }
                     if (sprite && !(sprite.image && sprite.image.complete) && !sprite.loaded && !sprite._forcedBitmap) {
                         const cn = String(chosenKey || '').toLowerCase();
                         if ((cn.indexOf('beaked') >= 0 || cn.indexOf('quthulu') >= 0 || cn.indexOf('thegreatbeakedone') >= 0) && game && game._eldritchSprites && game._eldritchSprites.quthulu) {
@@ -18395,8 +18501,8 @@ function offerPermanentAbilityChoice() {
                             const dh = Math.max(8, srcH * scale);
                             const dx = game.creditsEnemyX - dw/2;
                             const dy = y - dh/2;
-                            // Draw translucent magenta placeholder to make missing asset obvious and set lastDraw
-                            ctx.save(); ctx.globalAlpha = 0.45; ctx.fillStyle = 'magenta'; ctx.fillRect(dx, dy, dw, dh); ctx.globalAlpha = 1; ctx.lineWidth = 2; ctx.strokeStyle = '#ff00ff'; ctx.strokeRect(dx, dy, dw, dh); ctx.restore();
+                            // Placeholder removed: avoid drawing an intrusive magenta/purple box
+                            // (Keep lastDraw so diagnostics and DOM overlays still work.)
                             lastDraw = { dx, dy, dw, dh, mirrored: mustFaceLeft, frameIndex: 0, seqLen: seq ? seq.length : 1, key: chosenKey, imageW: (sprite.image && sprite.image.width) || 0, imageH: (sprite.image && sprite.image.height) || 0, spriteLoaded: !!sprite.loaded, sampleFrame: (sample && typeof sample === 'object') ? JSON.stringify(sample).slice(0,140) : '' };
                         } catch(_){}
                     } else {
