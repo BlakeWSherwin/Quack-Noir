@@ -168,7 +168,11 @@
                                         </div>
                                 </div>
                             </div>
-                            <!-- Right: Side panel (health HUD on top, stats below) -->
+                                <!-- Right: Side panel (health HUD on top, stats below) --> 
+                                <div id="creditsSection" style="display:none;">
+                                       <div id="creditsBg" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:-1;"></div>
+                                       <div id="creditsBars" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:-1;"></div>
+                                </div>
                             <div id="statsPanelWrapper" style="position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin-left:0; width: 210px; box-sizing:border-box; overflow-x:hidden;">
                                 <div id="ui" style="background: rgba(0,0,0,0.88); padding: 8px 10px; border-radius: 8px; width:100%; box-shadow:0 0 10px rgba(0,0,0,0.65); color:#f5f5f5;">
                                     <div style="display:flex; align-items:center; justify-content:flex-start; gap:8px; margin-bottom:6px;">
@@ -283,6 +287,26 @@
                     if (typeof window.unlockActIII === 'function' && window._safeUnlockActIII_flushing === false) {
                         try { window.unlockActIII(source); return; } catch(e) { /* fallthrough to queue */ }
                     }
+                } catch(_){ }
+                // Also preload the prison bars overlay graphic so it's available for the final pan-in
+                try {
+                    if (!game.creditsBarsImg) {
+                        game.creditsBarsImg = new Image();
+                        // diagnostic handlers so we can see success/fail reasons
+                        game.creditsBarsImg.onload = ()=>{ try { game.creditsBarsLoaded = true; console.info('[CreditsPreload] prisonbars1.png loaded', (game.creditsBarsImg && (game.creditsBarsImg.naturalWidth||game.creditsBarsImg.width) || 0), (game.creditsBarsImg && (game.creditsBarsImg.naturalHeight||game.creditsBarsImg.height)||0)); } catch(_){} };
+                        game.creditsBarsImg.onerror = ()=>{ try { game.creditsBarsLoaded = false; game.creditsBarsImg._broken = true; console.warn('[CreditsPreload] Failed to load prisonbars1.png (onerror) src=', game.creditsBarsImg && game.creditsBarsImg.src); } catch(_){} };
+                        try { game.creditsBarsImg.src = 'assets/prisonbars1.png'; } catch(e) { console.warn('[CreditsPreload] Could not set src for prisonbars1.png', e); }
+                    }
+                        // Also ensure the prison gate audio is requested so it's ready if allowed by browser
+                        try {
+                            if (!game.creditsBarsSfx) {
+                                game.creditsBarsSfx = new Audio();
+                                game.creditsBarsSfxLoaded = false;
+                                game.creditsBarsSfx.oncanplaythrough = ()=>{ try { game.creditsBarsSfxLoaded = true; console.info('[CreditsPreload] prisongate.mp3 ready (safeUnlockActIII)'); } catch(_){} };
+                                game.creditsBarsSfx.onerror = ()=>{ try { game.creditsBarsSfxLoaded = false; game.creditsBarsSfx._broken = true; console.warn('[CreditsPreload] Failed to load prisongate.mp3 (safeUnlockActIII) src=', game.creditsBarsSfx && game.creditsBarsSfx.src); } catch(_){} };
+                                try { game.creditsBarsSfx.src = 'assets/audio/prisongate.mp3'; } catch(e) { console.warn('[CreditsPreload] Could not set src for prisongate.mp3 (safeUnlockActIII)', e); }
+                            }
+                        } catch(_){ }
                 } catch(_){ }
                 try { window._unlockActIIIQueue.push(source || 'queued'); } catch(_){ }
             };
@@ -471,7 +495,7 @@
 
             // Preload bullet sprites
             window._bulletImages = window._bulletImages || {};
-            const WUNDER_SCRIBBLE_GIF_BASE64 = (
+                const WUNDER_SCRIBBLE_GIF_BASE64 = (
 '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'
 );
             const decodeBase64ToUint8Array = (str) => {
@@ -1409,6 +1433,24 @@
             creditsFade: 0,
             creditsBgImg: null,
             creditsBgLoaded: false,
+            // prison bars overlay that pans in for the final credits beat
+            creditsBarsImg: null,
+            creditsBarsLoaded: false,
+            creditsBarsX: null,
+            creditsBarsTargetX: null,
+            creditsBarsSpeed: null,
+            creditsBarsStopTime: 0,
+            // tuning: draw bars using native source dimensions then stretch slightly
+            creditsBarsNativeW: 1536,
+            creditsBarsNativeH: 1024,
+            // slightly wider than background so bars overlap the edges and feel weighty
+            creditsBarsOverlap: 1.30,
+            // audio to play when bars begin panning
+            creditsBarsSfx: null,
+            creditsBarsSfxLoaded: false,
+            _creditsBarsSoundPlayed: false,
+            // Whether the unlock-play (muted) succeeded — permits later audible play
+            _creditsBarsSoundUnlocked: false,
             creditsEnemyX: 0,
             creditsEnemySpeed: 2,
             creditsStopX: 0,
@@ -1425,6 +1467,54 @@
         try {
             if (localStorage && localStorage.getItem && localStorage.getItem('duckAndCoverUnlocked') === '1') {
                 game._duckAndCoverUnlocked = true;
+            }
+        } catch(_){ }
+
+        // Helper: ensure prisongate audio can be played when allowed by user gestures
+        try {
+            game._tryPlayCreditsBarsSound = game._tryPlayCreditsBarsSound || function(){
+                try {
+                    if (!game) return false;
+                    if (game._creditsBarsSoundPlayed) return true;
+                    if (game._creditsBarsSoundUnlocked) return true;
+                    if (!game.creditsBarsSfx) return false;
+                    try {
+                        // Try a muted play / pause to 'unlock' the audio context without producing
+                        // audible output. We leave `_creditsBarsSoundPlayed` false so that the
+                        // SFX will still be triggered normally when the bars actually move.
+                        const wasMuted = !!game.creditsBarsSfx.muted;
+                        try { game.creditsBarsSfx.muted = true; } catch(_){}
+                        const p = game.creditsBarsSfx.play();
+                        if (p && typeof p.then === 'function') {
+                            p.then(()=>{
+                                try {
+                                    game.creditsBarsSfx.pause();
+                                    game.creditsBarsSfx.currentTime = 0;
+                                    game.creditsBarsSfx.muted = wasMuted;
+                                    game._creditsBarsSoundUnlocked = true;
+                                    game._creditsBarsSoundPending = false;
+                                } catch(_){}
+                            }).catch(()=>{ try { game._creditsBarsSoundPending = true; } catch(_){} });
+                            return false;
+                        }
+                        // Sync path: pause and mark unlocked
+                        try { game.creditsBarsSfx.pause(); game.creditsBarsSfx.currentTime = 0; } catch(_){}
+                        try { game.creditsBarsSfx.muted = wasMuted; } catch(_){}
+                        game._creditsBarsSoundUnlocked = true;
+                        return true;
+                    } catch(e){ try { game._creditsBarsSoundPending = true; } catch(_){}; return false; }
+                } catch(_) { return false; }
+            };
+
+            // Hook gesture handlers so if autoplay was blocked, a user gesture will play the sound
+            if (!window._creditsBarsGestureHooked) {
+                const hook = function(){
+                    try {
+                        if (!game) return;
+                        try { if (typeof game._tryPlayCreditsBarsSound === 'function') { const ok = game._tryPlayCreditsBarsSound(); if (ok) { try { window.removeEventListener('pointerdown', hook, true); window.removeEventListener('keydown', hook, true); window.removeEventListener('touchstart', hook, true); window._creditsBarsGestureHooked = false; } catch(_){} } } } catch(_){ }
+                    } catch(_){}
+                };
+                try { window.addEventListener('pointerdown', hook, true); window.addEventListener('keydown', hook, true); window.addEventListener('touchstart', hook, true); window._creditsBarsGestureHooked = true; } catch(_){}
             }
         } catch(_){ }
 
@@ -6954,6 +7044,32 @@
         }
         // Attempt music start (safe if already playing)
         ensureBackgroundMusic();
+        // Try to unlock the prisongate SFX on first game start (user gesture) so later
+        // credits playback is allowed by autoplay policies.
+        try {
+            if (!game.creditsBarsSfx) {
+                try {
+                    const s = new Audio('assets/audio/prisongate.mp3');
+                    game.creditsBarsSfx = s;
+                    game.creditsBarsSfxLoaded = false;
+                    s.oncanplaythrough = ()=>{ try { game.creditsBarsSfxLoaded = true; console.info('[AudioUnlock] prisongate ready'); } catch(_){} };
+                    s.onerror = ()=>{ try { game.creditsBarsSfxLoaded = false; console.warn('[AudioUnlock] prisongate failed to load'); } catch(_){} };
+                    // Play briefly muted and pause to unlock the audio system without producing
+                    // any audible output. After unlocking, restore normal volume and mark
+                    // the sound as unlocked so later unmuted plays are allowed.
+                    try {
+                        const wasMuted = !!s.muted;
+                        try { s.muted = true; } catch(_){}
+                        const p = s.play();
+                        if (p && typeof p.then === 'function') {
+                            p.then(()=>{ try { s.pause(); s.currentTime = 0; s.muted = wasMuted; s.volume = 0.9; game._creditsBarsSoundPlayed = false; game._creditsBarsSoundUnlocked = true; } catch(_){} }).catch(()=>{ try { /* autoplay still blocked */ } catch(_){} });
+                        } else {
+                            try { s.pause(); s.currentTime = 0; s.muted = wasMuted; s.volume = 0.9; game._creditsBarsSoundPlayed = false; game._creditsBarsSoundUnlocked = true; } catch(_){ }
+                        }
+                    } catch(_){ }
+                } catch(_){}
+            }
+        } catch(_){}
         // Title overlay removal (if still present)
         const existingTitle = document.getElementById('titleOverlay');
         if (existingTitle) existingTitle.parentElement.removeChild(existingTitle);
@@ -18255,7 +18371,48 @@ function offerPermanentAbilityChoice() {
                 if (game.creditsEnemyX < -100) {
                     game.creditsIndex++;
                     if (game.creditsIndex >= game.creditsEnemies.length) {
-                        game.creditsState = 'done';
+                        // All enemies finished — start the prison bars pan-in animation
+                        game.creditsState = 'bars';
+                        console.info('[Credits] All enemies finished — starting bars animation');
+                        try {
+                            // Start from offscreen right
+                            game.creditsBarsX = LOGICAL_W + 50;
+                            // Choose a display width so the bars sit nicely within the screen
+                            // Prefer a display width slightly larger than the current canvas to overlap
+                            // the background. Use the overlap factor (e.g., 1.06 => 6% wider than background)
+                            const overlap = (typeof game.creditsBarsOverlap === 'number') ? game.creditsBarsOverlap : 1.06;
+                            const imgW = (game.creditsBarsImg && (game.creditsBarsImg.naturalWidth || game.creditsBarsImg.width)) || game.creditsBarsNativeW || Math.round(LOGICAL_W * 0.8);
+                            const displayW = Math.round(LOGICAL_W * overlap);
+                            game.creditsBarsTargetX = Math.round((LOGICAL_W - displayW) / 2);
+                            game.creditsBarsSpeed = Math.max(4, Math.round(LOGICAL_W / 160));
+                            game.creditsBarsStopTime = 160; // pause a bit once centered
+                            // store a logical display width (used by render) — make sure it exists
+                            game.creditsBarsDisplayWidth = displayW;
+                            // compute a scale for render routine; set later when image available but give a fallback
+                            game.creditsBarsScale = (imgW > 0) ? (displayW / imgW) : 1;
+                            // Ensure the image is requested now (in case preload didn't run earlier)
+                            try {
+                                if (!game.creditsBarsImg) {
+                                    game.creditsBarsImg = new Image();
+                                    game.creditsBarsLoaded = false;
+                                    game.creditsBarsImg.onload = () => { try { game.creditsBarsLoaded = true; console.info('[CreditsPreload] prisonbars1.png loaded (late)', (game.creditsBarsImg && (game.creditsBarsImg.naturalWidth||game.creditsBarsImg.width) || 0), (game.creditsBarsImg && (game.creditsBarsImg.naturalHeight||game.creditsBarsImg.height)||0)); } catch(_){} };
+                                    game.creditsBarsImg.onerror = () => { try { game.creditsBarsLoaded = false; game.creditsBarsImg._broken = true; console.warn('[CreditsPreload] Failed to load prisonbars1.png (late onerror) src=', game.creditsBarsImg && game.creditsBarsImg.src); } catch(_){} };
+                                    try { game.creditsBarsImg.src = 'assets/prisonbars1.png'; } catch(e) { console.warn('[CreditsPreload] Could not set src for prisonbars1.png (late)', e); }
+                                } else if (!(game.creditsBarsLoaded || (game.creditsBarsImg && game.creditsBarsImg.complete))) {
+                                    // If the image exists but hasn't loaded yet, ensure handlers are present so we get notifications
+                                    try {
+                                        game.creditsBarsImg.onload = game.creditsBarsImg.onload || (() => { try { game.creditsBarsLoaded = true; console.info('[CreditsPreload] prisonbars1.png loaded (late handler)'); } catch(_){} });
+                                        game.creditsBarsImg.onerror = game.creditsBarsImg.onerror || (() => { try { game.creditsBarsLoaded = false; game.creditsBarsImg._broken = true; console.warn('[CreditsPreload] Failed to load prisonbars1.png (existing image onerror) src=', game.creditsBarsImg && game.creditsBarsImg.src); } catch(_){} });
+                                    } catch(_){}
+                                }
+                            } catch(_){}
+                            // Reset SFX flags — don't attempt playback here. We'll play the gate SFX
+                            // only once the bars actually start panning (so we don't play at credits start).
+                            try { game._creditsBarsSoundPlayed = false; game._creditsBarsSoundPending = false; } catch(_){ }
+                        } catch(_) {
+                            game.creditsState = 'done';
+                            console.warn('[Credits] Failed to start bars animation — falling back to done');
+                        }
                     } else {
                         game.creditsState = 'walking';
                         game.creditsName = (window.ENEMY_DOSSIER_DATA && window.ENEMY_DOSSIER_DATA[game.creditsEnemies[game.creditsIndex]] && window.ENEMY_DOSSIER_DATA[game.creditsEnemies[game.creditsIndex]].displayName) || game.creditsEnemies[game.creditsIndex];
@@ -18265,6 +18422,93 @@ function offerPermanentAbilityChoice() {
                         game.creditsFrameTimer = 0;
                     }
                 }
+            } else if (game.creditsState === 'bars') {
+                // Animate pan-in of prison bars graphic (two-layer effect is handled in render)
+                    try {
+                    if (typeof game.creditsBarsX !== 'number') game.creditsBarsX = LOGICAL_W + 50;
+                    if (typeof game.creditsBarsSpeed !== 'number' || !game.creditsBarsSpeed) game.creditsBarsSpeed = Math.max(4, Math.round(LOGICAL_W / 160));
+                    // Now that the bars are actively beginning to move, attempt to play the
+                    // prison gate SFX here (only once). This prevents the audio from playing
+                    // earlier when the credits sequence starts.
+                    try {
+                        if (typeof game._tryPlayCreditsBarsSound === 'function' && !game._creditsBarsSoundPlayed) {
+                            try { game._tryPlayCreditsBarsSound(); } catch(_){}
+                            // If the credits music is already playing and autoplay policies allow
+                            // concurrent plays, try again shortly to ensure SFX starts.
+                            try {
+                                if (game.creditsMusic && !game.creditsMusic.paused) {
+                                    setTimeout(()=>{
+                                        try {
+                                            if (game.creditsBarsSfx && !game._creditsBarsSoundPlayed) {
+                                                const p = game.creditsBarsSfx.play();
+                                                if (p && typeof p.then === 'function') {
+                                                    p.then(()=>{ try { game._creditsBarsSoundPlayed = true; game._creditsBarsSoundPending = false; console.info('[CreditsSFX] played via creditsMusic unlock'); } catch(_){} }).catch(err=>{ try { game._creditsBarsSoundPending = true; console.warn('[CreditsSFX] autoplay blocked despite creditsMusic', err); } catch(_){} });
+                                                } else {
+                                                    game._creditsBarsSoundPlayed = true; console.info('[CreditsSFX] played via creditsMusic unlock (sync)');
+                                                }
+                                            }
+                                        } catch(e) { try { console.warn('[CreditsSFX] play attempt failed during creditsMusic check', e); } catch(_){} }
+                                    }, 120);
+                                }
+                            } catch(_){ }
+                        }
+                    } catch(_){ }
+                    // Move left until we reach the target
+                    game.creditsBarsX -= game.creditsBarsSpeed;
+                    if (game.creditsBarsX <= (typeof game.creditsBarsTargetX === 'number' ? game.creditsBarsTargetX : Math.round((LOGICAL_W - (game.creditsBarsDisplayWidth||LOGICAL_W)) / 2))) {
+                        game.creditsBarsX = (typeof game.creditsBarsTargetX === 'number') ? game.creditsBarsTargetX : Math.round((LOGICAL_W - (game.creditsBarsDisplayWidth||LOGICAL_W)) / 2);
+                        game.creditsBarsStopTime = (typeof game.creditsBarsStopTime === 'number') ? (game.creditsBarsStopTime - 1) : 160;
+                        if (game.creditsBarsStopTime <= 0) {
+                            // Give a short pause (2 seconds) with the bars static, then fade to black
+                            game.creditsState = 'bars_wait';
+                            try { game.creditsBarsPostStopDelay = 120; /* 2s @60fps */ } catch(_){ game.creditsBarsPostStopDelay = 120; }
+                        }
+                    }
+                } catch(_) { game.creditsState = 'done'; }
+            } else if (game.creditsState === 'bars_wait') {
+                // After the bars have come to rest, wait a short period then start a fade-to-title
+                try {
+                    game.creditsBarsPostStopDelay = (typeof game.creditsBarsPostStopDelay === 'number') ? (game.creditsBarsPostStopDelay - 1) : 120;
+                    if (game.creditsBarsPostStopDelay <= 0) {
+                        game.creditsState = 'bars_fade';
+                        try { game.creditsFade = 0; } catch(_){ game.creditsFade = 0; }
+                        // Pause credits music so SFX played at bars' movement start can be heard clearly
+                        try { if (game.creditsMusic) { try { game.creditsMusic.pause(); } catch(_){} } } catch(_){ }
+                    }
+                } catch(_) { game.creditsState = 'bars_fade'; }
+            } else if (game.creditsState === 'bars_fade') {
+                // Fade to black, then end current game and return to title screen
+                try {
+                    game.creditsFade = (typeof game.creditsFade === 'number') ? (game.creditsFade + 0.02) : 0.02;
+                    if (game.creditsFade >= 1) {
+                        game.creditsFade = 1;
+                        // finalize -- stop credits and reload the browser tab to ensure a clean title screen
+                        try {
+                            // Stop credits music explicitly to avoid overlap
+                            try { if (game.creditsMusic) { try { game.creditsMusic.pause(); } catch(_){}; game.creditsMusic = null; } } catch(_){ }
+                            // Also stop any act/background music so the reload won't try to auto-play an act
+                            try { if (game.bgMusic) { try { game.bgMusic.pause(); } catch(_){}; game.bgMusic = null; } } catch(_){ }
+                            // Ensure credits music is stopped before reload
+                            try { if (game.creditsMusic) { try { game.creditsMusic.pause(); } catch(_){}; game.creditsMusic = null; } } catch(_){ }
+                            // Prevent title from auto-starting Act music while we switch to the title overlay
+                            try { game._titleMusicSuppressed = true; } catch(_){ }
+                            // Clear credits state so render returns to title overlay drawing
+                            try { game.creditsScene = false; } catch(_){}
+                            try { game.creditsTick = 0; } catch(_){}
+                            // Ensure the game isn't running and show the title overlay
+                            try { game._returningToTitle = true; } catch(_){}
+                            try { game._started = false; } catch(_){}
+                            try { game.paused = false; } catch(_){}
+                            try { game.gameOver = true; } catch(_){}
+                            // Draw a final black frame to ensure no flicker
+                            try { if (ctx) { ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle = '#000'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.restore(); } } catch(_){ }
+                            // No final SFX here; the gate SFX should have played when bars started moving.
+
+                            // Finally do a browser reload so the title overlay is presented fresh
+                            try { setTimeout(()=>{ try { window.location.reload(); } catch(_){} }, 240); } catch(_){}
+                        } catch(e) { console.warn('[Credits] End-of-credits finalization failed', e); }
+                    }
+                } catch(_) { game.creditsState = 'done'; }
             } else if (game.creditsState === 'done') {
                 game._returningToTitle = true;
                 // Restore any UI or z-index modifications we made at start
@@ -18295,11 +18539,73 @@ function offerPermanentAbilityChoice() {
             if (game.creditsState === 'fade_black') {
                 ctx.globalAlpha = game.creditsFade;
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
-            } else if (game.creditsState === 'fade_in_bg' || game.creditsState === 'walking' || game.creditsState === 'stop' || game.creditsState === 'flash' || game.creditsState === 'continue') {
+            } else if (game.creditsState === 'fade_in_bg' || game.creditsState === 'walking' || game.creditsState === 'stop' || game.creditsState === 'flash' || game.creditsState === 'continue' || game.creditsState === 'bars' || game.creditsState === 'bars_wait' || game.creditsState === 'bars_fade') {
                 if (game.creditsBgLoaded) {
                     ctx.globalAlpha = 1 - game.creditsFade;
                     ctx.drawImage(game.creditsBgImg, 0, 0, LOGICAL_W, LOGICAL_H);
                 }
+
+                // If the prison bars effect is in-flight, draw two layers (back/front) that pan in
+                try {
+                    const shouldDrawBars = (game.creditsState === 'bars' || game.creditsState === 'bars_wait' || game.creditsState === 'bars_fade');
+                    const imgReady = !!(game.creditsBarsImg && (game.creditsBarsLoaded || (game.creditsBarsImg && game.creditsBarsImg.complete)));
+                    if (shouldDrawBars && imgReady) {
+                        const img = game.creditsBarsImg;
+                        // determine display width (already computed at init). We want the src to be
+                        // the image native dimensions (so the renderer samples at 1536x1024) then
+                        // scale to slightly overlap the background using the overlap factor.
+                        const displayW = game.creditsBarsDisplayWidth || Math.round(LOGICAL_W * (game.creditsBarsOverlap || 1.06));
+                        const srcW = (img && (img.naturalWidth||img.width)) || (game.creditsBarsNativeW || displayW);
+                        const srcH = (img && (img.naturalHeight||img.height)) || (game.creditsBarsNativeH || Math.round(srcW * (1024/1536)));
+                        const scale = game.creditsBarsScale || (displayW / Math.max(1, srcW));
+                        const displayH = Math.round(srcH * scale);
+                        const targetX = (typeof game.creditsBarsTargetX === 'number') ? game.creditsBarsTargetX : Math.round((LOGICAL_W - displayW) / 2);
+                        const baseX = (typeof game.creditsBarsX === 'number') ? game.creditsBarsX : (LOGICAL_W + 32);
+                        // small per-layer offsets so the two layers read as depth during motion but align when centered
+                        const remaining = Math.max(0, baseX - targetX);
+                        const backOffset = Math.round(remaining * 0.05);
+                        const frontOffset = Math.round(remaining * -0.04);
+                        const backX = baseX + backOffset;
+                        const frontX = baseX + frontOffset;
+                        const y = Math.round((LOGICAL_H / 2) - (displayH / 2));
+                        // draw darker/softer back layer and brighter slightly-offset front layer
+                        ctx.save();
+                        ctx.globalAlpha = 0.62; ctx.drawImage(img, 0, 0, srcW, srcH, backX, y + 6, displayW, displayH);
+                        ctx.globalAlpha = 0.96; ctx.drawImage(img, 0, 0, srcW, srcH, frontX, y - 6, displayW, displayH);
+                        ctx.restore();
+                    } else if (shouldDrawBars && !imgReady) {
+                        // Fallback visual: draw translucent vertical bars directly with the same
+                        // motion/center logic so the effect is visible even if the asset didn't load.
+                        try {
+                            const displayW = game.creditsBarsDisplayWidth || Math.round(LOGICAL_W * 0.8);
+                            const displayH = Math.round(displayW * 0.45);
+                            const x = (typeof game.creditsBarsX === 'number') ? game.creditsBarsX : (LOGICAL_W + 50);
+                            const y = Math.round((LOGICAL_H / 2) - (displayH / 2));
+                            ctx.save();
+                            // base translucent overlay to let background show through
+                            ctx.globalAlpha = 0.45; ctx.fillStyle = '#000000'; ctx.fillRect(x, y, displayW, displayH);
+                            // draw vertical metal bar strips (vary width/alpha) and small highlights
+                            const barW = Math.max(8, Math.round(displayW / 28));
+                            const gap = Math.max(6, Math.round(barW / 3));
+                            let px = x + 8;
+                            while (px < x + displayW - 8) {
+                                ctx.globalAlpha = 0.95; ctx.fillStyle = '#222'; ctx.fillRect(px, y, barW, displayH);
+                                ctx.globalAlpha = 0.55; ctx.fillStyle = '#444'; ctx.fillRect(px + Math.round(barW * 0.2), y + 4, Math.max(1, Math.round(barW * 0.2)), displayH - 8);
+                                px += barW + gap;
+                            }
+                            // subtle front highlight for readability
+                            ctx.globalAlpha = 0.85; ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 2; ctx.strokeRect(x, y, displayW, displayH);
+                            ctx.restore();
+                            try { window._creditsBarsDebug = { x, y, displayW, displayH, img: !!game.creditsBarsImg, loaded: !!(game.creditsBarsLoaded || (game.creditsBarsImg && game.creditsBarsImg.complete)), state: game.creditsState }; } catch(_){ }
+                            // Warn once per run if missing (non-spammy)
+                            if (!game._creditsBarsWarned) { console.warn('[Credits] bars state active but prisonbars image not ready — using procedural fallback', window._creditsBarsDebug); game._creditsBarsWarned = true; }
+                        } catch(_){ }
+                    }
+                    // If we're actively fading-to-title, overlay a black fade on top of everything
+                    if (game.creditsState === 'bars_fade' && typeof game.creditsFade === 'number') {
+                        try { ctx.save(); ctx.globalAlpha = Math.max(0, Math.min(1, game.creditsFade)); ctx.fillStyle = 'black'; ctx.fillRect(0,0,canvas.width, canvas.height); ctx.restore(); } catch(_){}
+                    }
+                } catch(_){}
                 const enemyName = game.creditsEnemies[game.creditsIndex];
                 let chosenKey = (game.creditsEnemyKey && game.creditsEnemyKey[game.creditsIndex]) || enemyName;
                 let sprite = (game.enemySprites && game.enemySprites[chosenKey]) || (game.enemySprites && game.enemySprites[enemyName]) || null;
@@ -23713,6 +24019,34 @@ function offerPermanentAbilityChoice() {
                                 game.player._seenAbilities = game.player._seenAbilities || {};
                                 game.player._seenAbilities['Release the Quacken!'] = true;
                                 if (typeof saveSeenAbilities === 'function') saveSeenAbilities();
+                            } catch(_){ }
+                            // Reset sound-play flags and ensure the gate audio object exists (do not auto-play here)
+                            try {
+                                game._creditsBarsSoundPlayed = false;
+                                game._creditsBarsSoundPending = false;
+                                // If we already have an audio object, try to play it now and handle a possible
+                                // autoplay rejection by marking the sound as pending. That allows a later
+                                // user gesture to unblock the audio and play it.
+                                if (game.creditsBarsSfx) {
+                                    // Do not play here — we'll trigger the SFX at the exact moment bars begin moving
+                                    game._creditsBarsSoundPlayed = false;
+                                    game._creditsBarsSoundPending = false;
+                                } else {
+                                    try {
+                                        // Create a best-effort audio object and try to play immediately; if blocked
+                                        // mark pending so gesture handlers will attempt playback later.
+                                        game.creditsBarsSfx = new Audio('assets/audio/prisongate.mp3');
+                                        game.creditsBarsSfxLoaded = false;
+                                        game.creditsBarsSfx.oncanplaythrough = ()=>{ try { game.creditsBarsSfxLoaded = true; } catch(_){} };
+                                        game.creditsBarsSfx.onerror = ()=>{ try { game.creditsBarsSfxLoaded = false; game.creditsBarsSfx._broken = true; } catch(_){} };
+                                        try {
+                                            // Create audio object but do not play yet — we will play when bars start
+                                            game.creditsBarsSfx.volume = 0.9; game.creditsBarsSfx.currentTime = 0;
+                                            game._creditsBarsSoundPlayed = false;
+                                            game._creditsBarsSoundPending = false;
+                                        } catch(e) { try { game._creditsBarsSoundPending = true; } catch(_){} }
+                                    } catch(e) { try { game._creditsBarsSoundPending = true; } catch(_){} }
+                                }
                             } catch(_){ }
                         } else {
                             try { game._quackenReleased = true; } catch(_){ }
