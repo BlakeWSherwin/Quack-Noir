@@ -249,8 +249,8 @@
                 try { console.info('[Progress-stub] Act II unlocked (early stub)', source || 'early-stub'); } catch(_){ }
                 try { if (typeof showToast === 'function') showToast('Act II unlocked!'); } catch(_){ }
                 try { const menu = document.getElementById('titleActMenu'); if (menu && typeof menu._refresh === 'function') menu._refresh(); } catch(_){ }
-            
-            
+            };
+        }
         } catch(_){ }
         if (typeof window.safeUnlockActII !== 'function') {
             window._unlockActIIQueue = window._unlockActIIQueue || [];
@@ -264,8 +264,9 @@
                     // Force mirroring when actors must face left so all sprites face left while moving left
                     if (mustFaceLeft) mirrored = true;
                 } catch(_){}
-                try { window._unlockActIIQueue.push(source || 'queued'); } catch(_){}
-            
+                try { window._unlockActIIQueue.push(source || 'queued'); } catch(_){ }
+            };
+
             window._flushUnlockActIIQueue = function(){
                 try {
                     if (!window._unlockActIIQueue || window._unlockActIIQueue.length === 0) return;
@@ -693,7 +694,6 @@
 
             // If frames could not be built from the sheet, keep the fallback animation
             if (!buildWunderScribbleFramesFromSheet()) ensureFallbackAnim();
-            };
             // Quacken tentacle projectile sprite (deferred to first use/unlock)
             const quackenTentacleImg = new Image();
             quackenTentacleImg.onload = ()=>{ quackenTentacleImg._ok = true; };
@@ -1287,9 +1287,9 @@
             player: {
                 x: 320, y: 240, health: 100, maxHealth: 100,
                 abilities: [], permanentAbilities: [],
-                // Initial facing is down; align lastDirection so first shot matches sprite
-                facing: 'down',
-                lastDirection: { x: 0, y: 1 },
+                // Initial facing should be right so new acts start facing right
+                facing: 'right',
+                lastDirection: { x: 1, y: 0 },
                 invulnerable: false, invulnTime: 0,
                 speed: 2.5
             },
@@ -11769,7 +11769,10 @@ function offerPermanentAbilityChoice() {
             ];
             const PLAYER_TARGET_HEIGHT = 54;
             game.player = game.player || {};
-            game.player.facing = game.player.facing || 'right';
+            // When initializing player state for a new act, always force facing right
+            // so acts consistently start with the player facing to the right.
+            game.player.facing = 'right';
+            game.player.lastDirection = { x: 1, y: 0 };
             game.player.animFrame = 0;
             game.player.animTimer = 0;
             game.player.animSpeed = 7;

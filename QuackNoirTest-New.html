@@ -581,14 +581,12 @@
                     }
                 } catch(_){ }
             };
-            const WUNDER_SCRIBBLE_SHEET_RECTS = [
-                { x:0, y:0, w:176, h:149 },
-                { x:176, y:0, w:176, h:149 },
-                { x:352, y:0, w:176, h:149 },
-                { x:528, y:0, w:176, h:149 },
-                { x:704, y:0, w:176, h:149 },
-                { x:0, y:149, w:176, h:149 }
-            ];
+            // The scribble spritesheet is a 5×2 sheet with 6 active frames (left-to-right, top-to-bottom)
+            // Instead of relying on hardcoded pixel rects, derive frame rects from the image's natural size
+            // so different source widths/heights still work correctly.
+            const WUNDER_SCRIBBLE_SHEET_COLUMNS = 5;
+            const WUNDER_SCRIBBLE_SHEET_ROWS = 2;
+            const WUNDER_SCRIBBLE_SHEET_FRAMES = 6; // only first 6 cells are used
             const WUNDER_SCRIBBLE_FRAME_DURATION = 80;
             const buildWunderScribbleFramesFromSheet = () => {
                 try {
@@ -599,8 +597,34 @@
 
                     const frames = [];
                     let total = 0;
-                    for (let i = 0; i < WUNDER_SCRIBBLE_SHEET_RECTS.length; i++) {
-                        const rect = WUNDER_SCRIBBLE_SHEET_RECTS[i];
+                    // If the source image exposes a natural size, compute grid cell bounds from it.
+                    let rects = null;
+                    try {
+                        const srcW = wunderScribbleImg.naturalWidth || wunderScribbleImg.width || 0;
+                        const srcH = wunderScribbleImg.naturalHeight || wunderScribbleImg.height || 0;
+                        if (srcW > 0 && srcH > 0) {
+                            const cellW = Math.floor(srcW / WUNDER_SCRIBBLE_SHEET_COLUMNS) || 1;
+                            const cellH = Math.floor(srcH / WUNDER_SCRIBBLE_SHEET_ROWS) || 1;
+                            rects = [];
+                            for (let fi = 0; fi < WUNDER_SCRIBBLE_SHEET_FRAMES; fi++) {
+                                const cx = fi % WUNDER_SCRIBBLE_SHEET_COLUMNS;
+                                const cy = Math.floor(fi / WUNDER_SCRIBBLE_SHEET_COLUMNS);
+                                rects.push({ x: cx * cellW, y: cy * cellH, w: cellW, h: cellH });
+                            }
+                        }
+                    } catch(_){ rects = null; }
+                    // Fallback to the legacy hardcoded rects if anything went wrong or sizes are missing
+                    if (!rects || !rects.length) rects = [
+                        { x:0, y:0, w:176, h:149 },
+                        { x:176, y:0, w:176, h:149 },
+                        { x:352, y:0, w:176, h:149 },
+                        { x:528, y:0, w:176, h:149 },
+                        { x:704, y:0, w:176, h:149 },
+                        { x:0, y:149, w:176, h:149 }
+                    ];
+
+                    for (let i = 0; i < rects.length; i++) {
+                        const rect = rects[i];
                         // Prefer OffscreenCanvas when available (no DOM), fallback to normal canvas
                         const canvas = (typeof OffscreenCanvas !== 'undefined') ? new OffscreenCanvas(rect.w, rect.h) : (typeof document !== 'undefined' ? document.createElement('canvas') : null);
                         if (!canvas) continue;
@@ -1287,9 +1311,9 @@
             player: {
                 x: 320, y: 240, health: 100, maxHealth: 100,
                 abilities: [], permanentAbilities: [],
-                // Initial facing is down; align lastDirection so first shot matches sprite
-                facing: 'down',
-                lastDirection: { x: 0, y: 1 },
+                // Initial facing should be right so new acts start facing right
+                facing: 'right',
+                lastDirection: { x: 1, y: 0 },
                 invulnerable: false, invulnTime: 0,
                 speed: 2.5
             },
@@ -11769,7 +11793,10 @@ function offerPermanentAbilityChoice() {
             ];
             const PLAYER_TARGET_HEIGHT = 54;
             game.player = game.player || {};
-            game.player.facing = game.player.facing || 'right';
+            // When initializing player state for a new act, always force facing right
+            // so acts consistently start with the player facing to the right.
+            game.player.facing = 'right';
+            game.player.lastDirection = { x: 1, y: 0 };
             game.player.animFrame = 0;
             game.player.animTimer = 0;
             game.player.animSpeed = 7;
@@ -27912,6 +27939,10 @@ function offerPermanentAbilityChoice() {
             // Only apply knockback when explicitly specified by the projectile or specific weapon types.
             // Avoid a large default knockback for ordinary shots (previously caused noticeable pushes).
             let kbDist = proj.knockbackDistance || 0;
+            // Reduce knockback applied by Wunder Doodle projectiles so enemies don't
+            // get launched unrealistically far and hit the player — make the effect
+            // gentler while preserving behavior when other abilities set explicit knockback.
+            try { if (proj && proj.wunderDoodle && kbDist > 0) kbDist = Math.floor(kbDist * 0.7); } catch(_){ }
             if (!kbDist && proj.weaponType === 'hammer') kbDist = 40; // hammer baseline
             // Earth Spike / Magma derived impacts: always use smooth knockback (less jarring)
             // proj._hasEarth is precomputed earlier (includes Magma combo). We slightly reduce raw distance
@@ -35506,8 +35537,13 @@ function offerPermanentAbilityChoice() {
                     const imgH = img && (img.naturalHeight || img.height) || (imgW || 0);
                     const defaultDrawW = baseSize;
                     const defaultDrawH = imgH ? Math.max(12, baseSize * (imgH / Math.max(1, imgW))) : baseSize;
+                    // Determine overlay anchor point. Prefer the enemy hitbox center when available
+                    // (some enemy sprites are anchored differently so hitbox center aligns better
+                    // with the visible middle of the sprite). Fall back to enemy.x/y if not present.
+                    const overlayCX = (enemy && enemy.hitbox && typeof enemy.hitbox.x === 'number' && typeof enemy.hitbox.w === 'number') ? (enemy.hitbox.x + (enemy.hitbox.w / 2)) : enemy.x;
+                    const overlayCY = (enemy && enemy.hitbox && typeof enemy.hitbox.y === 'number' && typeof enemy.hitbox.h === 'number') ? (enemy.hitbox.y + (enemy.hitbox.h / 2)) : enemy.y;
                     ctx.save();
-                    ctx.translate(enemy.x, enemy.y + bob);
+                    ctx.translate(overlayCX, overlayCY + bob);
                     ctx.globalAlpha = 0.9;
                     let rendered = false;
                     if (anim && anim.frames && anim.frames.length) {
