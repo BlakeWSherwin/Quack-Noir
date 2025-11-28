@@ -249,8 +249,8 @@
                 try { console.info('[Progress-stub] Act II unlocked (early stub)', source || 'early-stub'); } catch(_){ }
                 try { if (typeof showToast === 'function') showToast('Act II unlocked!'); } catch(_){ }
                 try { const menu = document.getElementById('titleActMenu'); if (menu && typeof menu._refresh === 'function') menu._refresh(); } catch(_){ }
-            };
-        }
+            
+            
         } catch(_){ }
         if (typeof window.safeUnlockActII !== 'function') {
             window._unlockActIIQueue = window._unlockActIIQueue || [];
@@ -264,9 +264,8 @@
                     // Force mirroring when actors must face left so all sprites face left while moving left
                     if (mustFaceLeft) mirrored = true;
                 } catch(_){}
-                try { window._unlockActIIQueue.push(source || 'queued'); } catch(_){ }
-            };
-
+                try { window._unlockActIIQueue.push(source || 'queued'); } catch(_){}
+            
             window._flushUnlockActIIQueue = function(){
                 try {
                     if (!window._unlockActIIQueue || window._unlockActIIQueue.length === 0) return;
@@ -694,6 +693,7 @@
 
             // If frames could not be built from the sheet, keep the fallback animation
             if (!buildWunderScribbleFramesFromSheet()) ensureFallbackAnim();
+            };
             // Quacken tentacle projectile sprite (deferred to first use/unlock)
             const quackenTentacleImg = new Image();
             quackenTentacleImg.onload = ()=>{ quackenTentacleImg._ok = true; };
