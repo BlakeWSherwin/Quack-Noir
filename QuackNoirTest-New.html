@@ -1321,6 +1321,10 @@
             _initComplete: false,
             _returningToTitle: false,
             _titleMusicSuppressed: true,
+            // Global visual debug overlay master switch. Set to `true` to re-enable
+            // in-canvas / DOM debug overlays for troubleshooting. Default OFF for
+            // production gameplay so overlays don't interfere with visuals.
+            debugOverlaysEnabled: false,
             // User-adjustable runtime settings / visual toggles
             settings: { realityBreakOverlay: false },
             // Unified input state (keyboard/touch/gamepad)
@@ -2404,9 +2408,9 @@
                 game.projectileDegradeTier = tier;
                 // Update a lightweight overlay if present
                 try {
-                    if (window._projPoolOverlay && typeof window._projPoolOverlay.update === 'function') {
-                        window._projPoolOverlay.update();
-                    }
+                    if (game && game.debugOverlaysEnabled && window._projPoolOverlay && typeof window._projPoolOverlay.update === 'function') {
+                            window._projPoolOverlay.update();
+                        }
                 } catch(_){}
                 // Make Sine Wave much more visible and wild
                 // tier 0: extreme; tier 1: very strong; tier 2: strong; tier 3: disabled
@@ -18871,7 +18875,7 @@ function offerPermanentAbilityChoice() {
                 // In-canvas debug overlay (draw on main canvas so it's always visible on top of DOM layers)
                     // Export a copy of lastDraw to window so any DOM-based overlays can use it too
                     try { window._creditsLastDraw = lastDraw; } catch(_){}
-                    if (game.creditsDebugOverlay && lastDraw) {
+                    if (game.debugOverlaysEnabled && game.creditsDebugOverlay && lastDraw) {
                     try {
                         ctx.save();
                         ctx.globalAlpha = 0.9;
@@ -24482,6 +24486,8 @@ function offerPermanentAbilityChoice() {
         })();
         // Small DOM overlay for projectile pool stats. Non-invasive; can be removed.
         (function createProjectilePoolOverlay(){
+            // Only create this debug overlay when debug overlays are explicitly enabled.
+            if (!game || !game.debugOverlaysEnabled) return;
             try {
                 const el = document.createElement('div');
                 el.id = 'projPoolOverlay';
@@ -32913,7 +32919,7 @@ function offerPermanentAbilityChoice() {
                                         ctx.scale(-1, 1);
                                     }
                                     ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
-                                    if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(0,255,0,0.6)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                                    if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(0,255,0,0.6)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                                     ctx.restore();
                                     return;
                                 }
@@ -32952,7 +32958,7 @@ function offerPermanentAbilityChoice() {
                                     ctx.save(); ctx.translate(enemy.x, enemy.y);
                                     if (mirrorSequence) ctx.scale(-1, 1);
                                     ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
-                                    if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(0,200,255,0.6)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                                    if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(0,200,255,0.6)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                                     ctx.restore();
                                     return;
                                 }
@@ -33031,7 +33037,7 @@ function offerPermanentAbilityChoice() {
                                     } else {
                                         ctx.drawImage(src, box.x, box.y, box.w, box.h, -drawW / 2, -drawH / 2, drawW, drawH);
                                     }
-                                    if (game._debugSpriteBounds) {
+                                    if (game.debugOverlaysEnabled && game._debugSpriteBounds) {
                                         ctx.strokeStyle = 'rgba(255,230,120,0.55)';
                                         ctx.strokeRect(-drawW / 2, -drawH / 2, drawW, drawH);
                                     }
@@ -33082,7 +33088,7 @@ function offerPermanentAbilityChoice() {
                             } else if (sa._forcedBitmap) {
                                 ctx.drawImage(sa._forcedBitmap, 0, 0, sa._forcedBitmap.width, sa._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
                             }
-                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(180,200,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(180,200,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                             ctx.restore();
                             return;
                         }
@@ -33122,7 +33128,7 @@ function offerPermanentAbilityChoice() {
                                         ctx.scale(-1, 1);
                                     }
                                     ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
-                                    if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(255,0,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                                    if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(255,0,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                                     ctx.restore();
                                     return;
                                 }
@@ -33159,7 +33165,7 @@ function offerPermanentAbilityChoice() {
                                 } else {
                                     ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
                                 }
-                                if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(255,215,100,0.65)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                                if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(255,215,100,0.65)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                                 ctx.restore();
                                 return;
                             }
@@ -33200,7 +33206,7 @@ function offerPermanentAbilityChoice() {
                                         ctx.scale(-1, 1);
                                     }
                                     ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
-                                    if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(255,255,0,0.6)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                                    if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(255,255,0,0.6)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                                     ctx.restore();
                                     return;
                                 }
@@ -33333,7 +33339,7 @@ function offerPermanentAbilityChoice() {
                                 const srcW = preparedSource ? preparedWidth : frame.w;
                                 const srcH = preparedSource ? preparedHeight : frame.h;
                                 ctx.drawImage(sourceImage, srcX, srcY, srcW, srcH, destX, destY, drawW, drawH);
-                                if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(0,255,255,0.55)'; ctx.strokeRect(destX, destY, drawW, drawH); }
+                                if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(0,255,255,0.55)'; ctx.strokeRect(destX, destY, drawW, drawH); }
                                 ctx.restore();
                                 try { enemy._noFallback = true; } catch(_) {}
                                 return;
@@ -33377,7 +33383,7 @@ function offerPermanentAbilityChoice() {
                                 } else {
                                     ctx.drawImage(preparedSource || gs.image, preparedSource ? 0 : fallbackFrame.sourceX, preparedSource ? 0 : fallbackFrame.sourceY, preparedSource ? preparedWidth : fallbackFrame.w, preparedSource ? preparedHeight : fallbackFrame.h, destX, destY, drawW, drawH);
                                 }
-                                if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(0,255,255,0.55)'; ctx.strokeRect(destX, destY, drawW, drawH); }
+                                if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(0,255,255,0.55)'; ctx.strokeRect(destX, destY, drawW, drawH); }
                                 ctx.restore();
                                 try { enemy._noFallback = true; } catch(_) {}
                                 return;
@@ -33414,7 +33420,7 @@ function offerPermanentAbilityChoice() {
                                 } else {
                                     ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
                                 }
-                                if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(180,200,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                                if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(180,200,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                                 ctx.restore();
                                 return;
                             }
@@ -33450,7 +33456,7 @@ function offerPermanentAbilityChoice() {
                                 } else {
                                     ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
                                 }
-                                if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(180,220,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                                if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(180,220,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                                 ctx.restore();
                                 return;
                             }
@@ -33486,7 +33492,7 @@ function offerPermanentAbilityChoice() {
                                 } else {
                                     ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
                                 }
-                                if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(180,255,180,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                                if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(180,255,180,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                                 ctx.restore();
                                 return;
                             }
@@ -33522,7 +33528,7 @@ function offerPermanentAbilityChoice() {
                                 } else {
                                     ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
                                 }
-                                if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(200,220,200,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                                if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(200,220,200,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                                 ctx.restore();
                                 return;
                             }
@@ -33558,7 +33564,7 @@ function offerPermanentAbilityChoice() {
                                 } else {
                                     ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
                                 }
-                                if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(200,200,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                                if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(200,200,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                                 ctx.restore();
                                 return;
                             }
@@ -33594,7 +33600,7 @@ function offerPermanentAbilityChoice() {
                                 } else {
                                     ctx.drawImage(img, box.x, box.y, box.w, box.h, -drawW/2, -drawH/2, drawW, drawH);
                                 }
-                                if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(180,200,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                                if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(180,200,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                                 ctx.restore();
                                 return;
                             }
@@ -33633,7 +33639,7 @@ function offerPermanentAbilityChoice() {
                             } else if (cb._forcedBitmap) {
                                 ctx.drawImage(cb._forcedBitmap, 0, 0, cb._forcedBitmap.width, cb._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
                             }
-                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(200,180,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(200,180,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                             ctx.restore();
                             return;
                         }
@@ -33671,7 +33677,7 @@ function offerPermanentAbilityChoice() {
                             } else if (hk._forcedBitmap) {
                                 ctx.drawImage(hk._forcedBitmap, 0, 0, hk._forcedBitmap.width, hk._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
                             }
-                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(200,200,255,0.45)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(200,200,255,0.45)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                             ctx.restore();
                             return;
                         }
@@ -33711,7 +33717,7 @@ function offerPermanentAbilityChoice() {
                                 } else if (ws._forcedBitmap) {
                                     ctx.drawImage(ws._forcedBitmap, 0, 0, ws._forcedBitmap.width, ws._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
                                 }
-                                if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(200,200,255,0.45)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                                if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(200,200,255,0.45)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                                 ctx.restore();
                                 return;
                             }
@@ -33749,7 +33755,7 @@ function offerPermanentAbilityChoice() {
                             } else if (cp._forcedBitmap) {
                                 ctx.drawImage(cp._forcedBitmap, 0, 0, cp._forcedBitmap.width, cp._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
                             }
-                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(200,200,255,0.45)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(200,200,255,0.45)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                             ctx.restore();
                             return;
                         }
@@ -33798,7 +33804,7 @@ function offerPermanentAbilityChoice() {
                                     ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
                                 }
                             }
-                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(200,200,255,0.45)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(200,200,255,0.45)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                             ctx.restore();
                             return;
                         }
@@ -33874,7 +33880,7 @@ function offerPermanentAbilityChoice() {
                             } else if (mg._forcedBitmap) {
                                 ctx.drawImage(mg._forcedBitmap, 0, 0, mg._forcedBitmap.width, mg._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
                             }
-                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(220,200,220,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(220,200,220,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                             ctx.restore();
                             return;
                         }
@@ -33933,7 +33939,7 @@ function offerPermanentAbilityChoice() {
                                     try { ctx.drawImage(sw._forcedBitmap, 0, 0, sw._forcedBitmap.width, sw._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH); } catch(_){ }
                                 }
                             }
-                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(220,200,220,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(220,200,220,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                             ctx.restore();
                             return;
                         }
@@ -33982,7 +33988,7 @@ function offerPermanentAbilityChoice() {
                                     ctx.drawImage(img, box.x, box.y, box.w, box.h, -dstW/2, -dstH/2, dstW, dstH);
                                 }
                             }
-                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(200,180,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(200,180,255,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                             ctx.restore();
                             return;
                         }
@@ -34020,7 +34026,7 @@ function offerPermanentAbilityChoice() {
                             } else if (bn._forcedBitmap) {
                                 ctx.drawImage(bn._forcedBitmap, 0, 0, bn._forcedBitmap.width, bn._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
                             }
-                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(139,69,19,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(139,69,19,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                             ctx.restore();
                             return;
                         }
@@ -34058,7 +34064,7 @@ function offerPermanentAbilityChoice() {
                             } else if (ds._forcedBitmap) {
                                 ctx.drawImage(ds._forcedBitmap, 0, 0, ds._forcedBitmap.width, ds._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
                             }
-                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(0,0,128,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(0,0,128,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                             ctx.restore();
                             return;
                         }
@@ -34096,7 +34102,7 @@ function offerPermanentAbilityChoice() {
                             } else if (ft._forcedBitmap) {
                                 ctx.drawImage(ft._forcedBitmap, 0, 0, ft._forcedBitmap.width, ft._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
                             }
-                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(255,69,0,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(255,69,0,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                             ctx.restore();
                             return;
                         }
@@ -34134,7 +34140,7 @@ function offerPermanentAbilityChoice() {
                             } else if (fs._forcedBitmap) {
                                 ctx.drawImage(fs._forcedBitmap, 0, 0, fs._forcedBitmap.width, fs._forcedBitmap.height, -dstW/2, -dstH/2, dstW, dstH);
                             }
-                            if (game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(128,0,128,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
+                            if (game.debugOverlaysEnabled && game._debugSpriteBounds) { ctx.strokeStyle = 'rgba(128,0,128,0.55)'; ctx.strokeRect(-drawW/2, -drawH/2, drawW, drawH); }
                             ctx.restore();
                             return;
                         }
@@ -38054,7 +38060,7 @@ function offerPermanentAbilityChoice() {
                         if (!baseCanvas) return; // game not present yet
                         const overlay = document.createElement('canvas');
                 // Credits debug overlay (shows sprite-key, frame index, frames count and bounding box)
-                if (game.creditsDebugOverlay && lastDraw) {
+                if (game.debugOverlaysEnabled && game.creditsDebugOverlay && lastDraw) {
                     try {
                         ctx.save();
                         ctx.globalAlpha = 0.85;
@@ -38322,7 +38328,7 @@ function offerPermanentAbilityChoice() {
                                             const worldDrawY = (boss.y || 0) + _hitOffsetY + destY;
                                             // Draw optional debug rectangle if enabled
                                             try {
-                                                if (window && window._quthuluOverlayDebug) {
+                                                if (game.debugOverlaysEnabled && window && window._quthuluOverlayDebug) {
                                                     try {
                                                         ctx.restore(); // restore transform so we draw rect in overlay canvas coords
                                                         const dbgCtx = ctx;
@@ -38344,7 +38350,7 @@ function offerPermanentAbilityChoice() {
                                             // Controlled logging: only print when debug flag enabled or when a one-shot sample is requested
                                             try {
                                                 const logObj = { frameIndex: _overlayFrameIndex, frame: (game && typeof game.frame === 'number') ? game.frame : null, drew: !!_drew, hasForcedBitmap: !!(q && q._forcedBitmap), imgReady: !!(img && (img.naturalWidth || img.width)), hb: _hbForLog, worldX: Math.round(worldDrawX), worldY: Math.round(worldDrawY), drawW: Math.round(drawW), drawH: Math.round(drawH), bossHitbox: (boss && boss.hitbox) ? boss.hitbox : null };
-                                                if (window && window._quthuluOverlayDebug) {
+                                                if (game.debugOverlaysEnabled && window && window._quthuluOverlayDebug) {
                                                     console.info('[QuthuluSprite][OVERLAY] drew overlay', logObj);
                                                 } else if (window && window._quthuluOverlayOneShot) {
                                                     // Print one sample and clear the one-shot flag so console isn't spammed
