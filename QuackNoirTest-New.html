@@ -969,22 +969,40 @@
                 } catch(e) { /* noop */ }
             })();
 
-            // Dumpster obstacle spritesheet (3 frames)
+            // Dumpster obstacle spritesheet (sprite atlas)
+            // New spritesheet: assets/dumpster-sheet.png — 8 columns × 4 rows, 32 total frames (256×256 cells)
             const dumpsterImg = new Image();
             dumpsterImg.onload = ()=>{ dumpsterImg._ok = true; };
-            dumpsterImg.onerror = ()=>{ console.warn('[DumpsterSprite] Failed to load assets/DumpsterFire.png'); dumpsterImg._broken = true; };
-            dumpsterImg.src = 'assets/DumpsterFire.png';
+            dumpsterImg.onerror = ()=>{ console.warn('[DumpsterSprite] Failed to load assets/dumpster-sheet.png'); dumpsterImg._broken = true; };
+            dumpsterImg.src = 'assets/dumpster-sheet.png';
             // Frames defined by bounding boxes: [ [x1,y1,x2,y2], ... ]
             window._dumpsterSprite = {
                 image: dumpsterImg,
-                frames: [
-                    // Frame 1: 44, 258 and 312, 710
-                    { x:44,  y:258, w:312-44,  h:710-258 },
-                    // Frame 2: 378, 258 and 645, 712
-                    { x:378, y:258, w:645-378, h:712-258 },
-                    // Frame 3: 712, 258 and 975, 709
-                    { x:712, y:258, w:975-712, h:709-258 }
-                ],
+                // Build 32 frames from an 8×4 grid (cells 256×256) — uses left-to-right, top-to-bottom ordering.
+                // If a different source image is used or the image fails to load, keep a small fallback later.
+                frames: (function(){
+                    try {
+                        const cols = 8;
+                        const rows = 4; // atlas height 1024 / 256 = 4
+                        const cellW = 256;
+                        const cellH = 256;
+                        const arr = [];
+                        for (let r = 0; r < rows; r++) {
+                            for (let c = 0; c < cols; c++) {
+                                arr.push({ x: c * cellW, y: r * cellH, w: cellW, h: cellH });
+                            }
+                        }
+                        // Ensure exactly 32 entries (safety) — if image data suggests different layout, consumer code can override
+                        return arr.slice(0, 32);
+                    } catch(_){
+                        // Fallback to a minimal 3-frame set (previous behavior)
+                        return [
+                            { x:44,  y:258, w:312-44,  h:710-258 },
+                            { x:378, y:258, w:645-378, h:712-258 },
+                            { x:712, y:258, w:975-712, h:709-258 }
+                        ];
+                    }
+                })(),
                 fps: 6 // target animation rate; derived via frame step from game.frame
             };
 
@@ -1356,7 +1374,7 @@
             disableCosmeticParticles: false, // legacy flag (kept for compatibility)
             // Performance / FX dynamic control
             perf: { frameTimes: [], lastFpsSample: performance.now(), fps: 60, lowFx:false, autoLowFx:true },
-            // Fine-grained FX flags (toggled via F3)
+            // Fine-grained FX flags
             fxFlags: { hideSparks: false, hideSpokes: false, reduceRings: false, reduceBeams: false },
             fxSuppression: { particleSkip: 0 },
             _roomSpawnedEnemies: 0,
@@ -3294,7 +3312,15 @@
                                 dx += (bestDx/len)*homingScale;
                                 dy += (bestDy/len)*homingScale;
                                 // Also gently bias the underlying velocity toward the steered direction
-                                const baseSpeed = Math.hypot(vx[i], vy[i]) || 0.0001;
+                                // Prefer the projectile's current underlying speed, but when that
+                                // speed is nearly zero (e.g. some effects zero vx/vy), fall back
+                                // to using this frame's displacement magnitude so homing steering
+                                // doesn't drive the projectile to a standstill.
+                                let baseSpeed = Math.hypot(vx[i], vy[i]);
+                                const frameSpeed = Math.hypot(dx, dy) || 0.0001;
+                                if (!isFinite(baseSpeed) || baseSpeed <= 0.000001) baseSpeed = frameSpeed;
+                                // Always keep a tiny non-zero floor to avoid divide-by-zero later
+                                baseSpeed = baseSpeed || 0.0001;
                                 const dlen = Math.hypot(dx, dy) || 1;
                                 const dirX = dx / dlen, dirY = dy / dlen;
                                 let blend = hasFullHoming ? 0.14 : 0.06; // full homing curves harder
@@ -3303,6 +3329,22 @@
                                 }
                                 vx[i] = vx[i]*(1 - blend) + dirX * baseSpeed * blend;
                                 vy[i] = vy[i]*(1 - blend) + dirY * baseSpeed * blend;
+                                // Defensive guards: avoid NaN/infinite results and ensure very-low
+                                // speeds caused by numeric drift or tiny baseSpeed don't leave the
+                                // projectile frozen in mid-air. If resulting vel is degenerate,
+                                // promote a reasonable fallback using the frame displacement.
+                                if (!isFinite(vx[i]) || !isFinite(vy[i])) {
+                                    vx[i] = dirX * Math.max(frameSpeed, 0.0001);
+                                    vy[i] = dirY * Math.max(frameSpeed, 0.0001);
+                                }
+                                // If final speed is still extremely small while the frame
+                                // displacement was non-trivial, nudge the velocity to match
+                                // that displacement so the projectile continues moving.
+                                const spNow = Math.hypot(vx[i], vy[i]) || 0;
+                                if (spNow < 0.02 && frameSpeed > 0.5) {
+                                    const forced = Math.max(0.5, frameSpeed);
+                                    vx[i] = dirX * forced; vy[i] = dirY * forced;
+                                }
                                 // Mark active homing window for rendering chevrons
                                 if (mHAct) {
                                     mHAct._homActive = Math.min(12, (mHAct._homActive||0) + 2); // short accumulating timer
@@ -3694,6 +3736,35 @@
                             }
                         }
                     }
+                    // Defensive fallback: if the projectile's underlying velocity has
+                    // collapsed to near-zero for whatever reason but there's a noticeable
+                    // displacement this frame (dx/dy), use that displacement to nudge
+                    // the underlying velocity so the projectile doesn't stall mid-air.
+                    try {
+                        const curSp = Math.hypot(vx[i], vy[i]) || 0;
+                        const dispSp = Math.hypot(dx, dy) || 0;
+                        if (curSp < 0.01 && dispSp > 0.5) {
+                            // derive fallback direction from this frame's displacement
+                            const _dlen = dispSp || 1;
+                            const _dirX = dx / _dlen; const _dirY = dy / _dlen;
+                            const enforced = Math.max(0.5, dispSp);
+                            vx[i] = _dirX * enforced; vy[i] = _dirY * enforced;
+                            // Mark this projectile briefly for debug overlay so we can spot cases
+                            // where velocity collapsed but displacement was still present.
+                            try { if (meta) meta._stuckCd = Math.max(meta._stuckCd || 0, 30); } catch(_) {}
+                            try {
+                                if (game && game.debugOverlaysEnabled) {
+                                    game._debug = game._debug || {};
+                                    const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+                                    if (!game._debug._lastStuckLog || (now - game._debug._lastStuckLog) > 2000) {
+                                        try { console.warn('[ProjDebug] low-speed nudge for idx', i, 'pos', x[i], y[i], 'disp', dispSp.toFixed(2)); } catch(_){}
+                                        game._debug._lastStuckLog = now;
+                                    }
+                                }
+                            } catch(_) {}
+                        }
+                    } catch(_) {}
+
                     if (x[i] < -50 || y[i] < -50 || x[i] > LOGICAL_W+50 || y[i] > LOGICAL_H+50) {
                         // Do not recycle indestructible entities; reflect and clamp instead
                         if (isIndestructible) {
@@ -4924,6 +4995,18 @@
                     if ((f & META_FLAG.ENEMY) && !(f & META_FLAG.BEAM)) {
                         continue;
                     }
+                    // Developer overlay: show a red 'X' for projectiles recently nudged due
+                    // to a velocity collapse (helps reproduce/fix stuck-in-air issues).
+                    try {
+                        if (meta && meta._stuckCd > 0) {
+                            if (game && game.debugOverlaysEnabled) {
+                                ctx.save(); ctx.strokeStyle = 'rgba(255,64,64,0.95)'; ctx.lineWidth = 2; ctx.beginPath();
+                                ctx.moveTo(cx - 8, cy - 8); ctx.lineTo(cx + 8, cy + 8);
+                                ctx.moveTo(cx - 8, cy + 8); ctx.lineTo(cx + 8, cy - 8); ctx.stroke(); ctx.restore();
+                            }
+                            meta._stuckCd = Math.max(0, (meta._stuckCd || 0) - 1);
+                        }
+                    } catch(_) {}
                     let meta = metaList[i];
                     const isEnemy = !!flagEnemy[i];
                     const isBeam = !!flagBeam[i];
@@ -7979,7 +8062,13 @@ window.addEventListener('keydown', (e)=>{
 // =============================================================
 // DEV: Starting Ability Picker (press '0') — temporary, easily removable
 // To remove: delete this block or set ENABLE_STARTING_ABILITY_PICKER = false
-window.ENABLE_STARTING_ABILITY_PICKER = true;
+// Toggle for dev debug hotkeys (5,7,8,0). Set to `true` to re-enable the keys during
+// development/testing. Default OFF so debug features are inert in normal play.
+window.ENABLE_DEBUG_HOTKEYS = false;
+
+// DEV: Starting Ability Picker (press '0') — temporary, easily removable
+// To remove: set ENABLE_STARTING_ABILITY_PICKER = false (kept for backwards compatibility)
+window.ENABLE_STARTING_ABILITY_PICKER = false;
 
 // Apply the chosen starting ability to the current player, keeping permanent abilities
 function applyStartingAbility(abName) {
@@ -8408,23 +8497,7 @@ window.addEventListener('keydown', (e) => {
     }
 });
 
-// FX toggle: Press F3 to cycle visual intensity presets
-window.addEventListener('keydown', (e)=>{
-    if (e.key === 'F3') {
-        const f = game.fxFlags || (game.fxFlags = { hideSparks:false, hideSpokes:false, reduceRings:false, reduceBeams:false });
-        // Sequence: Full FX -> Reduced Rings/Spokes -> Hide Sparks -> Low FX (global) -> Full FX
-        if (!game.perf.lowFx && !f.reduceRings && !f.hideSpokes && !f.hideSparks) {
-            f.reduceRings = true; f.hideSpokes = true; console.info('[FX] Reduced rings/spokes');
-        } else if (f.reduceRings && f.hideSpokes && !f.hideSparks) {
-            f.hideSparks = true; console.info('[FX] Hide sparks');
-        } else if (!game.perf.lowFx) {
-            game.perf.lowFx = true; console.info('[FX] Low FX mode ON'); updatePotatoBadge();
-        } else {
-            // reset to full
-            game.perf.lowFx = false; f.reduceRings=false; f.hideSpokes=false; f.hideSparks=false; console.info('[FX] Full FX restored'); updatePotatoBadge();
-        }
-    }
-});
+// Removed F3 FX toggle handler per request (no-op)
 
 function toggleCosmeticParticles() {
     game.disableCosmeticParticles = !game.disableCosmeticParticles;
@@ -9654,7 +9727,7 @@ function showTitleScreen() {
     overlay.innerHTML = `
         <img id="titleLogo" src="assets/mallardvice-title-clean.png" alt="Quack Noir" style="width:clamp(300px,60vw,780px);max-height:70vh;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 0 12px #400060);" />
         <div id="pressStartPrompt" style="color:#bbb;font-size:22px;letter-spacing:2px;animation:pulsePrompt 2.8s ease-in-out infinite;">PRESS SPACE / CLICK TO START</div>
-        <div style="position:absolute;bottom:12px;right:16px;font-size:11px;color:#444;">Build: Simplified Title v4</div>`;
+        `;
     if (!document.getElementById('pulsePromptStyle')) {
         const st = document.createElement('style'); st.id='pulsePromptStyle';
         st.textContent='@keyframes pulsePrompt{0%{opacity:.35}50%{opacity:1}100%{opacity:.35}}';
@@ -11491,57 +11564,57 @@ function offerPermanentAbilityChoice() {
 
     // Act IV enemy: Billnarock the Unhatched (exclusive to Act IV)
     // Uses assets/eldritch/spritesheets/billnarock-sheet-0-23.png. Spritesheet with frames 0-23. Mirrors horizontally when facing left.
-    ENEMY_TYPES['Billnarock the Unhatched'] = { health: 400, speed: 0.75, damage: 40, color: '#8B4513', size: 64, xp: 600, ranged: false, armor: 6, act: 'IV' };
+    ENEMY_TYPES['Billnarock the Unhatched'] = { health: 800, speed: 0.75, damage: 40, color: '#8B4513', size: 64, xp: 600, ranged: false, armor: 6, act: 'IV' };
 
     // Act IV enemy: Downspawn of the Abyss (exclusive to Act IV)
     // Uses assets/eldritch/spritesheets/downspawn-sheet-9-31.png. Spritesheet with frames 9-31. Mirrors horizontally when facing left.
-    ENEMY_TYPES['Downspawn of the Abyss'] = { health: 450, speed: 0.70, damage: 45, color: '#000080', size: 66, xp: 650, ranged: false, armor: 7, act: 'IV' };
+    ENEMY_TYPES['Downspawn of the Abyss'] = { health: 900, speed: 0.70, damage: 45, color: '#000080', size: 66, xp: 650, ranged: false, armor: 7, act: 'IV' };
 
     // Act IV enemy: Featheroth the Molten (exclusive to Act IV)
     // Uses assets/eldritch/spritesheets/featheroth-sheet.png. Spritesheet with 32 frames, using all frames. Mirrors horizontally when facing left.
-    ENEMY_TYPES['Featheroth the Molten'] = { health: 500, speed: 0.65, damage: 50, color: '#FF4500', size: 68, xp: 700, ranged: false, armor: 8, act: 'IV' };
+    ENEMY_TYPES['Featheroth the Molten'] = { health: 1000, speed: 0.65, damage: 50, color: '#FF4500', size: 68, xp: 700, ranged: false, armor: 8, act: 'IV' };
 
     // Act IV enemy: Feathered Sleeper (exclusive to Act IV)
     // Uses assets/eldritch/spritesheets/featheredsleeper-sheet.png. Spritesheet with 32 frames, using all frames. Mirrors horizontally when facing left.
-    ENEMY_TYPES['Feathered Sleeper'] = { health: 550, speed: 0.60, damage: 55, color: '#800080', size: 70, xp: 750, ranged: false, armor: 9, act: 'IV' };
+    ENEMY_TYPES['Feathered Sleeper'] = { health: 1100, speed: 0.60, damage: 55, color: '#800080', size: 70, xp: 750, ranged: false, armor: 9, act: 'IV' };
 
     // Act IV enemy: Waddlemancer (exclusive to Act IV)
     // Uses assets/eldritch/spritesheets/waddlemancer-sheet.png. Spritesheet with 32 frames, using all frames. Mirrors horizontally when facing left.
-    ENEMY_TYPES['Waddlemancer'] = { health: 600, speed: 0.55, damage: 60, color: '#FFD700', size: 72, xp: 800, ranged: false, armor: 10, act: 'IV' };
+    ENEMY_TYPES['Waddlemancer'] = { health: 1200, speed: 0.55, damage: 60, color: '#FFD700', size: 72, xp: 800, ranged: false, armor: 10, act: 'IV' };
 
     // Act IV enemy: The Beakoner (exclusive to Act IV)
     // Uses assets/eldritch/spritesheets/beakoner-sheet-4-23.png. Spritesheet with 32 frames, using frames 4-23. Mirrors horizontally when facing left.
-    ENEMY_TYPES['The Beakoner'] = { health: 650, speed: 0.50, damage: 65, color: '#FF6347', size: 74, xp: 850, ranged: false, armor: 11, act: 'IV' };
+    ENEMY_TYPES['The Beakoner'] = { health: 1300, speed: 0.50, damage: 65, color: '#FF6347', size: 74, xp: 850, ranged: false, armor: 11, act: 'IV' };
 
     // Act IV enemy: Quackos Eternal (exclusive to Act IV)
     // Uses assets/eldritch/spritesheets/quackos-sheet-2-31.png. Spritesheet with 32 frames, using frames 2-31. Mirrors horizontally when facing left.
-    ENEMY_TYPES['Quackos Eternal'] = { health: 700, speed: 0.45, damage: 70, color: '#8A2BE2', size: 76, xp: 900, ranged: false, armor: 12, act: 'IV' };
+    ENEMY_TYPES['Quackos Eternal'] = { health: 1400, speed: 0.45, damage: 70, color: '#8A2BE2', size: 76, xp: 900, ranged: false, armor: 12, act: 'IV' };
 
     // Act IV enemy: Mallard of the Mire (exclusive to Act IV)
     // Uses assets/eldritch/spritesheets/MallardMire-sheet-12-24.png. Spritesheet with 32 frames, using frames 12-24. Mirrors horizontally when facing left.
-    ENEMY_TYPES['Mallard of the Mire'] = { health: 750, speed: 0.40, damage: 75, color: '#228B22', size: 78, xp: 950, ranged: false, armor: 13, act: 'IV' };
+    ENEMY_TYPES['Mallard of the Mire'] = { health: 1500, speed: 0.40, damage: 75, color: '#228B22', size: 78, xp: 950, ranged: false, armor: 13, act: 'IV' };
 
     // Act IV enemy: Plumagorgon (exclusive to Act IV)
     // Uses assets/eldritch/spritesheets/plumagorgon-sheet-3-24.png. Spritesheet with 32 frames, using frames 3-24. Mirrors horizontally when facing left.
-    ENEMY_TYPES['Plumagorgon'] = { health: 800, speed: 0.35, damage: 80, color: '#DC143C', size: 80, xp: 1000, ranged: false, armor: 14, act: 'IV' };
+    ENEMY_TYPES['Plumagorgon'] = { health: 1600, speed: 0.35, damage: 80, color: '#DC143C', size: 80, xp: 1000, ranged: false, armor: 14, act: 'IV' };
 
     // Act IV enemy: Molted Menace (exclusive to Act IV)
     // Uses assets/eldritch/spritesheets/moltedmenace-sheet-3-29.png. Spritesheet with 32 frames, using frames 3-29. Mirrors horizontally when facing left.
-    ENEMY_TYPES['Molted Menace'] = { health: 850, speed: 0.30, damage: 85, color: '#FF8C00', size: 82, xp: 1050, ranged: false, armor: 15, act: 'IV' };
+    ENEMY_TYPES['Molted Menace'] = { health: 1700, speed: 0.30, damage: 85, color: '#FF8C00', size: 82, xp: 1050, ranged: false, armor: 15, act: 'IV' };
 
     // Act IV enemy: Broodwaddle (exclusive to Act IV)
     // Uses assets/eldritch/spritesheets/broodwaddle-sheet-11-31.png. Spritesheet with 32 frames, using frames 11-31. Mirrors horizontally when facing left.
-    ENEMY_TYPES['Broodwaddle'] = { health: 900, speed: 0.25, damage: 90, color: '#9932CC', size: 84, xp: 1100, ranged: false, armor: 16, act: 'IV' };
+    ENEMY_TYPES['Broodwaddle'] = { health: 1800, speed: 0.25, damage: 90, color: '#9932CC', size: 84, xp: 1100, ranged: false, armor: 16, act: 'IV' };
 
     // Act IV boss: Artisanal Sourduck...of Doom (street 5)
     // Uses assets/eldritch/spritesheets/sourduck-sheet-1-30.png. Spritesheet with 32 frames, using frames 1-30. Mirrors horizontally when facing left.
-    ENEMY_TYPES['Artisanal Sourduck...of Doom'] = { health: 2500, speed: 0.20, damage: 100, color: '#FF1493', size: 160, xp: 15000, ranged: true, rangedCooldown: 1000, armor: 18, act: 'IV', boss: true, spawnStreet: 5 };
+    ENEMY_TYPES['Artisanal Sourduck...of Doom'] = { health: 5000, speed: 0.20, damage: 100, color: '#FF1493', size: 160, xp: 15000, ranged: true, rangedCooldown: 1000, armor: 18, act: 'IV', boss: true, spawnStreet: 5 };
 
     // Act IV enemy: Mirequacker (exclusive to Act IV)
     // Uses assets/eldritch/spritesheets/mirequack-sheet-12-31.png. Spritesheet with frames 12-31. Mirrors horizontally when facing left.
-    ENEMY_TYPES['Mirequacker'] = { health: 600, speed: 0.55, damage: 60, color: '#008000', size: 72, xp: 800, ranged: false, armor: 10, act: 'IV' };
+    ENEMY_TYPES['Mirequacker'] = { health: 1200, speed: 0.55, damage: 60, color: '#008000', size: 72, xp: 800, ranged: false, armor: 10, act: 'IV' };
 
-    try { window.ENEMY_TYPES = ENEMY_TYPES; } catch(_){ }
+    try { window.ENEMY_TYPES = ENEMY_TYPES; console.info('[ENEMY] Act IV enemy HP values updated (doubled)'); } catch(_){ }
 
         function init() {
             canvas = document.getElementById('gameCanvas');
@@ -11620,7 +11693,9 @@ function offerPermanentAbilityChoice() {
                         return; // stop propagation to any firing logic
                     }
                 }
-                if ((e.code === 'Digit8' || e.code === 'Numpad8') && !e.altKey && !e.ctrlKey && !e.metaKey) {
+                // Stage-jump debug menu (Digit8/Numpad8) — disabled by default unless
+                // debug hotkeys are explicitly enabled.
+                if ((e.code === 'Digit8' || e.code === 'Numpad8') && !e.altKey && !e.ctrlKey && !e.metaKey && window.ENABLE_DEBUG_HOTKEYS) {
                     if (e.repeat) return;
                     e.preventDefault();
                     e.stopPropagation();
@@ -11628,11 +11703,7 @@ function offerPermanentAbilityChoice() {
                     catch (err) { console.warn('[StageJump] Failed to open debug menu', err); }
                     return;
                 }
-                // Dev: toggle sprite bounds with F3
-                if (e.code === 'F3') {
-                    game._debugSpriteBounds = !game._debugSpriteBounds;
-                    console.info('[Debug] Sprite bounds:', game._debugSpriteBounds ? 'ON' : 'OFF');
-                }
+                // NOTE: F3 sprite/debug toggle removed
                 if (e.code === 'F1') {
                     console.info('[Sprite Debug]', {
                         meta: game.player && game.player.spriteMeta,
@@ -15935,6 +16006,12 @@ function offerPermanentAbilityChoice() {
             'assets/audio/waves/track22.mp3',
             'assets/audio/waves/track23.mp3',
             'assets/audio/waves/track24.mp3',
+            'assets/audio/waves/track25.mp3',
+            'assets/audio/waves/track27.mp3',
+            'assets/audio/waves/track28.mp3',
+            'assets/audio/waves/track29.mp3',
+            'assets/audio/waves/track30.mp3',
+            'assets/audio/waves/track31.mp3',
         ];
 
         function pickDuckWaveTrack() {
@@ -17942,8 +18019,13 @@ function offerPermanentAbilityChoice() {
             // Supports variable-sized walls (cars, dumpsters, barriers) and aligns hitboxes with their sprite draw rects
             return game.walls.some(wall => {
                 let wx = wall.x, wy = wall.y, w = wall.width || TILE_SIZE, h = wall.height || TILE_SIZE;
-                if (wall.type === 'dumpster' && typeof window.getDumpsterSpriteRect === 'function') {
-                    const rect = window.getDumpsterSpriteRect(wall);
+                if (wall.type === 'dumpster' && typeof window.getDumpsterAabb === 'function') {
+                    // Use the dumpster AABB (which reduces the solid region to the lower half)
+                    const rect = window.getDumpsterAabb(wall);
+                    if (rect && rect.w && rect.h) { wx = rect.x; wy = rect.y; w = rect.w; h = rect.h; }
+                } else if (wall.type === 'cosmic_rock' && typeof window.getCosmicRockAabb === 'function') {
+                    // Use the cosmic rock AABB — only lower half is solid and width is reduced
+                    const rect = window.getCosmicRockAabb(wall);
                     if (rect && rect.w && rect.h) { wx = rect.x; wy = rect.y; w = rect.w; h = rect.h; }
                 } else if (wall.type === 'barrier') {
                     // Map opaque image bounds to on-canvas footprint for tighter collisions
@@ -18222,11 +18304,14 @@ function offerPermanentAbilityChoice() {
                 */
                 
                 // Debug shortcut: jump straight to credits with the '7' key (useful for testing)
-                if (key === '7') {
+                // Disabled by default; use window.ENABLE_DEBUG_HOTKEYS = true to re-enable.
+                if (key === '7' && window.ENABLE_DEBUG_HOTKEYS) {
                     try { if (typeof game.startCreditsSequence === 'function') game.startCreditsSequence(); else game.creditsScene = true; } catch(_) { game.creditsScene = true; }
                 }
                 // Quick-test shortcut: jump to credits entry for The Great Beaked One (key '5')
-                if (key === '5' || code === 'Digit5' || code === 'Numpad5') {
+                // Quick-test shortcut: jump to credits entry for The Great Beaked One (key '5')
+                // Disabled by default; enable via window.ENABLE_DEBUG_HOTKEYS
+                if ((key === '5' || code === 'Digit5' || code === 'Numpad5') && window.ENABLE_DEBUG_HOTKEYS) {
                     try {
                         if (typeof game.startCreditsSequence === 'function') game.startCreditsSequence(); else game.creditsScene = true;
                     } catch(_) { try { game.creditsScene = true; } catch(_){} }
@@ -18256,7 +18341,10 @@ function offerPermanentAbilityChoice() {
                 }
                 // Toggle credits debug overlay using top-row '6' (Digit6), numpad '6' (Numpad6)
                 // and keep '8' as a tolerant fallback.
-                if (key === '6' || code === 'Digit6' || code === 'Numpad6' || key === '8') {
+                // Toggle credits debug overlay using top-row '6' (Digit6), numpad '6' (Numpad6)
+                // '8' was previously a tolerant fallback — keep 6 active but only honor 8 when
+                // debug hotkeys are explicitly enabled.
+                if (key === '6' || code === 'Digit6' || code === 'Numpad6' || ((key === '8' || code === 'Digit8' || code === 'Numpad8') && window.ENABLE_DEBUG_HOTKEYS)) {
                     try {
                         game.creditsDebugOverlay = !game.creditsDebugOverlay;
                         console.info('[CreditsDebugOverlay] now', !!game.creditsDebugOverlay);
@@ -18617,10 +18705,12 @@ function offerPermanentAbilityChoice() {
                 ctx.textAlign = 'center';
                 const topText1 = "Thanks for playing! Don't forget to challenge yourself in Duck and Cover mode!";
                 const topText2 = "Mallard Vice was created and designed by Blake Sherwin";
+                const topText3 = "Tested by Jacob Sherwin.";
                 const centerX = LOGICAL_W / 2;
                 const topY = 50;
                 ctx.fillText(topText1, centerX, topY);
                 ctx.fillText(topText2, centerX, topY + 30);
+                ctx.fillText(topText3, centerX, topY + 60);
                 const enemyName = game.creditsEnemies[game.creditsIndex];
                 let chosenKey = (game.creditsEnemyKey && game.creditsEnemyKey[game.creditsIndex]) || enemyName;
                 let sprite = (game.enemySprites && game.enemySprites[chosenKey]) || (game.enemySprites && game.enemySprites[enemyName]) || null;
@@ -20913,32 +21003,77 @@ function offerPermanentAbilityChoice() {
         }
 
         function getDumpsterAabb(wall) {
-            // Use the same visual rect as render for precise collision
+            // Return a tighter collision AABB for dumpsters so their upper half is passable.
+            // We still use the visual rect for sizing, but map the hitbox to the lower half
+            // of the drawn sprite so players and small entities can pass over the top.
             if (typeof window.getDumpsterSpriteRect === 'function') {
                 const rect = window.getDumpsterSpriteRect(wall);
+                if (rect && rect.w && rect.h) {
+                            try {
+                                // Keep collisions on the lower half of the rendered sprite
+                                const hitY = rect.y + Math.floor(rect.h * 0.5); // lower half starts here
+                                const hitH = Math.max(1, Math.ceil(rect.h * 0.5));
+                                // Reduce width so the hitbox is much narrower than the sprite
+                                // Default ratio is 40% of sprite width; center horizontally
+                                const WIDTH_RATIO = (typeof window.DUMPSTER_HITBOX_WIDTH_RATIO === 'number') ? window.DUMPSTER_HITBOX_WIDTH_RATIO : 0.40;
+                                const reducedW = Math.max(1, Math.round((rect.w || 0) * Math.max(0, Math.min(1, WIDTH_RATIO))));
+                                const reducedX = rect.x + Math.round(((rect.w || 0) - reducedW) / 2);
+                                return { x: reducedX, y: hitY, w: reducedW, h: hitH };
+                            } catch(_){ /* fallback below */ }
+                }
                 return rect ? { x: rect.x, y: rect.y, w: rect.w, h: rect.h } : { x: wall.x, y: wall.y, w: (wall.width||TILE_SIZE), h: (wall.height||TILE_SIZE) };
             }
-            return { x: wall.x, y: wall.y, w: (wall.width||TILE_SIZE), h: (wall.height||TILE_SIZE) };
+            // Default footprint if sprite rect unavailable
+            // Assume the lower half is the hit region
+            const baseH = (wall && (wall.height || TILE_SIZE)) || TILE_SIZE;
+                // If sprite rect isn't available, apply same width-reduction behaviour to the tile footprint
+                const WIDTH_RATIO_DEF = (typeof window.DUMPSTER_HITBOX_WIDTH_RATIO === 'number') ? window.DUMPSTER_HITBOX_WIDTH_RATIO : 0.40;
+                const baseW = (wall && (wall.width || TILE_SIZE)) || TILE_SIZE;
+                const redW = Math.max(1, Math.round(baseW * Math.max(0, Math.min(1, WIDTH_RATIO_DEF))));
+                const ox = (wall && wall.x) ? wall.x : 0;
+                const centeredX = ox + Math.round((baseW - redW) / 2);
+                return { x: centeredX, y: (wall.y || 0) + Math.floor(baseH * 0.5), w: redW, h: Math.max(1, Math.ceil(baseH * 0.5)) };
         }
 
         function getCosmicRockAabb(wall) {
-            if (typeof window.getCosmicRockSpriteRect === 'function') {
-                const rect = window.getCosmicRockSpriteRect(wall);
-                if (rect) {
-                    // Reduce left/right padding on the hitbox so collisions are less wide than the sprite.
-                    try {
-                        const SHRINK_RATIO = 0.16; // total horizontal shrink ratio (16% of width)
-                        const shrinkPx = Math.round((rect.w || (wall.width||TILE_SIZE)) * SHRINK_RATIO);
-                        const nx = rect.x + Math.round(shrinkPx / 2);
-                        const nw = Math.max(1, (rect.w || (wall.width||TILE_SIZE)) - shrinkPx);
-                        return { x: nx, y: rect.y, w: nw, h: rect.h };
-                    } catch(_) {
-                        return { x: rect.x, y: rect.y, w: rect.w, h: rect.h };
+            // Prefer the on-canvas sprite rect and make collisions active only on the lower half
+            // with a reduced, centered width so the upper portion is passable.
+            try {
+                if (typeof window.getCosmicRockSpriteRect === 'function') {
+                    const rect = window.getCosmicRockSpriteRect(wall);
+                    if (rect && rect.w && rect.h) {
+                        try {
+                            // width ratio configurable via window.COSMICROCK_HITBOX_WIDTH_RATIO
+                            const WIDTH_RATIO = (typeof window.COSMICROCK_HITBOX_WIDTH_RATIO === 'number') ? window.COSMICROCK_HITBOX_WIDTH_RATIO : ((typeof window.DUMPSTER_HITBOX_WIDTH_RATIO === 'number') ? window.DUMPSTER_HITBOX_WIDTH_RATIO : 0.40);
+                            // extra horizontal pad (pixels) to extend hitbox left/right — configurable at runtime
+                            const SIDE_PAD = (typeof window.COSMICROCK_HITBOX_SIDE_PAD === 'number') ? Math.max(0, Math.floor(window.COSMICROCK_HITBOX_SIDE_PAD)) : 6;
+                            let reducedW = Math.max(1, Math.round(rect.w * Math.max(0, Math.min(1, WIDTH_RATIO))));
+                            // Expand width by SIDE_PAD on each side but never exceed sprite width
+                            reducedW = Math.min(rect.w, reducedW + (SIDE_PAD * 2));
+                            let centeredX = rect.x + Math.round((rect.w - reducedW) / 2);
+                            // Ensure we don't push outside source bounds
+                            if (centeredX < rect.x) centeredX = rect.x;
+                            if (centeredX + reducedW > rect.x + rect.w) centeredX = rect.x + rect.w - reducedW;
+                            const hitY = rect.y + Math.floor(rect.h * 0.5); // lower half
+                            const hitH = Math.max(1, Math.ceil(rect.h * 0.5));
+                            return { x: centeredX, y: hitY, w: reducedW, h: hitH };
+                        } catch(_) { return { x: rect.x, y: rect.y + Math.floor(rect.h * 0.5), w: rect.w, h: Math.max(1, Math.ceil(rect.h * 0.5)) }; }
                     }
                 }
+            } catch(_){}
+            // Fallback to footprint-based lower half hitbox
+            try {
+                const baseW = (wall && (wall.width || TILE_SIZE)) || TILE_SIZE;
+                const baseH = (wall && (wall.height || TILE_SIZE)) || TILE_SIZE;
+                const WIDTH_RATIO_DEF = (typeof window.COSMICROCK_HITBOX_WIDTH_RATIO === 'number') ? window.COSMICROCK_HITBOX_WIDTH_RATIO : ((typeof window.DUMPSTER_HITBOX_WIDTH_RATIO === 'number') ? window.DUMPSTER_HITBOX_WIDTH_RATIO : 0.40);
+                let redW = Math.max(1, Math.round(baseW * Math.max(0, Math.min(1, WIDTH_RATIO_DEF))));
+                const SIDE_PAD2 = (typeof window.COSMICROCK_HITBOX_SIDE_PAD === 'number') ? Math.max(0, Math.floor(window.COSMICROCK_HITBOX_SIDE_PAD)) : 6;
+                redW = Math.min(baseW, redW + (SIDE_PAD2 * 2));
+                const centeredX = (wall && wall.x) ? wall.x + Math.round((baseW - redW) / 2) : Math.round((baseW - redW) / 2);
+                return { x: centeredX, y: (wall && wall.y) ? wall.y + Math.floor(baseH * 0.5) : Math.floor(baseH * 0.5), w: redW, h: Math.max(1, Math.ceil(baseH * 0.5)) };
+            } catch(_) {
                 return { x: wall.x, y: wall.y, w: (wall.width||TILE_SIZE), h: (wall.height||TILE_SIZE) };
             }
-            return { x: wall.x, y: wall.y, w: (wall.width||TILE_SIZE), h: (wall.height||TILE_SIZE) };
         }
 
         function updateTrucks() {
@@ -31214,6 +31349,11 @@ function offerPermanentAbilityChoice() {
             }
             
             // Draw walls (restored original manual drawing)
+            // NOTE: We defer drawing dumpster + cosmic rock sprites so they can be rendered
+            // after players & enemies. This makes the dumpster visually sit on
+            // top of characters (so players/enemies can pass under the top half).
+            const _deferredDumpsters = [];
+            const _deferredCosmicRocks = [];
             game.walls.forEach(wall => {
                 // Skip invisible collision-only walls (e.g., perimeter markers)
                 if (wall && wall.invisible) return;
@@ -31295,14 +31435,11 @@ function offerPermanentAbilityChoice() {
                             ctx.fillRect(wall.x, wall.y, tileW, tileH);
                             break;
                         }
-                        // Compute destination rect via shared helper so collisions match visuals
-                        const rect = window.getDumpsterSpriteRect(wall);
-                        // Determine current frame to sample from
-                        const fps = spr.fps || 6;
-                        const step = Math.max(1, Math.round(60 / fps));
-                        const frameIdx = Math.floor(((game.frame||0) / step)) % frames.length;
-                        const f = frames[frameIdx];
-                        ctx.drawImage(img, f.x, f.y, f.w, f.h, rect.x, rect.y, rect.w, rect.h);
+                        // Defer drawing of dumpster visuals until after enemies/player
+                        // are drawn so the sprite appears as a top-layer object.
+                        // Keep only a reference to the wall (we recompute frame/rect
+                        // later to keep timing consistent).
+                        try { _deferredDumpsters.push({ wall: wall }); } catch(_) { /* best-effort */ }
                         break;
                     }
                     case 'cosmic_rock': {
@@ -31317,12 +31454,9 @@ function offerPermanentAbilityChoice() {
                             ctx.fillRect(wall.x, wall.y, tileW, tileH);
                             break;
                         }
-                        const rect = window.getCosmicRockSpriteRect(wall);
-                        const fps = spr.fps || 6;
-                        const step = Math.max(1, Math.round(60 / fps));
-                        const frameIdx = Math.floor(((game.frame||0) / step)) % frames.length;
-                        const f = frames[frameIdx];
-                        ctx.drawImage(img, f.x, f.y, f.w, f.h, rect.x, rect.y, rect.w, rect.h);
+                        // Defer drawing cosmic rock visuals so the sprite visually sits on
+                        // top while the upper portion remains passable (collisions use getCosmicRockAabb).
+                        try { _deferredCosmicRocks.push({ wall: wall }); } catch(_) { /* best-effort */ }
                         break;
                     }
                     case 'streetlight': {
@@ -37109,6 +37243,81 @@ function offerPermanentAbilityChoice() {
                 }
             }
             
+            // --- Deferred: draw dumpster sprites above enemies/player ---
+            try {
+                if (typeof _deferredDumpsters !== 'undefined' && Array.isArray(_deferredDumpsters) && _deferredDumpsters.length) {
+                    _deferredDumpsters.forEach(ent => {
+                        try {
+                            const wall = ent && ent.wall;
+                            if (!wall) return;
+                            const tileW = wall.width || TILE_SIZE;
+                            const tileH = wall.height || TILE_SIZE;
+                            const spr = window._dumpsterSprite;
+                            const img = spr && spr.image;
+                            const frames = spr && spr.frames;
+                            if (!img || img._broken || !img.complete || !img.naturalWidth || !frames || frames.length === 0) {
+                                ctx.fillStyle = '#2f522f';
+                                ctx.fillRect(wall.x, wall.y, tileW, tileH);
+                                return;
+                            }
+                            const rect = window.getDumpsterSpriteRect(wall);
+                            const fps = spr.fps || 6;
+                            const step = Math.max(1, Math.round(60 / fps));
+                            const frameIdx = Math.floor(((game.frame||0) / step)) % frames.length;
+                            const f = frames[frameIdx];
+                            try { ctx.drawImage(img, f.x, f.y, f.w, f.h, rect.x, rect.y, rect.w, rect.h); } catch(_){ }
+                        } catch(_){ }
+                    });
+                }
+            } catch(_){ }
+
+            // --- Deferred: draw cosmic rock sprites above enemies/player ---
+            try {
+                if (typeof _deferredCosmicRocks !== 'undefined' && Array.isArray(_deferredCosmicRocks) && _deferredCosmicRocks.length) {
+                    _deferredCosmicRocks.forEach(ent => {
+                        try {
+                            const wall = ent && ent.wall;
+                            if (!wall) return;
+                            const tileW = wall.width || TILE_SIZE;
+                            const tileH = wall.height || TILE_SIZE;
+                            const spr = window._cosmicRockSprite;
+                            const img = spr && spr.image;
+                            const frames = spr && spr.frames;
+                            if (!img || img._broken || !img.complete || !img.naturalWidth || !frames || frames.length === 0) {
+                                ctx.fillStyle = '#4b2f5b';
+                                ctx.fillRect(wall.x, wall.y, tileW, tileH);
+                                return;
+                            }
+                            // Guard canvas state — callers may have changed composite/alpha
+                            ctx.save();
+                            try { ctx.globalCompositeOperation = 'source-over'; } catch(_){}
+                            try { ctx.globalAlpha = 1; } catch(_){}
+                            try { ctx.imageSmoothingEnabled = true; } catch(_){}
+                            const rect = window.getCosmicRockSpriteRect ? window.getCosmicRockSpriteRect(wall) : { x: wall.x, y: wall.y, w: tileW, h: tileH };
+                            const fps = spr.fps || 6;
+                            const step = Math.max(1, Math.round(60 / fps));
+                            const frameIdx = Math.floor(((game.frame||0) / step)) % frames.length;
+                            const f = frames[frameIdx];
+                            try { ctx.drawImage(img, f.x, f.y, f.w, f.h, rect.x, rect.y, rect.w, rect.h); } catch(_) { /* best-effort */ }
+                            // Helpful debug outline for hitbox tuning
+                            try {
+                                if (game && !!game.debugOverlaysEnabled) {
+                                    const hb = getCosmicRockAabb(wall);
+                                    if (hb) {
+                                        ctx.lineWidth = 1;
+                                        ctx.strokeStyle = 'rgba(255,0,255,0.9)'; // magenta hitbox
+                                        ctx.strokeRect(hb.x, hb.y, hb.w, hb.h);
+                                        ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+                                        ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+                                    }
+                                }
+                            } catch(_){}
+                            ctx.restore();
+                        } catch(_){ }
+                    });
+                }
+            } catch(_){ }
+
             // Nuke explosion flash overlay (above scene, below damage numbers/UI)
             if (Array.isArray(game.nukes) && game.nukes.length) {
                 game.nukes.forEach(n => {
