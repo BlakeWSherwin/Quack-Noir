@@ -90,7 +90,7 @@
             max-width: 320px;
             padding: 10px 12px;
             border-radius: 8px;
-            background: rgba(6,6,6,0.94);
+            background: rgba(6,6,6,0.5);
             color: #ffffff;
             font-family: 'Courier New', monospace;
             font-size: 12px;
@@ -208,7 +208,7 @@
                         </div>
                         <!-- Pause overlay with tabbed submenus -->
                         <div id="pauseOverlay" style="display:none; position:fixed; inset:0; z-index:10050; align-items:center; justify-content:center; background:rgba(0,0,0,0.55); pointer-events:auto;">
-                            <div id="pauseMenu" style="background:#111;border:2px solid #444;border-radius:10px;padding:16px;box-shadow:0 12px 34px rgba(0,0,0,0.6);width:min(860px,90vw);max-height:85vh;overflow:auto;">
+                            <div id="pauseMenu" style="background:rgba(17,17,17,0.8);border:2px solid #444;border-radius:10px;padding:16px;box-shadow:0 12px 34px rgba(0,0,0,0.6);width:min(860px,90vw);max-height:85vh;overflow:auto;">
                                 <h2 style="margin-top:0;color:#00ff88;">Paused</h2>
                                 <div style="display:flex; gap:12px; margin-bottom:14px;">
                                     <button id="tabAbilities" data-tab="abilities" style="flex:1;padding:8px 10px;background:#111;border:2px solid #00ff88;color:#00ff88;border-radius:6px;cursor:pointer;font-family:'Courier New', monospace;">Abilities</button>
@@ -7057,6 +7057,7 @@
     function safeStartGame(source='manual') {
         if (game._started) return; // already started
         game._started = true;
+        try { game._lastStartTime = Date.now(); } catch(_){} // Track last start time
         try { game._returningToTitle = false; game._titleMusicSuppressed = false; } catch(_){ }
         document.body.classList.remove('title-active');
         // Defensive: remove title overlay if still present (e.g., alternate start trigger)
@@ -7498,7 +7499,7 @@ function grantPermanentAbilities(){
             const overlay = document.createElement('div'); overlay.id = 'discoveredAbilitiesOverlay';
             overlay.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.88);z-index:20005;padding:18px;font-family:Courier New,monospace;';
             const panel = document.createElement('div');
-            panel.style.cssText = 'width:min(1100px,94vw);max-height:86vh;overflow:auto;background:#0e0e0e;border:2px solid #444;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px;color:#eee;';
+            panel.style.cssText = 'width:min(1100px,94vw);max-height:86vh;overflow:auto;background:rgba(14,14,14,0.85);border:2px solid #444;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px;color:#eee;';
             const hdr = document.createElement('div'); hdr.textContent = 'Discovered Abilities'; hdr.style.cssText = 'font-weight:800;letter-spacing:1px;color:#fff;font-size:18px;';
             const note = document.createElement('div'); note.textContent = 'Abilities you have not yet discovered are grayed out.'; note.style.cssText = 'color:#bbb;font-size:12px;margin-top:-6px;';
             const grid = document.createElement('div');
@@ -8117,7 +8118,7 @@ function showStartingAbilityMenu() {
 
     const panel = document.createElement('div');
     panel.style.cssText = [
-        'width:min(1000px,92vw)', 'max-height:min(85vh,900px)', 'background:#1b1b1b', 'border:2px solid #555', 'border-radius:10px',
+        'width:min(1000px,92vw)', 'max-height:min(85vh,900px)', 'background:rgba(27,27,27,0.85)', 'border:2px solid #555', 'border-radius:10px',
         'box-shadow:0 12px 34px rgba(0,0,0,0.6)', 'padding:16px', 'display:flex', 'flex-direction:column', 'gap:12px'
     ].join(';');
 
@@ -8145,9 +8146,9 @@ function showStartingAbilityMenu() {
     grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;overflow:auto;flex:1;padding-right:4px;';
 
     function tierStyle(tier){
-        if (tier === 3) return { border:'#c68b1a', bg:'#2a1d05', name:'#ffd37a' };
-        if (tier === 2) return { border:'#3d7dd9', bg:'#0a1d33', name:'#aaccff' };
-        return { border:'#5aa84d', bg:'#0d2a0d', name:'#b9e8b2' };
+        if (tier === 3) return { border:'rgba(198,139,26,0.5)', bg:'rgb(42,29,5)', opacity:0.8, name:'#ffd37a' };
+        if (tier === 2) return { border:'rgba(61,125,217,0.5)', bg:'rgb(10,29,51)', opacity:0.8, name:'#aaccff' };
+        return { border:'rgba(90,168,77,0.5)', bg:'rgb(13,42,13)', opacity:0.8, name:'#b9e8b2' };
     }
 
     function buildItem(name, meta){
@@ -8155,8 +8156,8 @@ function showStartingAbilityMenu() {
         const owned = Array.isArray(game?.player?.abilities) && game.player.abilities.includes(name);
         const d = document.createElement('div');
         d.style.cssText = [
-            'border:2px solid '+st.border, 'background:'+st.bg, 'border-radius:8px', 'padding:10px',
-            'display:flex', 'flex-direction:column', 'gap:6px', 'box-shadow:inset 0 0 8px #000, 0 0 8px rgba(0,0,0,0.35)'
+            'border:2px solid '+st.border, 'background-color:'+st.bg, 'opacity:'+st.opacity, 'border-radius:8px', 'padding:10px',
+            'display:flex', 'flex-direction:column', 'gap:6px', 'box-shadow:0 0 8px rgba(0,0,0,0.35)'
         ].join(';');
         if (!owned) {
             d.style.cursor = 'pointer';
@@ -8391,7 +8392,7 @@ function showEnemySpawnDebugMenu() {
     ].join(';');
     const panel = document.createElement('div');
     panel.style.cssText = [
-        'width:min(900px,92vw)','max-height:min(85vh,880px)','background:#141414','border:2px solid #555','border-radius:10px',
+        'width:min(900px,92vw)','max-height:min(85vh,880px)','background:rgba(20,20,20,0.85)','border:2px solid #555','border-radius:10px',
         'box-shadow:0 12px 32px rgba(0,0,0,0.6)','padding:16px','display:flex','flex-direction:column','gap:12px'
     ].join(';');
     overlay.appendChild(panel);
@@ -8522,6 +8523,9 @@ function showActICutscene(){
         overlay.appendChild(img);
         document.body.appendChild(overlay);
         
+        const shownAt = Date.now();
+        const SUPPRESS_MS = 180;
+        
         let step = 1;
         function nextStep() {
             if (step === 1) {
@@ -8545,10 +8549,36 @@ function showActICutscene(){
         window.addEventListener('keydown', handleInput, true);
         overlay.addEventListener('click', handleInput);
         
+        // Basic gamepad support: poll for A button press (same as space)
+        let gpPollId = null;
+        let gpLastA = {};
+        function pollGamepads(){
+            const now = Date.now();
+            if (now >= (shownAt + SUPPRESS_MS)) {
+                try {
+                    const gps = (navigator.getGamepads && navigator.getGamepads()) || [];
+                    for (let i=0;i<gps.length;i++){
+                        const g = gps[i];
+                        if (!g || !g.buttons || !g.buttons[0]) continue;
+                        const a = g.buttons[0];
+                        const aPressed = !!(a && (a.pressed || a.value > 0.5));
+                        const lastA = gpLastA[i] || false;
+                        if (aPressed && !lastA) {
+                            gpLastA[i] = true;
+                            try { nextStep(); } catch(_){}; return;
+                        }
+                        if (!aPressed) gpLastA[i] = false;
+                    }
+                } catch(_){}
+            }
+        }
+        gpPollId = setInterval(pollGamepads, 50);
+        
         // Store for cleanup
         overlay._cleanup = () => {
             window.removeEventListener('keydown', handleInput, true);
             overlay.removeEventListener('click', handleInput);
+            if (gpPollId) { try { clearInterval(gpPollId); } catch(_){} }
         };
     });
 }
@@ -8568,6 +8598,9 @@ function showActIICutscene(){
         img.style.objectFit = 'contain';
         overlay.appendChild(img);
         document.body.appendChild(overlay);
+        
+        const shownAt = Date.now();
+        const SUPPRESS_MS = 180;
         
         let step = 1;
         function nextStep() {
@@ -8592,10 +8625,36 @@ function showActIICutscene(){
         window.addEventListener('keydown', handleInput, true);
         overlay.addEventListener('click', handleInput);
         
+        // Basic gamepad support: poll for A button press (same as space)
+        let gpPollId = null;
+        let gpLastA = {};
+        function pollGamepads(){
+            const now = Date.now();
+            if (now >= (shownAt + SUPPRESS_MS)) {
+                try {
+                    const gps = (navigator.getGamepads && navigator.getGamepads()) || [];
+                    for (let i=0;i<gps.length;i++){
+                        const g = gps[i];
+                        if (!g || !g.buttons || !g.buttons[0]) continue;
+                        const a = g.buttons[0];
+                        const aPressed = !!(a && (a.pressed || a.value > 0.5));
+                        const lastA = gpLastA[i] || false;
+                        if (aPressed && !lastA) {
+                            gpLastA[i] = true;
+                            try { nextStep(); } catch(_){}; return;
+                        }
+                        if (!aPressed) gpLastA[i] = false;
+                    }
+                } catch(_){}
+            }
+        }
+        gpPollId = setInterval(pollGamepads, 50);
+        
         // Store for cleanup
         overlay._cleanup = () => {
             window.removeEventListener('keydown', handleInput, true);
             overlay.removeEventListener('click', handleInput);
+            if (gpPollId) { try { clearInterval(gpPollId); } catch(_){} }
         };
     });
 }
@@ -8615,6 +8674,9 @@ function showActIIICutscene(){
         img.style.objectFit = 'contain';
         overlay.appendChild(img);
         document.body.appendChild(overlay);
+        
+        const shownAt = Date.now();
+        const SUPPRESS_MS = 180;
         
         let step = 1;
         function nextStep() {
@@ -8639,10 +8701,116 @@ function showActIIICutscene(){
         window.addEventListener('keydown', handleInput, true);
         overlay.addEventListener('click', handleInput);
         
+        // Basic gamepad support: poll for A button press (same as space)
+        let gpPollId = null;
+        let gpLastA = {};
+        function pollGamepads(){
+            const now = Date.now();
+            if (now >= (shownAt + SUPPRESS_MS)) {
+                try {
+                    const gps = (navigator.getGamepads && navigator.getGamepads()) || [];
+                    for (let i=0;i<gps.length;i++){
+                        const g = gps[i];
+                        if (!g || !g.buttons || !g.buttons[0]) continue;
+                        const a = g.buttons[0];
+                        const aPressed = !!(a && (a.pressed || a.value > 0.5));
+                        const lastA = gpLastA[i] || false;
+                        if (aPressed && !lastA) {
+                            gpLastA[i] = true;
+                            try { nextStep(); } catch(_){}; return;
+                        }
+                        if (!aPressed) gpLastA[i] = false;
+                    }
+                } catch(_){}
+            }
+        }
+        gpPollId = setInterval(pollGamepads, 50);
+        
         // Store for cleanup
         overlay._cleanup = () => {
             window.removeEventListener('keydown', handleInput, true);
             overlay.removeEventListener('click', handleInput);
+            if (gpPollId) { try { clearInterval(gpPollId); } catch(_){} }
+        };
+    });
+}
+
+function showTutorial(){
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.id = 'tutorialOverlay';
+        Object.assign(overlay.style, {
+            position: 'fixed', inset: '0', background: '#000', display:'flex', alignItems:'center', justifyContent:'center',
+            zIndex: 10050, opacity: '1'
+        });
+        const img = document.createElement('img');
+        img.src = 'assets/tutorial/1.jpg';
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = '100%';
+        img.style.objectFit = 'contain';
+        overlay.appendChild(img);
+        document.body.appendChild(overlay);
+        
+        const shownAt = Date.now();
+        const SUPPRESS_MS = 180;
+        
+        let step = 1;
+        function nextStep() {
+            if (step === 1) {
+                img.src = 'assets/tutorial/2.jpg';
+                step = 2;
+            } else if (step === 2) {
+                img.src = 'assets/tutorial/3.jpg';
+                step = 3;
+            } else {
+                overlay.remove();
+                resolve();
+                return;
+            }
+        }
+        
+        function handleInput(ev) {
+            if (ev.type === 'keydown' && (ev.code === 'Space' || ev.key === ' ' || ev.key === 'Enter')) {
+                ev.preventDefault();
+                nextStep();
+            } else if (ev.type === 'click') {
+                nextStep();
+            }
+        }
+        
+        window.addEventListener('keydown', handleInput, true);
+        overlay.addEventListener('click', handleInput);
+        
+        // Basic gamepad support: poll for A button press (same as space)
+        let gpPollId = null;
+        let gpLastA = {};
+        function pollGamepads(){
+            const now = Date.now();
+            if (now >= (shownAt + SUPPRESS_MS)) {
+                try {
+                    const gps = (navigator.getGamepads && navigator.getGamepads()) || [];
+                    for (let i=0;i<gps.length;i++){
+                        const g = gps[i];
+                        if (!g || !g.buttons || !g.buttons[0]) continue;
+                        const a = g.buttons[0];
+                        const aPressed = !!(a && (a.pressed || a.value > 0.5));
+                        const lastA = gpLastA[i] || false;
+                        if (aPressed && !lastA) {
+                            gpLastA[i] = true;
+                            try { nextStep(); } catch(_){}; return;
+                        }
+                        if (!aPressed) gpLastA[i] = false;
+                    }
+                } catch(_){}
+            }
+        }
+        gpPollId = setInterval(pollGamepads, 50);
+        
+        // Store for cleanup
+        overlay._cleanup = () => {
+            window.removeEventListener('keydown', handleInput, true);
+            overlay.removeEventListener('click', handleInput);
+            if (gpPollId) { try { clearInterval(gpPollId); } catch(_){} }
         };
     });
 }
@@ -8662,20 +8830,24 @@ function _createActTransitionOverlay(){
     return ov;
 }
 
-function preloadActSprites(actId, timeoutMs){
+function preloadActSprites(actId, timeoutMs, onProgress){
     return new Promise((resolve)=>{
         try {
             try { console.info('[preloadActSprites] start', actId); } catch(_){ }
             if (!window.ENEMY_TYPES || !window.game) { resolve(); return; }
             const keys = Object.keys(ENEMY_TYPES).filter(k=>{ try{ return (ENEMY_TYPES[k] && (''+ENEMY_TYPES[k].act) === (''+actId)); } catch(e){ return false; } });
             if (!keys || keys.length === 0) { resolve(); return; }
+            const totalChecks = keys.length;
+            let reported = 0;
+            const notify = (n) => { try { if (typeof onProgress === 'function' && n) onProgress(n); } catch(_){} };
+
             const checks = keys.map(t => {
                 return new Promise((res)=>{
                     try {
                         const variants = [t, t.toLowerCase(), t.replace(/\s+/g,''), t.toLowerCase().replace(/\s+/g,'')];
                         let cont = null;
                         for (let v of variants){ if (game.enemySprites && game.enemySprites[v]) { cont = game.enemySprites[v]; break; } }
-                        if (!cont) {
+                            if (!cont) {
                             // Load the sprite if not present
                             let path = 'assets/enemies/' + t.toLowerCase().replace(/\s+/g,'') + '.png';
                             if (t === 'Golden Goose') path = 'assets/enemies/goldengoose.png';
@@ -8705,10 +8877,10 @@ function preloadActSprites(actId, timeoutMs){
                         }
                         // Consider the sprite ready if loaded flag set, fallback bitmap present, or image decoded (naturalWidth available)
                         const isImgReady = (cont.image && (cont.image.naturalWidth || cont.image.width));
-                        if (cont.loaded || cont._forcedBitmap || isImgReady) { res(); return; }
+                            if (cont.loaded || cont._forcedBitmap || isImgReady) { try { notify(1); } catch(_){} res(); return; }
 
                         let done = false;
-                        const finish = ()=>{ try{ if (done) return; done = true; clearInterval(iv); res(); }catch(_){ try{ res(); }catch(_){} } };
+                        const finish = ()=>{ try{ if (done) return; done = true; clearInterval(iv); try { notify(1); } catch(_){} res(); }catch(_){ try{ res(); }catch(_){} } };
 
                         // Prefer the modern decode() API to ensure the image is fully decoded before resolving
                         try {
@@ -8731,9 +8903,9 @@ function preloadActSprites(actId, timeoutMs){
                                     const sig2 = ac2 ? ac2.signal : null;
                                     const to2 = setTimeout(()=>{ try{ if (ac2) ac2.abort(); }catch(_){} }, 900);
                                     fetch(href, { signal: sig2 }).then(r=>{ clearTimeout(to2); if (!r.ok) throw new Error('status '+r.status); return r.blob(); }).then(b=>createImageBitmap(b)).then(bmp=>{
-                                        try { cont._forcedBitmap = bmp; cont.loaded = true; } catch(_){}
-                                        try { finish(); } catch(_){}
-                                    }).catch(()=>{});
+                                                try { cont._forcedBitmap = bmp; cont.loaded = true; } catch(_){ }
+                                                try { finish(); } catch(_){ }
+                                            }).catch(()=>{});
                                 } catch(_){}
                             } else if (href) {
                                 // Fallback for file:// or environments without fetch/createImageBitmap: create a small Image to nudge loading
@@ -8758,7 +8930,112 @@ function preloadActSprites(actId, timeoutMs){
     });
 }
 
+// Show a lightweight, full-screen loading overlay while important act assets preload.
+// Returns a Promise that resolves when preloads finish or timeout settles.
+function showActLoadingOverlay(actId, options){
+    options = options || {};
+    const timeoutMs = typeof options.timeoutMs === 'number' ? options.timeoutMs : 6000;
+    try {
+        if (document.getElementById('actLoadingOverlay')) return Promise.resolve();
+        // ensure spinner keyframes exist
+        if (!document.getElementById('qnSpinStyle')){
+            const st = document.createElement('style'); st.id = 'qnSpinStyle';
+            st.textContent = '@keyframes qnSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}';
+            document.head.appendChild(st);
+        }
+        const overlay = document.createElement('div'); overlay.id = 'actLoadingOverlay';
+        // Use the given loading image as a cover background and dark overlay for contrast
+        Object.assign(overlay.style, {
+            position: 'fixed', inset: '0', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            // Use the loading.jpg asset and make sure it fits the viewport without cropping
+            background: 'linear-gradient(rgba(0,0,0,0.52), rgba(0,0,0,0.52)), url("assets/loading.jpg") center / contain no-repeat', zIndex: 11000, pointerEvents: 'auto'
+        });
+
+        const box = document.createElement('div');
+        Object.assign(box.style, { display:'flex', flexDirection:'column', alignItems:'center', gap:'12px', padding:'20px 28px', borderRadius:'10px', background:'linear-gradient(180deg,rgba(255,255,255,0.02),rgba(0,0,0,0.06))', border:'1px solid rgba(255,255,255,0.04)', boxShadow:'0 12px 36px rgba(0,0,0,0.6)' });
+
+        const spinner = document.createElement('div');
+        Object.assign(spinner.style, { width:'56px', height:'56px', borderRadius:'50%', border:'6px solid rgba(255,255,255,0.06)', borderTop:'6px solid #ffd', animation:'qnSpin 920ms linear infinite' });
+        const title = document.createElement('div'); title.textContent = 'Loading…'; Object.assign(title.style, { color:'#ffd', fontWeight:700, fontFamily:'Courier New,monospace', fontSize:'18px', letterSpacing:'1px' });
+        const sub = document.createElement('div'); sub.textContent = 'Preparing act assets — please wait'; Object.assign(sub.style, { color:'#d0d0d0', fontSize:'13px', fontFamily:'Courier New,monospace', opacity:0.92 });
+
+        // Progress UI: counter and bar
+        const progressWrap = document.createElement('div'); Object.assign(progressWrap.style, { width:'300px', maxWidth:'78vw', display:'flex', flexDirection:'column', gap:'8px', alignItems:'stretch' });
+        const counter = document.createElement('div'); counter.textContent = '0 / 0 — 0%'; Object.assign(counter.style, { color:'#dfe6ff', fontSize:'13px', fontFamily:'Courier New,monospace', textAlign:'center' });
+        const barOuter = document.createElement('div'); Object.assign(barOuter.style, { height:'12px', background:'rgba(255,255,255,0.06)', borderRadius:'8px', overflow:'hidden', border:'1px solid rgba(255,255,255,0.04)' });
+        const barFill = document.createElement('div'); Object.assign(barFill.style, { width:'0%', height:'100%', background:'linear-gradient(90deg, #ffd36b, #ff8fb3)', transition:'width 240ms linear' });
+        barOuter.appendChild(barFill);
+
+        progressWrap.appendChild(counter); progressWrap.appendChild(barOuter);
+
+        box.appendChild(spinner); box.appendChild(title); box.appendChild(sub); box.appendChild(progressWrap);
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+
+        // Kick important preload operations in parallel and wait for them to settle
+        const promises = [];
+        // Apply backgrounds for the selected act so window._streetBackgrounds.list is accurate
+        try { if (typeof applyActBackgrounds === 'function') applyActBackgrounds(); } catch(_){ }
+
+        // Collect background list (if present) and create per-image preloads we can track
+        let bgList = [];
+        try { if (window._streetBackgrounds && Array.isArray(window._streetBackgrounds.list)) bgList = window._streetBackgrounds.list.slice(); } catch(_){ bgList = []; }
+
+        // Determine enemy sprites count (if ENEMY_TYPES available)
+        let enemyCount = 0;
+        try { enemyCount = (window.ENEMY_TYPES && Object.keys(window.ENEMY_TYPES).filter(k=>{ try { return (''+window.ENEMY_TYPES[k].act) === (''+actId); } catch(_) { return false; } }).length) || 0; } catch(_){ enemyCount = 0; }
+
+        // At least one logical step so progress behaves when there's nothing to preload
+        let totalItems = Math.max(1, bgList.length + enemyCount);
+        let completed = 0;
+
+        const updateUI = ()=>{
+            try {
+                const pct = Math.round((completed/totalItems)*100);
+                counter.textContent = completed + ' / ' + totalItems + ' — ' + pct + '%';
+                barFill.style.width = Math.min(100, pct) + '%';
+            } catch(_){}
+        };
+
+        const markOne = ()=>{ completed = Math.min(totalItems, completed + 1); updateUI(); };
+
+        // Start background preloads and count each when settled
+        try {
+            const bgPromises = (bgList && bgList.length) ? bgList.map(src => {
+                try { const p = loadBgToCache(src); if (p && typeof p.then === 'function') { promises.push(p.then(()=>{ markOne(); }).catch(()=>{ markOne(); })); return p; } } catch(_){ }
+                // fallback: create an image promise
+                return new Promise(r=>{ const i = new Image(); i.onload = ()=> { markOne(); r(i); }; i.onerror = ()=> { markOne(); r(null); }; try { i.src = src; } catch(_) { markOne(); r(null); } });
+            }) : [];
+        } catch(_){ }
+
+        // Track enemy sprite preloads using the updated preloadActSprites progress callback
+        try {
+            if (typeof preloadActSprites === 'function') {
+                const enemyPromise = preloadActSprites(actId, timeoutMs, ()=>{ markOne(); });
+                if (enemyPromise && typeof enemyPromise.then === 'function') promises.push(enemyPromise);
+            }
+        } catch(_){ }
+
+        // In case there were zero items (or some preloads didn't increment), ensure the counter updates at least once
+        updateUI();
+
+        // Enforce a soft timeout so the UI doesn't stall indefinitely
+        const timer = new Promise(res => setTimeout(res, timeoutMs));
+        // wait for all preloads to either resolve or timeout — use allSettled so single failures won't block
+        return Promise.allSettled(promises.concat([timer])).then(()=>{
+            // ensure counter shows fully completed
+            try { completed = totalItems; updateUI(); } catch(_){}
+            try { overlay.style.opacity = '0'; overlay.style.pointerEvents = 'none'; } catch(_){ }
+            setTimeout(()=>{ try { if (overlay && overlay.parentElement) overlay.parentElement.removeChild(overlay); } catch(_){} }, 260);
+        }).catch(()=>{
+            try { if (overlay && overlay.parentElement) overlay.parentElement.removeChild(overlay); } catch(_){}
+        });
+    } catch(e){ return Promise.resolve(); }
+}
+
 function showActTransition(actId, options){
+    if (game._transitionActive) return Promise.resolve(); // Prevent overlapping transitions
+    game._transitionActive = true;
     options = options || {};
     // Special Act IV intro cutscene: show two images sequentially on fire button presses
     function showActIVCutscene(){
@@ -8831,22 +9108,25 @@ function showActTransition(actId, options){
                 overlay.addEventListener('pointerup', onPointer);
                 document.addEventListener('keyup', onKeyUp, true);
 
-                // Basic gamepad support: poll for any button press on connected gamepads
+                // Basic gamepad support: poll for A button press on connected gamepads (same as space)
                 let gpPollId = null;
+                let gpLastA = {};
                 function pollGamepads(){
                     try {
                         const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-                        if (now >= (shownAt + SUPPRESS_MS)) {
+                        if (now >= (shownAt + SUPPRESS_MS) && now >= (shownAt + 300)) { // Extra delay to prevent held button from previous screen
                             const gps = (navigator.getGamepads && navigator.getGamepads()) || [];
                             for (let i=0;i<gps.length;i++){
                                 const g = gps[i];
-                                if (!g || !g.buttons) continue;
-                                for (let b=0;b<g.buttons.length;b++){
-                                    try {
-                                        const btn = g.buttons[b];
-                                        if (btn && btn.pressed) { try { proceed(); } catch(_){}; return; }
-                                    } catch(_){}
+                                if (!g || !g.buttons || !g.buttons[0]) continue;
+                                const a = g.buttons[0];
+                                const aPressed = !!(a && (a.pressed || a.value > 0.5));
+                                const lastA = gpLastA[i] || false;
+                                if (aPressed && !lastA) {
+                                    gpLastA[i] = true;
+                                    try { proceed(); } catch(_){}; return;
                                 }
+                                if (!aPressed) gpLastA[i] = false;
                             }
                         }
                     } catch(_){}
@@ -8879,13 +9159,13 @@ function showActTransition(actId, options){
             try { console.info('[ActTransition] overlay set visible — element present?', !!ov, 'text=', (txt?txt.textContent:null)); } catch(_){ }
             const start = Date.now();
             const tasks = [
-                preloadActSprites(actId, preloadTimeout),
+                (options && options.preloaded) ? Promise.resolve() : preloadActSprites(actId, preloadTimeout),
                 new Promise(r=>setTimeout(r, minMs))
             ];
             return Promise.all(tasks).then(()=>{
                 const passed = Date.now() - start; const remain = Math.max(0, 120 - (Date.now()-start));
-                setTimeout(()=>{ try { ov.style.opacity = '0'; ov.style.pointerEvents = 'none'; try { console.info('[ActTransition] hide overlay'); } catch(_){} } catch(_){}; setTimeout(()=>{ try{ if (ov && ov.parentElement) {} }catch(_){} },240); }, remain);
-            }).catch(()=>{ try{ ov.style.opacity='0'; ov.style.pointerEvents='none'; }catch(_){} });
+                setTimeout(()=>{ try { ov.style.opacity = '0'; ov.style.pointerEvents = 'none'; try { console.info('[ActTransition] hide overlay'); } catch(_){} } catch(_){}; setTimeout(()=>{ try{ if (ov && ov.parentElement) {} }catch(_){} },240); try { game._transitionActive = false; } catch(_){} }, remain);
+            }).catch(()=>{ try{ ov.style.opacity='0'; ov.style.pointerEvents='none'; }catch(_){} try { game._transitionActive = false; } catch(_){} });
         });
     }
 
@@ -8900,7 +9180,7 @@ function showActTransition(actId, options){
             try { console.info('[ActTransition] overlay set visible — element present?', !!ov, 'text=', (txt?txt.textContent:null)); } catch(_){ }
             const start = Date.now();
             const tasks = [
-                preloadActSprites(actId, preloadTimeout),
+                (options && options.preloaded) ? Promise.resolve() : preloadActSprites(actId, preloadTimeout),
                 new Promise(r=>setTimeout(r, minMs))
             ];
             return Promise.all(tasks).then(()=>{
@@ -8922,7 +9202,7 @@ function showActTransition(actId, options){
             try { console.info('[ActTransition] overlay set visible — element present?', !!ov, 'text=', (txt?txt.textContent:null)); } catch(_){ }
             const start = Date.now();
             const tasks = [
-                preloadActSprites(actId, preloadTimeout),
+                (options && options.preloaded) ? Promise.resolve() : preloadActSprites(actId, preloadTimeout),
                 new Promise(r=>setTimeout(r, minMs))
             ];
             return Promise.all(tasks).then(()=>{
@@ -8944,7 +9224,7 @@ function showActTransition(actId, options){
             try { console.info('[ActTransition] overlay set visible — element present?', !!ov, 'text=', (txt?txt.textContent:null)); } catch(_){ }
             const start = Date.now();
             const tasks = [
-                preloadActSprites(actId, preloadTimeout),
+                (options && options.preloaded) ? Promise.resolve() : preloadActSprites(actId, preloadTimeout),
                 new Promise(r=>setTimeout(r, minMs))
             ];
             return Promise.all(tasks).then(()=>{
@@ -8962,7 +9242,7 @@ function showActTransition(actId, options){
             try { console.info('[ActTransition] overlay set visible — element present?', !!ov, 'text=', (txt?txt.textContent:null)); } catch(_){ }
             const start = Date.now();
             const tasks = [
-                preloadActSprites(actId, preloadTimeout),
+                (options && options.preloaded) ? Promise.resolve() : preloadActSprites(actId, preloadTimeout),
                 new Promise(r=>setTimeout(r, minMs))
             ];
             if (String(actId) === 'DuckAndCover' && typeof preloadBackgroundList === 'function') {
@@ -9424,7 +9704,7 @@ function showEnemyDossier() {
     overlay.style.cssText = 'position:fixed;inset:0;z-index:20020;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.88);padding:18px;font-family:"Courier New",monospace;';
 
     const panel = document.createElement('div');
-    panel.style.cssText = 'width:min(1100px,94vw);max-height:86vh;background:#0d0f14;border:2px solid #333;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px;color:#eee;box-shadow:0 12px 34px rgba(0,0,0,0.6);';
+    panel.style.cssText = 'width:min(1100px,94vw);max-height:86vh;background:rgba(13,15,20,0.85);border:2px solid #333;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px;color:#eee;box-shadow:0 12px 34px rgba(0,0,0,0.6);';
 
     const header = document.createElement('div');
     header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;';
@@ -9716,6 +9996,10 @@ try { window.showEnemyDossier = showEnemyDossier; } catch(_){ }
 // ================= Simplified Title Screen =================
 function showTitleScreen() {
     if (document.getElementById('titleOverlay') || game._started) return;
+    if (game._lastStartTime && Date.now() - game._lastStartTime < 1000) return; // Prevent showing title immediately after start
+    if (game._lastShowTime && Date.now() - game._lastShowTime < 5000) return; // Prevent rapid restarts
+    try { game._started = false; } catch(_){} // Reset started flag to allow restarting if game failed
+    try { game._lastShowTime = Date.now(); } catch(_){} // Track last show time
     document.body.classList.add('title-active');
     const overlay = document.createElement('div');
     overlay.id = 'titleOverlay';
@@ -9725,7 +10009,7 @@ function showTitleScreen() {
         fontFamily:'Courier New,monospace', transition:'opacity 380ms ease', opacity:'1'
     });
     overlay.innerHTML = `
-        <img id="titleLogo" src="assets/mallardvice-title-clean.png" alt="Mallard Vice" style="width:clamp(300px,60vw,780px);max-height:70vh;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 0 12px #400060);" />
+        <img id="titleLogo" src="assets/mallardvice-title-clean.jpg" alt="Mallard Vice" style="width:clamp(300px,60vw,780px);max-height:70vh;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 0 12px #400060);" />
         <div id="pressStartPrompt" style="color:#bbb;font-size:22px;letter-spacing:2px;animation:pulsePrompt 2.8s ease-in-out infinite;">PRESS SPACE / CLICK TO START</div>
         `;
     if (!document.getElementById('pulsePromptStyle')) {
@@ -9740,10 +10024,18 @@ function showTitleScreen() {
     let started = false;
     // Track an in-title Act menu state when open so input handlers can route appropriately.
     let actMenuState = null;
-    function begin(source){
+    let gpPollId = null;
+    function begin(source, opts){
         try { console.info('[begin] called, selectedAct=', game && game._selectedAct); } catch(_){}
         if (started) return; started = true;
+        try { window.removeEventListener('keydown', keyHandler, true); } catch(_){} // Disable title input to prevent reopening act menu
+        try { clearInterval(gpPollId); } catch(_){} // Stop polling
+        try { overlay.removeEventListener('click', clickHandler); } catch(_){} // Disable click to prevent reopening act menu
+        // Ensure any remaining menus are closed
+        try { const m = document.getElementById('titleActMenu'); if (m && m.parentElement) m.parentElement.removeChild(m); } catch(_){}
+        try { const l = document.getElementById('actLoadingOverlay'); if (l && l.parentElement) l.parentElement.removeChild(l); } catch(_){}
         overlay.style.opacity='0';
+        overlay.style.pointerEvents = 'none'; // Prevent clicks on faded overlay
         // Kick music again explicitly on gesture for browsers that require it
         const suppressTitleMusic = !!(game && game._titleMusicSuppressed);
         if (!suppressTitleMusic) {
@@ -9755,7 +10047,7 @@ function showTitleScreen() {
         // Show act transition overlay and preload sprites (minimum display: 2s)
         try {
             try { console.info('[begin] calling showActTransition, typeof=', typeof showActTransition); } catch(_){}
-            const p = showActTransition(game._selectedAct, { minMs: 2000, preloadTimeout: 1800 });
+            const p = showActTransition(game._selectedAct, Object.assign({ minMs: 2000, preloadTimeout: 1800 }, opts || {}));
             try { console.info('[begin] showActTransition returned', !!p); } catch(_){}
             if (p && typeof p.then === 'function') {
                 p.then(()=>{ try{ setTimeout(()=> safeStartGame(source), 220); }catch(_){ setTimeout(()=> safeStartGame(source), 420); } });
@@ -9771,6 +10063,7 @@ function showTitleScreen() {
     // Show Act selection menu (Act II & Act III locked by default)
     function showActMenu(){
         if (actMenuState) return; // already open
+        try { clearInterval(gpPollId); } catch(_){} // Stop title polling to prevent interference
         const menu = document.createElement('div');
         menu.id = 'titleActMenu';
         menu.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);min-width:280px;max-width:86vw;padding:18px 20px;border-radius:10px;background:rgba(6,6,8,0.92);border:2px solid #444;z-index:10001;display:flex;flex-direction:column;gap:12px;font-family:Courier New,monospace;color:#eee;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.6);';
@@ -9788,6 +10081,7 @@ function showTitleScreen() {
     try { duckUnlocked = !!(game && game._duckAndCoverUnlocked) || (localStorage && localStorage.getItem && localStorage.getItem('duckAndCoverUnlocked') === '1'); } catch(_) { duckUnlocked = !!(game && game._duckAndCoverUnlocked); }
 
         let acts = [ 
+            { id: 'Tutorial', label: 'Tutorial', locked: false }, 
             { id: 'I', label: 'Act I: New Quack City', locked: false }, 
             { id: 'II', label: 'Act II: Goose Ghetto', locked: !actIIUnlocked, lockReason: 'Find and defeat the Golden Goose' }, 
             { id: 'III', label: 'Act III: Wunderswan\'s domain', locked: !actIIIUnlocked, lockReason: 'Survive the Wunderswan' },
@@ -9834,9 +10128,32 @@ function showTitleScreen() {
                     } catch(_){}
                     return;
                 }
+                if (a.id === 'Tutorial') {
+                    // Show tutorial slideshow
+                    try { closeActMenu(); try { clearInterval(gpPollId); } catch(_){} cleanup();
+                        showTutorial().then(() => {
+                            // Re-add input handlers
+                            window.addEventListener('keydown', keyHandler);
+                            overlay.addEventListener('click', clickHandler, { passive:true });
+                            overlay.addEventListener('touchstart', clickHandler, { passive:true });
+                            startTitlePolling();
+                        });
+                    } catch(_){}
+                    return;
+                }
                 // Start corresponding act; set act music if applicable then begin
                 try { game._selectedAct = a.id; game._titleMusicSuppressed = false; try { ensureActMusic(game._selectedAct); } catch(_){} try { saveSelectedAct(); } catch(_){} } catch(_){}
-                closeActMenu(); cleanup(); begin('title-space');
+                // Kick open the loading screen, wait for important preloads, then proceed to the transition and run start
+                try { closeActMenu(); try { clearInterval(gpPollId); } catch(_){} cleanup();
+                    // Show loading overlay — will resolve automatically when preloads complete or timeout
+                    try {
+                        showActLoadingOverlay(a.id, { timeoutMs: 8000 }).then(()=>{
+                            try { begin('title-space', { preloaded: true }); } catch(_){ begin('title-space'); }
+                        }).catch(()=>{
+                            try { begin('title-space'); } catch(_){ /* fallback */ }
+                        });
+                    } catch(e) { try { begin('title-space'); } catch(_){} }
+                } catch(_){}
             };
             // Also register an actions entry for keyboard handling that simply triggers the click
             actions.push(()=> { try { it.click(); } catch(_){} });
@@ -9993,6 +10310,7 @@ function showTitleScreen() {
             // Track last direction per-pad so d-pad holds can repeat without analog drift issues.
             let gpLastDir = {};
             let gpLastMoveTs = {};
+            let gpLastA = {};
             const MOVE_COOLDOWN_MS = 200; // delay between repeated moves when holding d-pad
             return setInterval(()=>{
             try {
@@ -10034,7 +10352,14 @@ function showTitleScreen() {
                         }
                         if (dir === 0) gpLastDir[i] = 0;
 
-                        if (a && (a.pressed || a.value>0.5)) { try { clearInterval(gpMenuInterval); try { if (items[idx] && typeof items[idx].click === 'function') items[idx].click(); else if (typeof actions[idx] === 'function') actions[idx](); } catch(_){} } catch(_){} return; }
+                        // Rising-edge for A button
+                        const aPressed = !!(a && (a.pressed || a.value > 0.5));
+                        const lastA = gpLastA[i] || false;
+                        if (aPressed && !lastA && menu.parentElement) { // Only click if menu is still attached
+                            gpLastA[i] = true;
+                            try { clearInterval(gpMenuInterval); try { if (items[idx] && typeof items[idx].click === 'function') items[idx].click(); else if (typeof actions[idx] === 'function') actions[idx](); } catch(_){} } catch(_){} return;
+                        }
+                        if (!aPressed) gpLastA[i] = false;
                 }
             } catch(_){ }
         }, 140);
@@ -10043,7 +10368,7 @@ function showTitleScreen() {
         function closeActMenu(){
             try { window.removeEventListener('keydown', menuKeyHandler, true); } catch(_){}
             try { clearInterval(gpMenuInterval); } catch(_){}
-            try { if (menu.parentElement) menu.parentElement.removeChild(menu); } catch(_){}
+            try { const m = document.getElementById('titleActMenu'); if (m) m.remove(); } catch(_){}
             actMenuState = null;
         }
 
@@ -10055,7 +10380,7 @@ function showTitleScreen() {
             const overlay = document.createElement('div'); overlay.id = 'discoveredAbilitiesOverlay';
             overlay.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.88);z-index:20005;padding:18px;font-family:Courier New,monospace;';
             const panel = document.createElement('div');
-            panel.style.cssText = 'width:min(1100px,94vw);max-height:86vh;overflow:auto;background:#0e0e0e;border:2px solid #444;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px;color:#eee;';
+            panel.style.cssText = 'width:min(1100px,94vw);max-height:86vh;overflow:auto;background:rgba(14,14,14,0.85);border:2px solid #444;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px;color:#eee;';
             const hdr = document.createElement('div'); hdr.textContent = 'Discovered Abilities'; hdr.style.cssText = 'font-weight:800;letter-spacing:1px;color:#fff;font-size:18px;';
             const note = document.createElement('div'); note.textContent = 'Abilities you have not yet discovered are grayed out.'; note.style.cssText = 'color:#bbb;font-size:12px;margin-top:-6px;';
             const grid = document.createElement('div');
@@ -10142,6 +10467,7 @@ function showTitleScreen() {
         // Open Act menu instead of immediately starting
         showActMenu();
     }
+    let gpLastA = {};
     function gamepadHandler(){
         try {
             const pads = (navigator.getGamepads && navigator.getGamepads()) || [];
@@ -10150,13 +10476,18 @@ function showTitleScreen() {
                 if (!p || !p.connected) continue;
                 const a = p.buttons && p.buttons[0];
                 const start = p.buttons && p.buttons[9];
-                if ((a && (a.pressed || (a.value>0.5))) || (start && (start.pressed || (start.value>0.5)))) {
+                const aPressed = !!(a && (a.pressed || (a.value>0.5)));
+                const startPressed = !!(start && (start.pressed || (start.value>0.5)));
+                const lastA = gpLastA[i] || false;
+                if ((aPressed && !lastA) || startPressed) {
+                    gpLastA[i] = aPressed;
                     // If Act menu is open, ignore the global begin and let the menu poller handle selection
                     if (actMenuState) return;
                     // Controller 'A' / Start should open the Act selection menu (same as Space / click)
                     try { showActMenu(); } catch(e) { try { cleanup(); begin('title-gamepad'); } catch(_) {} }
                     return;
                 }
+                if (!aPressed) gpLastA[i] = false;
             }
         } catch(_){ }
     }
@@ -10514,11 +10845,15 @@ function showTitleScreen() {
     // Poll for A/Start on title overlay but require a rising-edge (release then press)
     // and avoid starting the run if the Act menu is already open. This prevents
     // accidental skips when switching input methods (keyboard -> controller).
-    (function(){
+    function startTitlePolling(){
         let lastPressed = false;
-        const gpInterval = setInterval(()=>{
+        const shownAt = Date.now();
+        const SUPPRESS_MS = 180;
+        gpPollId = setInterval(()=>{
+            const now = Date.now();
+            if (now < (shownAt + SUPPRESS_MS)) return;
             const to = document.getElementById('titleOverlay');
-            if (!to) { clearInterval(gpInterval); return; }
+            if (!to) { clearInterval(gpPollId); return; }
             // If Act selection already open, don't interpret A/Start here
             if (document.getElementById('titleActMenu')) return;
             try {
@@ -10541,7 +10876,8 @@ function showTitleScreen() {
                 lastPressed = anyPressed;
             } catch(_) {}
         }, 120);
-    })();
+    }
+    startTitlePolling();
     // Also react to a newly connected pad (poller above will handle the input)
     window.addEventListener('gamepadconnected', ()=>{});
 }
@@ -10950,14 +11286,14 @@ function showAbilityChoiceUI(options) {
 
     const container = document.createElement('div');
     container.style.cssText = `
-        display: flex; gap: 20px; background: #222; padding: 20px; border-radius: 10px;
+        display: flex; gap: 20px; background: rgba(34,34,34,0.8); padding: 20px; border-radius: 10px;
         border: 2px solid #666;
     `;
 
     const tierStyles = {
-        1: { border:'#5aa84d', glow:'#5aa84d88', bg:'#0d2a0d', label:'Tier I' },
-        2: { border:'#3d7dd9', glow:'#3d7dd988', bg:'#0a1d33', label:'Tier II' },
-        3: { border:'#c68b1a', glow:'#c68b1acc', bg:'#2a1d05', label:'Tier III' }
+        1: { border:'rgba(90,168,77,0.5)', glow:'#5aa84d88', bg:'rgb(13,42,13)', opacity:0.8, label:'Tier I' },
+        2: { border:'rgba(61,125,217,0.5)', glow:'#3d7dd988', bg:'rgb(10,29,51)', opacity:0.8, label:'Tier II' },
+        3: { border:'rgba(198,139,26,0.5)', glow:'#c68b1acc', bg:'rgb(42,29,5)', opacity:0.8, label:'Tier III' }
     };
     // Inject one-time keyframe styles if not present
     if (!document.getElementById('permAbilityFXStyles')) {
@@ -10965,7 +11301,7 @@ function showAbilityChoiceUI(options) {
         styleEl.id = 'permAbilityFXStyles';
         styleEl.textContent = `@keyframes badgePop {0%{transform:scale(.4) translateY(-8px);opacity:0}60%{transform:scale(1.08) translateY(0);opacity:1}100%{transform:scale(1) translateY(0);opacity:1}}
         @keyframes flairFloat {0%{transform:translateY(0) scale(.6);opacity:0}20%{opacity:1}80%{opacity:1}100%{transform:translateY(-38px) scale(1.1);opacity:0}}
-        .synergy-tip {position:absolute;left:50%;top:100%;transform:translate(-50%,12px);background:#111;padding:8px 10px;border:1px solid #555;border-radius:6px;color:#eee;font:11px/1.3 'Courier New',monospace;width:220px;pointer-events:none;opacity:0;transition:opacity .18s;z-index:40;box-shadow:0 0 6px #000}
+        .synergy-tip {position:absolute;left:50%;top:100%;transform:translate(-50%,12px);background:rgba(17,17,17,0.5);padding:8px 10px;border:1px solid #555;border-radius:6px;color:#eee;font:11px/1.3 'Courier New',monospace;width:220px;pointer-events:none;opacity:0;transition:opacity .18s;z-index:40;box-shadow:0 0 6px #000}
         .ability-card.permanent:hover .synergy-tip {opacity:1}
         `;
         document.head.appendChild(styleEl);
@@ -10990,12 +11326,12 @@ function showAbilityChoiceUI(options) {
         const style = tierStyles[tier] || tierStyles[1];
         const card = document.createElement('div');
         card.className = 'ability-card permanent';
-        card.style.cssText = `min-width:200px;max-width:240px;padding:14px 16px;background:${style.bg};`+
+        card.style.cssText = `min-width:200px;max-width:240px;padding:14px 16px;background-color: ${style.bg}; opacity: ${style.opacity};`+
             `border:3px solid ${style.border};border-radius:10px;position:relative;`+
-            `box-shadow:0 0 10px ${style.glow}, inset 0 0 8px #000;display:flex;flex-direction:column;gap:8px;`+
+            `box-shadow:0 0 10px ${style.glow};display:flex;flex-direction:column;gap:8px;`+
             `transition:transform .15s, box-shadow .2s;`;
         card.onmouseenter = ()=>{ card.style.transform='translateY(-4px)'; card.style.boxShadow=`0 0 16px ${style.glow}, 0 0 4px ${style.border}`; };
-        card.onmouseleave = ()=>{ card.style.transform='none'; card.style.boxShadow=`0 0 10px ${style.glow}, inset 0 0 8px #000`; };
+        card.onmouseleave = ()=>{ card.style.transform='none'; card.style.boxShadow=`0 0 10px ${style.glow}`; };
 
     const badge = document.createElement('div');
         badge.textContent = style.label;
@@ -11165,7 +11501,7 @@ function showRainbowAbilityPicker(onSelect) {
     overlay.id = 'rainbowAbilityOverlay';
     overlay.style.cssText = 'position:fixed;inset:0;z-index:20000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.85);font-family:Courier New,monospace;';
     const panel = document.createElement('div');
-    panel.style.cssText = 'width:min(1100px,94vw);max-height:min(86vh,940px);background:#121212;border:2px solid #666;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;box-shadow:0 0 18px rgba(255,255,255,0.15), 0 0 60px rgba(180,120,255,0.25) inset;';
+    panel.style.cssText = 'width:min(1100px,94vw);max-height:min(86vh,940px);background:rgba(18,18,18,0.85);border:2px solid #666;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;box-shadow:0 0 18px rgba(255,255,255,0.15), 0 0 60px rgba(180,120,255,0.25) inset;';
     const header = document.createElement('div');
     header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;';
     header.innerHTML = '<div style="color:#fff;font-weight:800;letter-spacing:1px;text-shadow:0 0 10px #fff, 0 0 20px #f0f;">Rainbow Chest — Choose Any Ability</div>'+
@@ -11184,12 +11520,12 @@ function showRainbowAbilityPicker(onSelect) {
     controls.appendChild(search); controls.appendChild(onlyNewLabel);
     const grid = document.createElement('div');
     grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;overflow:auto;flex:1;padding-right:4px;';
-    function tierStyle(tier){ if (tier===3) return { border:'#c68b1a', bg:'#2a1d05', name:'#ffd37a' }; if (tier===2) return { border:'#3d7dd9', bg:'#0a1d33', name:'#aaccff' }; return { border:'#5aa84d', bg:'#0d2a0d', name:'#b9e8b2' }; }
+    function tierStyle(tier){ if (tier===3) return { border:'rgba(198,139,26,0.5)', bg:'rgb(42,29,5)', opacity:0.8, name:'#ffd37a' }; if (tier===2) return { border:'rgba(61,125,217,0.5)', bg:'rgb(10,29,51)', opacity:0.8, name:'#aaccff' }; return { border:'rgba(90,168,77,0.5)', bg:'rgb(13,42,13)', opacity:0.8, name:'#b9e8b2' }; }
     function buildItem(name, meta){
         const t = (meta && meta.tier) || 1; const st = tierStyle(t);
         const owned = Array.isArray(game?.player?.abilities) && game.player.abilities.includes(name);
         const d = document.createElement('div');
-        d.style.cssText = 'border:2px solid '+st.border+';background:'+st.bg+';border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:6px;box-shadow:inset 0 0 8px #000, 0 0 8px rgba(0,0,0,0.35)';
+        d.style.cssText = 'border:2px solid '+st.border+';background-color:'+st.bg+';opacity:'+st.opacity+';border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:6px;box-shadow:0 0 8px rgba(0,0,0,0.35)';
         // Hover/interactive affordances only if not owned
         if (!owned) {
             d.style.cursor = 'pointer';
@@ -11208,7 +11544,7 @@ function showRainbowAbilityPicker(onSelect) {
         if (owned) {
             const badge = document.createElement('div');
             badge.textContent = 'OWNED';
-            badge.style.cssText = 'align-self:flex-start;background:#2a2a2a;color:#bbb;border:1px solid #555;border-radius:4px;padding:2px 6px;font-size:11px;letter-spacing:0.5px;';
+            badge.style.cssText = 'align-self:flex-start;background:rgba(42,42,42,0.85);color:#bbb;border:1px solid #555;border-radius:4px;padding:2px 6px;font-size:11px;letter-spacing:0.5px;';
             d.appendChild(badge);
         }
         d.appendChild(desc);
@@ -11511,7 +11847,7 @@ function offerPermanentAbilityChoice() {
     // Act II melee grunt: Goosey Elliot (non-ranged)
     ENEMY_TYPES['Goosey Elliot'] = { health: 82, speed: 1.0, damage: 16, color: '#DCEECC', size: 28, xp: 24, ranged: false, armor: 0, act: 'II' };
     ENEMY_TYPES['Fowl Pacino'] = { health: 96, speed: 0.95, damage: 18, color: '#E0D4B8', size: 32, xp: 36, ranged: false, armor: 0, act: 'II' };
-    // Rare melee enemy: The Quacken (spawns via special 1% override in any street)
+    // Rare melee enemy: The Quacken (spawns via special 0.5% override in any street)
     ENEMY_TYPES['The Quacken'] = { health: 1000, speed: 0.82, damage: 24, color: '#2F6B68', size: 42, xp: 160, ranged: false, armor: 2, act: 'Secret' };
     // Act II ranged grunt: Geese Robbins
     ENEMY_TYPES['Geese Robbins'] = { health: 90, speed: 1.02, damage: 14, color: '#DDE8FF', size: 30, xp: 32, ranged: true, rangedCooldown: 700, armor: 0, act: 'II' };
@@ -12063,7 +12399,7 @@ function offerPermanentAbilityChoice() {
                 game.player.walkAnimations = game.player.walkAnimations || {};
                 game.player.walkAnimations.up = game.player.upWalkFrames;
             };
-            game.player.upWalkSheet.onerror = (err) => { console.warn('[PlayerSprite] up walk sheet failed to load', err); };
+            game.player.upWalkSheet.onerror = (err) => { console.warn('[PlayerSprite] up walk sheet failed to load', err); game.player.walkAnimations = game.player.walkAnimations || {}; game.player.walkAnimations.up = game.player.walkFrames; };
             game.player.upWalkSheet.src = 'assets/player-up-sheet-0-29.png';
 
             if (!game.player.downWalkSheet) game.player.downWalkSheet = new Image();
@@ -12080,7 +12416,7 @@ function offerPermanentAbilityChoice() {
                 game.player.walkAnimations = game.player.walkAnimations || {};
                 game.player.walkAnimations.down = game.player.downWalkFrames;
             };
-            game.player.downWalkSheet.onerror = (err) => { console.warn('[PlayerSprite] down walk sheet failed to load', err); };
+            game.player.downWalkSheet.onerror = (err) => { console.warn('[PlayerSprite] down walk sheet failed to load', err); game.player.walkAnimations = game.player.walkAnimations || {}; game.player.walkAnimations.down = game.player.walkFrames; };
             game.player.downWalkSheet.src = 'assets/player-down-sheet-5-26.png';
 
             if (!game.player.idleImage) game.player.idleImage = new Image();
@@ -17541,7 +17877,7 @@ function offerPermanentAbilityChoice() {
                     } catch(_) {}
                     } else {
                         const quackenMeta = ENEMY_TYPES['The Quacken'];
-                        if (quackenMeta && Math.random() < 0.01) {
+                        if (quackenMeta && Math.random() < 0.005) {
                             typeName = 'The Quacken';
                         } else {
                             // Use theme weighted pool then modulate by dungeon progression similarly to legacy weighting (soft gating)
@@ -19044,7 +19380,7 @@ function offerPermanentAbilityChoice() {
                     const st = document.createElement('style');
                     st.id = 'pauseAbilitiesStyles';
                     st.textContent = `
-                        .ability-card { padding:10px 12px; border-radius:8px; position:relative; background:rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.04); }
+                        .ability-card { padding:10px 12px; border-radius:8px; position:relative; border:1px solid rgba(255,255,255,0.04); }
                         .ability-card .ability-card-name { font-weight:700; font-size:15px; }
                         .ability-card .ability-card-desc { font-size:13px; color:#ddd; margin-top:6px; min-height:42px; }
                         .ability-card .remove-btn { display:none; position:absolute; top:8px; right:8px; width:28px; height:28px; border-radius:999px; background:rgba(20,20,20,0.66); border:1px solid rgba(255,255,255,0.08); color:#fff; font-weight:700; align-items:center; justify-content:center; cursor:pointer; }
@@ -19064,7 +19400,7 @@ function offerPermanentAbilityChoice() {
 
                 const card = document.createElement('div');
                 card.className = `ability-card tier${tier}` + (isPermanent ? ' permanent' : '');
-                card.style.cssText = 'margin-bottom:10px; padding:10px 12px; cursor:default;';
+                card.style.cssText = 'margin-bottom:10px; padding:10px 12px; cursor:default; background-color: rgb(0,0,0); opacity: 0.8;';
                 // Make cards focusable for gamepad nav
                 try { card.setAttribute('data-gp-focus','1'); card.tabIndex = 0; } catch(_){}
 
@@ -19532,7 +19868,7 @@ function offerPermanentAbilityChoice() {
             overlay.id = 'confirmOverlay';
             overlay.style.cssText = 'position:fixed;inset:0;z-index:25000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.82);font-family:Courier New,monospace;';
             const panel = document.createElement('div');
-            panel.style.cssText = 'min-width:300px;max-width:520px;background:#141414;border:2px solid #666;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px;box-shadow:0 10px 24px rgba(0,0,0,0.6)';
+            panel.style.cssText = 'min-width:300px;max-width:520px;background:rgba(20,20,20,0.85);border:2px solid #666;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px;box-shadow:0 10px 24px rgba(0,0,0,0.6)';
             const text = document.createElement('div');
             text.textContent = message || 'Are you sure?';
             text.style.cssText = 'color:#eee;font-size:14px;line-height:1.4;';
@@ -21460,13 +21796,13 @@ function offerPermanentAbilityChoice() {
                 }
             });
             
-            if (game.keys['w']) { dy -= speed; game.player.lastDirection = { x: 0, y: -1 }; game.player.facing = 'up'; }
-            if (game.keys['s']) { dy += speed; game.player.lastDirection = { x: 0, y: 1 }; game.player.facing = 'down'; }
-            if (game.keys['a']) { dx -= speed; game.player.lastDirection = { x: -1, y: 0 }; game.player.facing = 'left'; }
-            if (game.keys['d']) { dx += speed; game.player.lastDirection = { x: 1, y: 0 }; game.player.facing = 'right'; }
+            if (game.keys['w'] || game.keys['arrowup']) { dy -= speed; game.player.lastDirection = { x: 0, y: -1 }; game.player.facing = 'up'; }
+            if (game.keys['s'] || game.keys['arrowdown']) { dy += speed; game.player.lastDirection = { x: 0, y: 1 }; game.player.facing = 'down'; }
+            if (game.keys['a'] || game.keys['arrowleft']) { dx -= speed; game.player.lastDirection = { x: -1, y: 0 }; game.player.facing = 'left'; }
+            if (game.keys['d'] || game.keys['arrowright']) { dx += speed; game.player.lastDirection = { x: 1, y: 0 }; game.player.facing = 'right'; }
 
-            // Gamepad analog move/aim when present; keyboard has priority if any WASD key is down
-            const anyKeyboardMove = !!(game.keys['w'] || game.keys['a'] || game.keys['s'] || game.keys['d']);
+            // Gamepad analog move/aim when present; keyboard has priority if any WASD or arrow key is down
+            const anyKeyboardMove = !!(game.keys['w'] || game.keys['a'] || game.keys['s'] || game.keys['d'] || game.keys['arrowup'] || game.keys['arrowleft'] || game.keys['arrowdown'] || game.keys['arrowright']);
             if (game.input && game.input.gamepadEnabled && !anyKeyboardMove) {
                 const mv = game.input.gpMove || {x:0,y:0};
                 const av = game.input.gpAim || {x:0,y:0};
@@ -30872,7 +31208,7 @@ function offerPermanentAbilityChoice() {
                         try { rebuildPlayerSprite(); } catch(_){}
                     } catch(_) {}
                 };
-                game.player.upWalkSheet.onerror = (err) => { console.warn('[Reset] player up walk sheet load failed', err); };
+                game.player.upWalkSheet.onerror = (err) => { console.warn('[Reset] player up walk sheet load failed', err); game.player.walkAnimations = game.player.walkAnimations || {}; game.player.walkAnimations.up = game.player.walkFrames; };
                 game.player.upWalkSheet.src = 'assets/player-up-sheet-0-29.png';
             } else if (game.player.upWalkSheet && game.player.upWalkSheet.complete && !game.player.upWalkFrames) {
                 try {
@@ -30896,7 +31232,7 @@ function offerPermanentAbilityChoice() {
                         try { rebuildPlayerSprite(); } catch(_){}
                     } catch(_) {}
                 };
-                game.player.downWalkSheet.onerror = (err) => { console.warn('[Reset] player down walk sheet load failed', err); };
+                game.player.downWalkSheet.onerror = (err) => { console.warn('[Reset] player down walk sheet load failed', err); game.player.walkAnimations = game.player.walkAnimations || {}; game.player.walkAnimations.down = game.player.walkFrames; };
                 game.player.downWalkSheet.src = 'assets/player-down-sheet-0-20.png';
             } else if (game.player.downWalkSheet && game.player.downWalkSheet.complete && !game.player.downWalkFrames) {
                 try {
